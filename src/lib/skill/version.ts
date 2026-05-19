@@ -1,23 +1,15 @@
-import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
-import { join } from "node:path";
+import skillText from "./idea-seeding-agent.md";
 
-const SKILL_PATH = join(process.cwd(), "src", "lib", "skill", "idea-seeding-agent.md");
-
-let cached: { text: string; version: string } | null = null;
-
-function load() {
-  if (cached) return cached;
-  const text = readFileSync(SKILL_PATH, "utf8");
-  const version = createHash("sha256").update(text).digest("hex").slice(0, 12);
-  cached = { text, version };
-  return cached;
-}
+// idea-seeding-agent.md is the single source of truth; webpack inlines it
+// as a string at build time (see next.config.mjs).
+const TEXT: string = skillText as unknown as string;
+const VERSION = createHash("sha256").update(TEXT).digest("hex").slice(0, 12);
 
 export function getSkillPrompt(): string {
-  return load().text;
+  return TEXT;
 }
 
 export function getSkillVersion(): string {
-  return load().version;
+  return VERSION;
 }

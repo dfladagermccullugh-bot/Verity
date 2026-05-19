@@ -11,7 +11,18 @@
       "Bash(npx next *)",
       "Bash(git init *)",
       "Bash(git add *)",
-      "Bash(git -c user.email=\"dfladagermccullugh@gmail.com\" -c user.name=\"Davin\" commit -q -m \"Idea Seeder web app — initial build\")"
+      "Bash(git -c user.email=\"dfladagermccullugh@gmail.com\" -c user.name=\"Davin\" commit -q -m \"Idea Seeder web app — initial build\")",
+      "Bash(node -e \"const c=require\\('crypto'\\);console.log\\('INVITE_SIGNING_SECRET='+c.randomBytes\\(32\\).toString\\('hex'\\)\\);console.log\\('SESSION_COOKIE_SECRET='+c.randomBytes\\(32\\).toString\\('hex'\\)\\);console.log\\('ADMIN_PASSWORD='+c.randomBytes\\(9\\).toString\\('base64url'\\)\\);\")",
+      "Bash(gh --version)",
+      "Bash(gh auth *)",
+      "Bash(git remote *)",
+      "Bash(git branch *)",
+      "Bash(git push *)",
+      "Bash(git fetch *)",
+      "Bash(git ls-tree *)",
+      "Bash(git -c user.email=\"dfladagermccullugh@gmail.com\" -c user.name=\"Davin\" merge origin/main --allow-unrelated-histories --no-edit)",
+      "Bash(DATABASE_URL='postgresql://neondb_owner:npg_SuFxf53esTHI@ep-weathered-silence-aqig8tlr-pooler.c-8.us-east-1.aws.neon.tech/neondb?sslmode=require' npx drizzle-kit migrate)",
+      "Bash(git -c user.email=\"dfladagermccullugh@gmail.com\" -c user.name=\"Davin\" commit -q -m \"Inline skill markdown into bundle \\(fix serverless ENOENT on Vercel\\)\")"
     ]
   }
 }
