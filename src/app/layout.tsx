@@ -6,7 +6,6 @@ import ThemeToggle from "@/components/theme-toggle";
 const fraunces = Fraunces({
   subsets: ["latin"],
   display: "swap",
-  weight: ["600", "700", "800"],
   axes: ["SOFT", "opsz"],
   variable: "--font-display",
 });
