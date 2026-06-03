@@ -1,6 +1,15 @@
 import type { Metadata, Viewport } from "next";
+import { Fraunces } from "next/font/google";
 import "./globals.css";
 import ThemeToggle from "@/components/theme-toggle";
+
+const fraunces = Fraunces({
+  subsets: ["latin"],
+  display: "swap",
+  weight: ["600", "700", "800"],
+  axes: ["SOFT", "opsz"],
+  variable: "--font-display",
+});
 
 export const metadata: Metadata = {
   title: "Idea Seeder",
@@ -24,7 +33,7 @@ const prePaintScript = `
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" className={fraunces.variable}>
       <head>
         <script dangerouslySetInnerHTML={{ __html: prePaintScript }} />
       </head>
