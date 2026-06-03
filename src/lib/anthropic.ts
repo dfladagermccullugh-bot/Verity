@@ -19,13 +19,50 @@ function model(): string {
 
 export type ChatMessage = { role: "user" | "assistant"; content: string };
 
-/** One raw model call. System prompt is always the server-side skill. */
+/** One raw model call. System prompt is always the server-side skill.
+ *  Uses prompt caching: the skill system prompt and the conversation prefix
+ *  up to the previous assistant turn are marked cacheable, so each new turn
+ *  only sends the delta. The model still receives the full prompt + history. */
 export async function callModel(messages: ChatMessage[]): Promise<string> {
-  const resp = await getClient().messages.create({
+  // Cache the prefix up to and including the most recent assistant message.
+  // If there is none yet (first turn), cache through the seed instead so the
+  // next turn benefits.
+  let cacheIdx = -1;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].role === "assistant") {
+      cacheIdx = i;
+      break;
+    }
+  }
+  if (cacheIdx === -1 && messages.length > 0) cacheIdx = 0;
+
+  const formatted = messages.map((m, i) => {
+    if (i === cacheIdx) {
+      return {
+        role: m.role,
+        content: [
+          {
+            type: "text" as const,
+            text: m.content,
+            cache_control: { type: "ephemeral" as const },
+          },
+        ],
+      };
+    }
+    return { role: m.role, content: m.content };
+  });
+
+  const resp = await getClient().beta.promptCaching.messages.create({
     model: model(),
     max_tokens: 4096,
-    system: getSkillPrompt(),
-    messages: messages.map((m) => ({ role: m.role, content: m.content })),
+    system: [
+      {
+        type: "text",
+        text: getSkillPrompt(),
+        cache_control: { type: "ephemeral" },
+      },
+    ],
+    messages: formatted,
   });
   return resp.content
     .filter((b): b is Anthropic.TextBlock => b.type === "text")
