@@ -9,7 +9,7 @@ function SubmitButton() {
     <button
       type="submit"
       disabled={pending}
-      className="mt-4 w-full rounded-xl bg-seed-accent py-3 font-semibold text-seed-bg transition active:scale-[0.98] disabled:opacity-40"
+      className="mt-4 w-full rounded-full bg-primary py-3 font-semibold text-on-primary transition active:scale-[0.98] disabled:opacity-40"
     >
       {pending ? "Signing in…" : "Sign in"}
     </button>
@@ -22,9 +22,9 @@ export default function LoginForm() {
   return (
     <form
       action={formAction}
-      className="w-full max-w-sm rounded-2xl bg-seed-card p-7 shadow-xl"
+      className="w-full max-w-sm rounded-md3-xl bg-surface-container-high p-7 shadow-md3-2"
     >
-      <h1 className="text-center text-xl font-semibold text-seed-accent">
+      <h1 className="text-center text-xl font-semibold text-primary">
         Idea Seeder — Admin
       </h1>
       <input
@@ -32,10 +32,10 @@ export default function LoginForm() {
         name="password"
         autoComplete="current-password"
         placeholder="Password"
-        className="mt-5 w-full rounded-xl border border-white/10 bg-seed-bg p-3 outline-none focus:border-seed-accent/60"
+        className="mt-5 w-full rounded-md3-lg border border-outline-variant bg-surface-container-low p-3 text-on-surface outline-none focus:border-primary"
       />
       {state?.error && (
-        <p className="mt-3 text-center text-sm text-red-400">{state.error}</p>
+        <p className="mt-3 text-center text-sm text-error">{state.error}</p>
       )}
       <SubmitButton />
     </form>

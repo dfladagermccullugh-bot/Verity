@@ -40,7 +40,7 @@ export default async function InterviewPage({
   if (!pending) {
     return (
       <main className="flex min-h-screen items-center justify-center p-6">
-        <p className="text-center text-seed-muted">
+        <p className="text-center text-on-surface-variant">
           One moment — please refresh this page.
         </p>
       </main>

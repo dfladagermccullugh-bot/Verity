@@ -56,9 +56,9 @@ export default function Interview({
 
   return (
     <main className="flex min-h-screen flex-col">
-      <div className="h-1.5 w-full bg-white/5">
+      <div className="h-1.5 w-full bg-surface-container">
         <motion.div
-          className="h-full bg-seed-accent"
+          className="h-full bg-primary"
           animate={{ width: progressWidth(answered) }}
           transition={{ duration: 0.4 }}
         />
@@ -73,11 +73,11 @@ export default function Interview({
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -28 }}
               transition={{ duration: 0.2 }}
-              className="rounded-2xl bg-seed-card p-7 shadow-xl"
+              className="rounded-md3-xl bg-surface-container-high p-7 shadow-md3-2"
             >
-              <p className="min-h-[3.5rem] text-center text-xl font-medium leading-relaxed">
+              <p className="min-h-[3.5rem] text-center text-xl font-medium leading-relaxed text-on-surface">
                 {pending ? (
-                  <span className="text-seed-muted">{loadingWord}…</span>
+                  <span className="text-on-surface-variant">{loadingWord}…</span>
                 ) : (
                   question
                 )}
@@ -87,14 +87,14 @@ export default function Interview({
                 <button
                   onClick={() => send("no")}
                   disabled={pending}
-                  className="rounded-xl border border-white/10 bg-seed-bg py-5 text-lg font-semibold transition active:scale-[0.97] disabled:opacity-40"
+                  className="rounded-full border border-outline bg-surface-container-low py-5 text-lg font-semibold text-on-surface transition active:scale-[0.97] disabled:opacity-40"
                 >
                   No
                 </button>
                 <button
                   onClick={() => send("yes")}
                   disabled={pending}
-                  className="rounded-xl bg-seed-accent py-5 text-lg font-semibold text-seed-bg transition active:scale-[0.97] disabled:opacity-40"
+                  className="rounded-full bg-primary py-5 text-lg font-semibold text-on-primary transition active:scale-[0.97] disabled:opacity-40"
                 >
                   Yes
                 </button>
@@ -103,13 +103,13 @@ export default function Interview({
               <button
                 onClick={() => send("done")}
                 disabled={pending}
-                className="mt-5 w-full text-center text-sm text-seed-muted underline-offset-4 hover:underline disabled:opacity-40"
+                className="mt-5 w-full text-center text-sm text-on-surface-variant underline-offset-4 hover:underline disabled:opacity-40"
               >
                 I&apos;m done — write the PRD
               </button>
 
               {error && (
-                <p className="mt-4 text-center text-sm text-red-400">{error}</p>
+                <p className="mt-4 text-center text-sm text-error">{error}</p>
               )}
             </motion.div>
           </AnimatePresence>

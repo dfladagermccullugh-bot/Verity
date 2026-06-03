@@ -19,20 +19,20 @@ export default async function PrdView({ params }: { params: { id: string } }) {
   return (
     <main className="mx-auto max-w-3xl p-6">
       <div className="flex items-center justify-between">
-        <Link href="/admin/prds" className="text-sm text-seed-accent hover:underline">
+        <Link href="/admin/prds" className="text-sm text-primary hover:underline">
           ← Back
         </Link>
         <a
           href={`/api/admin/prd/${session!.id}`}
-          className="text-sm text-seed-accent hover:underline"
+          className="text-sm text-primary hover:underline"
         >
           Download .md
         </a>
       </div>
-      <p className="mt-4 text-sm text-seed-muted">
+      <p className="mt-4 text-sm text-on-surface-variant">
         {invite?.inviteeName} · seed: {session!.seed}
       </p>
-      <pre className="mt-4 whitespace-pre-wrap rounded-xl border border-white/10 bg-seed-card p-6 text-sm leading-relaxed">
+      <pre className="mt-4 whitespace-pre-wrap rounded-md3-lg border border-outline-variant bg-surface-container-high p-6 text-sm leading-relaxed text-on-surface">
         {session!.prdMarkdown}
       </pre>
     </main>

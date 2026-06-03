@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 function InvalidLink({ message }: { message: string }) {
   return (
     <main className="flex min-h-screen items-center justify-center p-6">
-      <p className="max-w-sm text-center text-seed-muted">{message}</p>
+      <p className="max-w-sm text-center text-on-surface-variant">{message}</p>
     </main>
   );
 }
