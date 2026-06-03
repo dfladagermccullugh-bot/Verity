@@ -44,6 +44,12 @@ const config: Config = {
           "Segoe UI",
           "sans-serif",
         ],
+        display: [
+          "var(--font-display)",
+          "ui-serif",
+          "Georgia",
+          "serif",
+        ],
       },
       borderRadius: {
         md3: "12px",

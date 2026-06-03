@@ -23,7 +23,12 @@
       "Bash(git -c user.email=\"dfladagermccullugh@gmail.com\" -c user.name=\"Davin\" merge origin/main --allow-unrelated-histories --no-edit)",
       "Bash(DATABASE_URL='postgresql://neondb_owner:npg_SuFxf53esTHI@ep-weathered-silence-aqig8tlr-pooler.c-8.us-east-1.aws.neon.tech/neondb?sslmode=require' npx drizzle-kit migrate)",
       "Bash(git -c user.email=\"dfladagermccullugh@gmail.com\" -c user.name=\"Davin\" commit -q -m \"Inline skill markdown into bundle \\(fix serverless ENOENT on Vercel\\)\")",
-      "Bash(npm run *)"
+      "Bash(npm run *)",
+      "Bash(git commit -m ' *)",
+      "PowerShell(gh pr list --head claude/fervent-black-0c9a73 --json url,number,state)",
+      "PowerShell(\\(Get-Command gh -ErrorAction SilentlyContinue\\).Source; if \\(-not $?\\) { Get-ChildItem -Path \"C:\\\\Program Files\\\\GitHub CLI\",\"$env:LOCALAPPDATA\\\\Programs\\\\GitHub CLI\" -Filter gh.exe -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName })",
+      "Bash(env)",
+      "Bash(command -v gh)"
     ]
   }
 }
