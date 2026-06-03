@@ -29,7 +29,7 @@ export default async function DonePage({
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-6">
       <Puppy />
-      <p className="mt-6 text-center text-seed-muted">
+      <p className="mt-6 text-center text-on-surface-variant">
         Your idea&apos;s in good hands.
       </p>
     </main>

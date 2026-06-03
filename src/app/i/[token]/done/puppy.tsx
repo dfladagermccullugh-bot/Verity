@@ -30,10 +30,10 @@ export default function Puppy() {
         transition={{ type: "spring", stiffness: 220, damping: 14, delay: 0.15 }}
         className="relative mb-2"
       >
-        <span className="inline-block rounded-2xl border-2 border-seed-text bg-white px-5 py-2 text-2xl font-extrabold tracking-tight text-seed-bg shadow-[3px_3px_0_0_rgba(232,241,236,0.9)]">
+        <span className="inline-block rounded-md3-lg border-2 border-inverse-surface bg-inverse-surface px-5 py-2 text-2xl font-extrabold tracking-tight text-inverse-on-surface shadow-md3-1">
           WOOF! Thank you!
         </span>
-        <span className="absolute -bottom-2 left-10 h-4 w-4 rotate-45 border-b-2 border-r-2 border-seed-text bg-white" />
+        <span className="absolute -bottom-2 left-10 h-4 w-4 rotate-45 border-b-2 border-r-2 border-inverse-surface bg-inverse-surface" />
       </motion.div>
 
       <div className="h-56 w-56">

@@ -34,9 +34,9 @@ export default async function PrdsPage() {
   return (
     <main className="mx-auto max-w-5xl p-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-seed-accent">PRDs</h1>
+        <h1 className="text-2xl font-semibold text-primary">PRDs</h1>
         <form action={logout}>
-          <button className="text-sm text-seed-muted hover:underline">
+          <button className="text-sm text-on-surface-variant hover:underline">
             Sign out
           </button>
         </form>
@@ -46,9 +46,9 @@ export default async function PrdsPage() {
         <NewInvite />
       </div>
 
-      <div className="mt-8 overflow-x-auto rounded-xl border border-white/10">
+      <div className="mt-8 overflow-x-auto rounded-md3-lg border border-outline-variant">
         <table className="w-full text-left text-sm">
-          <thead className="bg-white/5 text-seed-muted">
+          <thead className="bg-surface-container text-on-surface-variant">
             <tr>
               <th className="p-3">Invitee</th>
               <th className="p-3">Seed</th>
@@ -61,7 +61,7 @@ export default async function PrdsPage() {
           <tbody>
             {rows.length === 0 && (
               <tr>
-                <td colSpan={6} className="p-6 text-center text-seed-muted">
+                <td colSpan={6} className="p-6 text-center text-on-surface-variant">
                   No sessions yet.
                 </td>
               </tr>
@@ -77,22 +77,22 @@ export default async function PrdsPage() {
                   )
                 : null;
               return (
-                <tr key={session.id} className="border-t border-white/10">
+                <tr key={session.id} className="border-t border-outline-variant">
                   <td className="p-3">{invite.inviteeName}</td>
-                  <td className="max-w-[18rem] truncate p-3 text-seed-muted">
+                  <td className="max-w-[18rem] truncate p-3 text-on-surface-variant">
                     {session.seed}
                   </td>
-                  <td className="p-3 text-seed-muted">
+                  <td className="p-3 text-on-surface-variant">
                     {fmtDate(session.startedAt)}
                   </td>
                   <td className="p-3">{qCount}</td>
                   <td className="p-3">
                     {completed ? (
-                      <span className="text-seed-accent">
+                      <span className="text-primary">
                         done · {durationS}s
                       </span>
                     ) : (
-                      <span className="text-seed-muted">in progress</span>
+                      <span className="text-on-surface-variant">in progress</span>
                     )}
                   </td>
                   <td className="p-3">
@@ -100,13 +100,13 @@ export default async function PrdsPage() {
                       <span className="flex gap-3">
                         <Link
                           href={`/admin/prds/${session.id}`}
-                          className="text-seed-accent hover:underline"
+                          className="text-primary hover:underline"
                         >
                           View
                         </Link>
                         <a
                           href={`/api/admin/prd/${session.id}`}
-                          className="text-seed-accent hover:underline"
+                          className="text-primary hover:underline"
                         >
                           .md
                         </a>
@@ -125,7 +125,7 @@ export default async function PrdsPage() {
       <div className="mt-6 flex justify-end">
         <a
           href="/api/admin/export"
-          className="rounded-lg border border-seed-accent/50 px-4 py-2 text-sm text-seed-accent hover:bg-seed-accent/10"
+          className="rounded-full border border-outline px-4 py-2 text-sm text-primary hover:bg-primary/10"
         >
           Export training data
         </a>
