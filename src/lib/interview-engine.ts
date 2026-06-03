@@ -1,28 +1,30 @@
 import "server-only";
 import { and, asc, eq, isNull } from "drizzle-orm";
 import { db } from "./db";
-import { invites, sessions, turns, type Session } from "./db/schema";
+import { invites, sessions, turns, type Session, type Turn } from "./db/schema";
 import { callModel, type ChatMessage } from "./anthropic";
 import { guardOutput, STOP_CONFIRM } from "./guard";
 import { sendPrdEmail } from "./email";
 
 export const RUNAWAY_CEILING = 40;
 
-/** Rebuild the model conversation from the seed + answered turns. */
-async function rebuildMessages(session: Session): Promise<ChatMessage[]> {
-  const answered = await db
-    .select()
-    .from(turns)
-    .where(eq(turns.sessionId, session.id))
-    .orderBy(asc(turns.step));
-
-  const messages: ChatMessage[] = [{ role: "user", content: session.seed }];
-  for (const t of answered) {
+/** Build the model conversation from the seed + already-answered turns. */
+function messagesFromTurns(seed: string, allTurns: Turn[]): ChatMessage[] {
+  const messages: ChatMessage[] = [{ role: "user", content: seed }];
+  for (const t of allTurns) {
     if (t.answer == null) continue; // pending (unanswered) turn — not part of history yet
     messages.push({ role: "assistant", content: t.questionText });
     messages.push({ role: "user", content: t.answer });
   }
   return messages;
+}
+
+async function loadTurns(sessionId: string): Promise<Turn[]> {
+  return db
+    .select()
+    .from(turns)
+    .where(eq(turns.sessionId, sessionId))
+    .orderBy(asc(turns.step));
 }
 
 type NextShape =
@@ -88,15 +90,6 @@ async function finalizeWithPrd(session: Session, markdown: string): Promise<void
   });
 }
 
-/** Number of answered turns in a session. */
-async function answeredCount(sessionId: string): Promise<number> {
-  const rows = await db
-    .select({ answer: turns.answer })
-    .from(turns)
-    .where(eq(turns.sessionId, sessionId));
-  return rows.filter((r) => r.answer != null).length;
-}
-
 /** The currently-displayed (unanswered) turn, if any. */
 export async function pendingTurn(sessionId: string) {
   const [row] = await db
@@ -107,20 +100,12 @@ export async function pendingTurn(sessionId: string) {
   return row ?? null;
 }
 
-export async function nextStepNumber(sessionId: string): Promise<number> {
-  const rows = await db
-    .select({ step: turns.step })
-    .from(turns)
-    .where(eq(turns.sessionId, sessionId));
-  return rows.reduce((m, r) => Math.max(m, r.step), 0) + 1;
-}
-
 /** Step 1: first model call after the seed is submitted. */
 export async function beginInterview(session: Session): Promise<
   | { kind: "question"; text: string }
   | { kind: "done" }
 > {
-  const messages = await rebuildMessages(session);
+  const messages: ChatMessage[] = [{ role: "user", content: session.seed }];
   const shape = await generateNextShape(messages);
 
   if (shape.kind === "question") {
@@ -149,35 +134,35 @@ export async function submitAnswer(
 ): Promise<{ kind: "question"; text: string } | { kind: "done" }> {
   if (session.completedAt) return { kind: "done" };
 
-  const pending = await pendingTurn(session.id);
+  // One fetch covers pending lookup, history rebuild, answered count, and next-step number.
+  const allTurns = await loadTurns(session.id);
+  const pending = allTurns.find((t) => t.answer == null) ?? null;
+
   if (pending) {
     await db
       .update(turns)
       .set({ answer, timeToAnswerMs })
       .where(eq(turns.id, pending.id));
+    pending.answer = answer; // reflect the write in-memory; avoids a refetch
   }
 
-  const refreshed = await db.query.sessions.findFirst({
-    where: eq(sessions.id, session.id),
-  });
-  const current = refreshed ?? session;
-  const messages = await rebuildMessages(current);
-  const count = await answeredCount(session.id);
+  const messages = messagesFromTurns(session.seed, allTurns);
+  const count = allTurns.reduce((n, t) => (t.answer != null ? n + 1 : n), 0);
+  const nextStep = allTurns.reduce((m, t) => Math.max(m, t.step), 0) + 1;
 
   // Invitee asked to finish, or runaway ceiling reached → go straight to PRD.
   if (answer === "done" || count >= RUNAWAY_CEILING) {
     const markdown = await forcePrd(messages);
-    await finalizeWithPrd(current, markdown);
+    await finalizeWithPrd(session, markdown);
     return { kind: "done" };
   }
 
   const shape = await generateNextShape(messages);
 
   if (shape.kind === "question") {
-    const step = await nextStepNumber(session.id);
     await db.insert(turns).values({
       sessionId: session.id,
-      step,
+      step: nextStep,
       questionText: shape.text,
       answer: null,
       timeToAnswerMs: null,
@@ -188,6 +173,6 @@ export async function submitAnswer(
   // stop_confirm or prd → finish silently (invitee never sees the confirmation).
   const markdown =
     shape.kind === "prd" ? shape.markdown : await forcePrd(messages);
-  await finalizeWithPrd(current, markdown);
+  await finalizeWithPrd(session, markdown);
   return { kind: "done" };
 }
