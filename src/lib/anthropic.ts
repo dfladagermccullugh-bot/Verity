@@ -13,9 +13,12 @@ function getClient(): Anthropic {
   return client;
 }
 
-function model(): string {
+export function getModelName(): string {
   return process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6";
 }
+
+/** Max tokens passed to every model call. Surfaced for disclosure. */
+export const MAX_TOKENS = 4096;
 
 export type ChatMessage = { role: "user" | "assistant"; content: string };
 
@@ -53,8 +56,8 @@ export async function callModel(messages: ChatMessage[]): Promise<string> {
   });
 
   const resp = await getClient().beta.promptCaching.messages.create({
-    model: model(),
-    max_tokens: 4096,
+    model: getModelName(),
+    max_tokens: MAX_TOKENS,
     system: [
       {
         type: "text",

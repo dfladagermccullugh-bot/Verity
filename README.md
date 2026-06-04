@@ -61,6 +61,12 @@ PRD markdown emailed to operator + stored
 - *Model refuses to write the PRD.* The forcer appends an increasingly explicit instruction and accepts a best-effort markdown blob on the last attempt — the operator always gets something to read.
 - *Latency feels dead.* Optimistic card transitions and a cycling word make the wait feel like motion rather than a stall.
 
+## Survey methodology
+
+Verity sits in the highest-risk quadrant of the AAPOR taxonomy for AI in survey research — it is both an *AI Interviewer* (asking questions) and an *AI Analyst* (synthesizing the final artifact from collected responses). Every generated PRD therefore carries a methodology footer modeled on the Required Disclosures specified by the [AAPOR Task Force on Responsible AI Integration in Survey Research (2026)](https://aapor.org/wp-content/uploads/2026/05/Responsible-AI-Integration-In-Survey-Research.pdf): tasks performed by AI, plain-language description of the AI's role, human oversight and validation, number of human respondents, model identifier, system-prompt SHA-256 fingerprint, statefulness, sampling parameters, and date of generation. The provenance is frozen with the artifact at finalization time, so a reader months later can still see the exact conditions under which a specific PRD was produced.
+
+See [src/lib/disclosure.ts](src/lib/disclosure.ts) for the disclosure template and [src/lib/interview-engine.ts](src/lib/interview-engine.ts) for where it is appended.
+
 ## Stack
 
 - **Next.js 14** App Router, React 18, TypeScript, server actions for the interview loop
