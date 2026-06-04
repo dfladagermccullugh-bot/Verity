@@ -46,6 +46,17 @@ export default async function PrdView({ params }: { params: { id: string } }) {
         session: {session!.id}
       </p>
 
+      {session!.constructBrief && (
+        <details className="mt-6 rounded-md3-lg border border-outline-variant bg-surface-container-low">
+          <summary className="cursor-pointer p-4 text-xs font-semibold uppercase tracking-wider text-on-surface-variant">
+            Construct brief (validity check, AAPOR §4.3.1)
+          </summary>
+          <pre className="whitespace-pre-wrap border-t border-outline-variant p-6 text-sm leading-relaxed text-on-surface">
+            {session!.constructBrief}
+          </pre>
+        </details>
+      )}
+
       <h2 className="mt-6 text-xs font-semibold uppercase tracking-wider text-on-surface-variant">
         PRD
       </h2>

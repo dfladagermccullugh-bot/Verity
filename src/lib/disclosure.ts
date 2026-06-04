@@ -25,6 +25,13 @@ export interface DocumentInputs {
   date?: string;
 }
 
+export interface MethodologyInputs extends DocumentInputs {
+  /** True iff a construct-validity probe (AAPOR §4.3.1) was logged for the
+   *  session. Surfaced as a single line under Human oversight and validation
+   *  so the disclosure reflects only what actually happened. */
+  constructBriefPresent?: boolean;
+}
+
 function today(): string {
   return new Date().toISOString().slice(0, 10);
 }
@@ -57,11 +64,21 @@ export function buildPrdHeader(inputs: DocumentInputs): string {
  * the model identifier, prompt fingerprint, and date reflect the conditions
  * that produced the linked PRD — not whatever is configured today.
  */
-export function buildMethodologyDocument(inputs: DocumentInputs): string {
+export function buildMethodologyDocument(inputs: MethodologyInputs): string {
   const date = inputs.date ?? today();
   const model = getModelName();
   const promptFingerprint = getSkillVersion();
   const companion = prdFilename(inputs.sessionId);
+
+  const oversightLines = [
+    "Question-generation outputs are validated turn-by-turn by the deterministic guard described above (the rule-bounded conversation engine recommended in AAPOR §3.1.1). The completed PRD is reviewed by a human operator before any downstream action is taken. No subset audit of historical interview transcripts has been conducted as of this generation.",
+  ];
+  if (inputs.constructBriefPresent) {
+    oversightLines.push(
+      "",
+      "**Construct-validity probe:** A structured restatement of the seed's intent — goal, scope, in-bounds and out-of-bounds examples — was generated and logged before the first interview question, following AAPOR §4.3.1. The brief is available in the session record for human review.",
+    );
+  }
 
   return [
     `<!-- Verity Methodology · Session ${inputs.sessionId} · Generated ${date} · Companion PRD: ${companion} -->`,
@@ -86,7 +103,7 @@ export function buildMethodologyDocument(inputs: DocumentInputs): string {
     "",
     "## Human oversight and validation",
     "",
-    "Question-generation outputs are validated turn-by-turn by the deterministic guard described above (the rule-bounded conversation engine recommended in AAPOR §3.1.1). The completed PRD is reviewed by a human operator before any downstream action is taken. No subset audit of historical interview transcripts has been conducted as of this generation.",
+    ...oversightLines,
     "",
     "## Human respondents",
     "",

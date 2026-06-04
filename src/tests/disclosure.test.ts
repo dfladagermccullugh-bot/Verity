@@ -105,4 +105,18 @@ describe("buildMethodologyDocument — AAPOR Required Disclosures", () => {
     const today = new Date().toISOString().slice(0, 10);
     expect(d).toContain(today);
   });
+
+  it("omits the construct-validity probe line by default", () => {
+    expect(doc).not.toMatch(/Construct-validity probe/);
+  });
+
+  it("includes the construct-validity probe line only when one was logged", () => {
+    const withProbe = buildMethodologyDocument({
+      sessionId: SESSION_ID,
+      date: DATE,
+      constructBriefPresent: true,
+    });
+    expect(withProbe).toMatch(/\*\*Construct-validity probe:\*\*/);
+    expect(withProbe).toMatch(/AAPOR §4\.3\.1/);
+  });
 });

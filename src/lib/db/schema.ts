@@ -22,6 +22,7 @@ export const sessions = pgTable("sessions", {
   abandonedAtStep: integer("abandoned_at_step"),
   prdMarkdown: text("prd_markdown"),
   methodologyMarkdown: text("methodology_markdown"),
+  constructBrief: text("construct_brief"),
 });
 
 export const turns = pgTable("turns", {

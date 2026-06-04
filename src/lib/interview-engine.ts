@@ -6,6 +6,7 @@ import { callModel, type ChatMessage } from "./anthropic";
 import { guardOutput, STOP_CONFIRM } from "./guard";
 import { sendPrdEmail } from "./email";
 import { buildPrdHeader, buildMethodologyDocument } from "./disclosure";
+import { buildConstructBrief } from "./construct-brief";
 
 export const RUNAWAY_CEILING = 40;
 
@@ -77,8 +78,19 @@ async function finalizeWithPrd(session: Session, markdown: string): Promise<void
   // methodology document; the full AAPOR disclosure lives in a separate field
   // so it can be distributed as its own file. Both documents share the session
   // ID in their filenames and headers, so the association survives separation.
+  //
+  // Re-read the session before building the methodology document — the
+  // in-memory copy is from before the construct-brief probe ran.
+  const fresh = await db.query.sessions.findFirst({
+    where: eq(sessions.id, session.id),
+  });
+  const constructBriefPresent = !!fresh?.constructBrief;
+
   const prdMarkdown = buildPrdHeader({ sessionId: session.id }) + markdown;
-  const methodologyMarkdown = buildMethodologyDocument({ sessionId: session.id });
+  const methodologyMarkdown = buildMethodologyDocument({
+    sessionId: session.id,
+    constructBriefPresent,
+  });
 
   await db
     .update(sessions)
@@ -116,11 +128,35 @@ export async function pendingTurn(sessionId: string) {
   return row ?? null;
 }
 
+/**
+ * Best-effort sidecar call: run the construct-validity probe and persist the
+ * brief on the session. Never throws — a missing brief must not block the
+ * interview, only flag it as missing in the methodology disclosure.
+ */
+async function persistConstructBrief(session: Session): Promise<void> {
+  try {
+    const brief = await buildConstructBrief(session.seed);
+    if (brief) {
+      await db
+        .update(sessions)
+        .set({ constructBrief: brief })
+        .where(eq(sessions.id, session.id));
+    }
+  } catch {
+    // Swallow — the interview must proceed even if the auditor call fails.
+  }
+}
+
 /** Step 1: first model call after the seed is submitted. */
 export async function beginInterview(session: Session): Promise<
   | { kind: "question"; text: string }
   | { kind: "done" }
 > {
+  // Fire the AAPOR §4.3.1 construct-validity probe before generating the
+  // first question. Awaited so the brief is on file (or known-missing) before
+  // any substantive content is produced.
+  await persistConstructBrief(session);
+
   const messages: ChatMessage[] = [{ role: "user", content: session.seed }];
   const shape = await generateNextShape(messages);
 
