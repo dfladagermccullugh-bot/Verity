@@ -73,3 +73,23 @@ export async function callModel(messages: ChatMessage[]): Promise<string> {
     .join("")
     .trim();
 }
+
+/** One-shot call with a custom system prompt. Used for sidecar calls that are
+ *  not part of the interview loop (e.g. the construct-validity probe) — they
+ *  must not inherit the interview system prompt or pollute its cached prefix. */
+export async function callModelOneShot(
+  systemPrompt: string,
+  userMessage: string
+): Promise<string> {
+  const resp = await getClient().messages.create({
+    model: getModelName(),
+    max_tokens: MAX_TOKENS,
+    system: systemPrompt,
+    messages: [{ role: "user", content: userMessage }],
+  });
+  return resp.content
+    .filter((b): b is Anthropic.TextBlock => b.type === "text")
+    .map((b) => b.text)
+    .join("")
+    .trim();
+}
