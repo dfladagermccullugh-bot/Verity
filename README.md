@@ -101,3 +101,7 @@ npm run dev
 ```
 
 Tests: `npm test`. Type-check: `npm run typecheck`.
+
+## Deploys
+
+Vercel uses `npm run vercel-build`, which applies any pending Drizzle migrations before building Next.js (`drizzle-kit migrate && next build`). This keeps the schema in lockstep with the code on every deploy — no manual migration step required when a PR adds a new migration file. `DATABASE_URL` must be available at build time (not runtime-only) in the Vercel project settings for this to work.
