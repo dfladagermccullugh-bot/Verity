@@ -5,7 +5,7 @@ import { invites, sessions, turns, type Session, type Turn } from "./db/schema";
 import { callModel, type ChatMessage } from "./anthropic";
 import { guardOutput, STOP_CONFIRM } from "./guard";
 import { sendPrdEmail } from "./email";
-import { buildMethodologyFooter } from "./disclosure";
+import { buildPrdHeader, buildMethodologyDocument } from "./disclosure";
 
 export const RUNAWAY_CEILING = 40;
 
@@ -72,13 +72,22 @@ async function forcePrd(messages: ChatMessage[]): Promise<string> {
 }
 
 async function finalizeWithPrd(session: Session, markdown: string): Promise<void> {
-  // Freeze methodology provenance with the artifact: model, prompt fingerprint,
-  // and date at the time of generation travel with the PRD into the DB, the
-  // admin view, the markdown download, and the operator's inbox.
-  const finalMarkdown = markdown + buildMethodologyFooter();
+  // Freeze methodology provenance with the artifact. The PRD itself carries
+  // only an invisible HTML-comment header linking it to the companion
+  // methodology document; the full AAPOR disclosure lives in a separate field
+  // so it can be distributed as its own file. Both documents share the session
+  // ID in their filenames and headers, so the association survives separation.
+  const prdMarkdown = buildPrdHeader({ sessionId: session.id }) + markdown;
+  const methodologyMarkdown = buildMethodologyDocument({ sessionId: session.id });
+
   await db
     .update(sessions)
-    .set({ prdMarkdown: finalMarkdown, completedAt: new Date(), abandonedAtStep: null })
+    .set({
+      prdMarkdown,
+      methodologyMarkdown,
+      completedAt: new Date(),
+      abandonedAtStep: null,
+    })
     .where(eq(sessions.id, session.id));
   await db
     .update(invites)
@@ -91,7 +100,9 @@ async function finalizeWithPrd(session: Session, markdown: string): Promise<void
   await sendPrdEmail({
     inviteeName: invite?.inviteeName ?? "Unknown",
     seed: session.seed,
-    prdMarkdown: finalMarkdown,
+    sessionId: session.id,
+    prdMarkdown,
+    methodologyMarkdown,
   });
 }
 

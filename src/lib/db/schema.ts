@@ -21,6 +21,7 @@ export const sessions = pgTable("sessions", {
   completedAt: timestamp("completed_at", { withTimezone: true }),
   abandonedAtStep: integer("abandoned_at_step"),
   prdMarkdown: text("prd_markdown"),
+  methodologyMarkdown: text("methodology_markdown"),
 });
 
 export const turns = pgTable("turns", {

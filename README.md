@@ -63,9 +63,14 @@ PRD markdown emailed to operator + stored
 
 ## Survey methodology
 
-Verity sits in the highest-risk quadrant of the AAPOR taxonomy for AI in survey research — it is both an *AI Interviewer* (asking questions) and an *AI Analyst* (synthesizing the final artifact from collected responses). Every generated PRD therefore carries a methodology footer modeled on the Required Disclosures specified by the [AAPOR Task Force on Responsible AI Integration in Survey Research (2026)](https://aapor.org/wp-content/uploads/2026/05/Responsible-AI-Integration-In-Survey-Research.pdf): tasks performed by AI, plain-language description of the AI's role, human oversight and validation, number of human respondents, model identifier, system-prompt SHA-256 fingerprint, statefulness, sampling parameters, and date of generation. The provenance is frozen with the artifact at finalization time, so a reader months later can still see the exact conditions under which a specific PRD was produced.
+Verity sits in the highest-risk quadrant of the AAPOR taxonomy for AI in survey research — it is both an *AI Interviewer* (asking questions) and an *AI Analyst* (synthesizing the final artifact from collected responses). Every completed session therefore produces two linked documents, modeled on the Required Disclosures framework specified by the [AAPOR Task Force on Responsible AI Integration in Survey Research (2026)](https://aapor.org/wp-content/uploads/2026/05/Responsible-AI-Integration-In-Survey-Research.pdf):
 
-See [src/lib/disclosure.ts](src/lib/disclosure.ts) for the disclosure template and [src/lib/interview-engine.ts](src/lib/interview-engine.ts) for where it is appended.
+- `prd-<session-id>.md` — the substantive PRD. Clean for downstream consumers (notably AI coding agents). Carries an invisible HTML-comment header naming its companion methodology document.
+- `methodology-<session-id>.md` — the AAPOR-style disclosure: tasks performed by AI, plain-language role description, human oversight and validation, number of human respondents (N=1), model identifier, system-prompt SHA-256 fingerprint, statefulness, sampling parameters, and date of generation.
+
+Both documents share the Verity session ID in their filenames and headers, so the association survives if the files are separated in transit. Provenance is frozen at finalization time — model and prompt fingerprint reflect the conditions that produced *this specific* PRD, not whatever is configured today. Following survey-research convention, the methodology lives outside the deliverable's body rather than inside it.
+
+See [src/lib/disclosure.ts](src/lib/disclosure.ts) for the document templates and [src/lib/interview-engine.ts](src/lib/interview-engine.ts) for where they are persisted.
 
 ## Stack
 
