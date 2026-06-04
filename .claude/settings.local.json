@@ -46,7 +46,12 @@
       "Bash(awk 'NR>=1540 && NR<=1640 {print NR\": \"$0}' /tmp/aapor.txt)",
       "Bash(git reset *)",
       "Bash(npm test *)",
-      "Bash(git checkout *)"
+      "Bash(git checkout *)",
+      "PowerShell($paths = @\\(\\); foreach \\($d in @\\(\"C:\\\\Program Files\\\\GitHub CLI\", \"$env:LOCALAPPDATA\\\\Programs\\\\GitHub CLI\", \"$env:ProgramFiles\\\\GitHub CLI\", \"C:\\\\Program Files \\(x86\\)\\\\GitHub CLI\"\\)\\) { if \\(Test-Path $d\\) { Get-ChildItem $d -Filter gh.exe -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName } })",
+      "Read(//c/Program Files/**)",
+      "Read(//c/Users/LCAC/AppData/Local/Programs/**)",
+      "Bash(git config *)",
+      "Bash(git credential *)"
     ]
   }
 }

@@ -1,0 +1,5 @@
+{
+  "_comment": "Reliability baseline for the canary suite (AAPOR §4.2.4). The model id is checked exactly; per-seed metrics are checked against the tolerances defined in scripts/canary.ts. Sentinel value `null` for `model` means 'not yet baselined' — the runner will print clear instructions to run `npm run canary:rebaseline` once with the production model and ANTHROPIC_API_KEY set, then commit the result.",
+  "model": null,
+  "seeds": {}
+}

@@ -63,14 +63,18 @@ PRD markdown emailed to operator + stored
 
 ## Survey methodology
 
-Verity sits in the highest-risk quadrant of the AAPOR taxonomy for AI in survey research — it is both an *AI Interviewer* (asking questions) and an *AI Analyst* (synthesizing the final artifact from collected responses). Every completed session therefore produces two linked documents, modeled on the Required Disclosures framework specified by the [AAPOR Task Force on Responsible AI Integration in Survey Research (2026)](https://aapor.org/wp-content/uploads/2026/05/Responsible-AI-Integration-In-Survey-Research.pdf):
+Verity sits in the highest-risk quadrant of the AAPOR taxonomy for AI in survey research — it is both an *AI Interviewer* (asking questions) and an *AI Analyst* (synthesizing the final artifact from collected responses). That framing maps onto three concrete obligations from the [AAPOR Task Force on Responsible AI Integration in Survey Research (2026)](https://aapor.org/wp-content/uploads/2026/05/Responsible-AI-Integration-In-Survey-Research.pdf), each implemented as code that runs on every session or every week:
+
+**1. Required Disclosures, as a companion document (§5 — Disclosure).** Every completed session emits two linked files:
 
 - `prd-<session-id>.md` — the substantive PRD. Clean for downstream consumers (notably AI coding agents). Carries an invisible HTML-comment header naming its companion methodology document.
 - `methodology-<session-id>.md` — the AAPOR-style disclosure: tasks performed by AI, plain-language role description, human oversight and validation, number of human respondents (N=1), model identifier, system-prompt SHA-256 fingerprint, statefulness, sampling parameters, and date of generation.
 
-Both documents share the Verity session ID in their filenames and headers, so the association survives if the files are separated in transit. Provenance is frozen at finalization time — model and prompt fingerprint reflect the conditions that produced *this specific* PRD, not whatever is configured today. Following survey-research convention, the methodology lives outside the deliverable's body rather than inside it.
+Both documents share the Verity session ID in their filenames and headers, so the association survives if the files are separated in transit. Provenance is frozen at finalization time — model and prompt fingerprint reflect the conditions that produced *this specific* PRD, not whatever is configured today. Following survey-research convention, the methodology lives outside the deliverable's body rather than inside it. See [src/lib/disclosure.ts](src/lib/disclosure.ts).
 
-See [src/lib/disclosure.ts](src/lib/disclosure.ts) for the document templates and [src/lib/interview-engine.ts](src/lib/interview-engine.ts) for where they are persisted.
+**2. Pre-flight construct-validity probe (§4.3.1 — Validity).** Before the first interview question, an auditor LLM call restates the seed's intent — goal, scope, in-bounds and out-of-bounds examples — and persists the result on the session. A reviewer can later confirm the interview was about the *right thing*; a session whose interview targeted the wrong construct is identifiable after the fact. The probe is log-only by design (not fed back into the interview system prompt) so brief-vs-interview drift remains auditable. See [src/lib/construct-brief.ts](src/lib/construct-brief.ts).
+
+**3. Continuous reliability monitoring (§4.1.3 + §4.2.4 — Reliability).** A fixed reference dataset of five seeds with deterministic answer scripts replays through the engine each week. Key output distributions — turn count, guard-reject rate, mean question length, PRD heading presence, termination path — are diffed against a committed baseline. Drift beyond stated tolerances opens a GitHub Issue rather than degrading silently. The canary runs entirely off the database so it never pollutes the admin view, and uses the same model id as production so silent provider-side changes show up as drift. See [src/lib/canaries/](src/lib/canaries/), [scripts/canary.ts](scripts/canary.ts), and [.github/workflows/canary.yml](.github/workflows/canary.yml).
 
 ## Stack
 

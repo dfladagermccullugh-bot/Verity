@@ -1,0 +1,32 @@
+[
+  {
+    "id": "kids-multiplication-puzzle",
+    "category": "B2C consumer app",
+    "seed": "A puzzle app for 6 to 8 year olds that teaches multiplication facts.",
+    "answerScript": ["yes", "no", "yes", "yes", "no", "yes", "no", "yes", "yes", "no", "yes", "done"]
+  },
+  {
+    "id": "dental-appointment-reminders",
+    "category": "B2B SaaS",
+    "seed": "A tool that helps small dental practices remind patients about upcoming appointments.",
+    "answerScript": ["yes", "yes", "no", "yes", "no", "yes", "yes", "no", "yes", "no", "yes", "done"]
+  },
+  {
+    "id": "new-parents-book-club",
+    "category": "service / community",
+    "seed": "A weekly virtual book club for new parents that meets in the evening.",
+    "answerScript": ["yes", "no", "no", "yes", "yes", "no", "yes", "no", "yes", "yes", "no", "done"]
+  },
+  {
+    "id": "hydration-water-bottle",
+    "category": "physical product",
+    "seed": "A reusable water bottle that nudges you to drink throughout the day.",
+    "answerScript": ["yes", "yes", "no", "no", "yes", "yes", "no", "yes", "yes", "no", "yes", "done"]
+  },
+  {
+    "id": "ambiguous-journaling",
+    "category": "ambiguous short seed",
+    "seed": "Something to help me journal more consistently.",
+    "answerScript": ["yes", "no", "yes", "yes", "yes", "no", "no", "yes", "no", "yes", "yes", "done"]
+  }
+]
