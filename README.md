@@ -1,26 +1,24 @@
 # Verity
 
-A constrained-interview tool that turns a vague idea into a structured PRD. The invitee answers nothing but **yes**, **no**, or **done** — the model carries the burden of asking.
+A constrained-interview tool that turns a one-sentence idea into a structured PRD. The invitee answers only yes, no, or done. The model does the asking.
 
 Live: invite-only. See *Try it* below.
 
----
+## Problem
 
-## The problem
-
-Most AI brainstorming tools hand the user a blank text box and ask them to type. That works for people who already know what they want to build. For everyone else — a stakeholder with a half-formed idea, a designer who can describe a feeling but not a spec, a founder mid-shower-thought — the blank box is the bottleneck. Typing is slow, typing forces premature commitment, and a long-form answer to a vague prompt usually produces a long-form mess.
+Most AI brainstorming tools hand the user a blank text box. That works for people who already know what they want. For everyone else — a stakeholder with a half-formed idea, a designer who can describe a feeling but not a spec — the blank box is the bottleneck. Typing is slow, it forces premature commitment, and a long-form answer to a vague prompt usually produces a long-form mess.
 
 The interesting question is not "how do we get better answers from the user?" It is "how little do we need from the user to extract a coherent product brief?"
 
-## The approach
+## Approach
 
-Verity reduces the user's surface area to three buttons. The model is required to ask exactly one yes/no question per turn, and the system rejects any output that isn't a single, jargon-free, single-sentence question. When the model decides it has enough signal, it emits a PRD in markdown and the session ends.
+Reduce the user's surface area to three buttons. Require the model to ask exactly one yes/no question per turn. Reject any output that isn't a single, jargon-free question and force a regeneration. When the model decides it has enough signal, it emits a PRD and the session ends.
 
 Two design bets sit underneath that:
 
-1. **Constraint as interface.** A yes/no answer is roughly one bit of information, but a *well-targeted* yes/no answer from the right branch of a decision tree is worth a paragraph of vague prose. The model's job is to pick the right next question; the user's job is to react. The interaction is faster, lower-stakes, and surprisingly more honest — people commit to opinions they would have hedged on in writing.
+1. **Constraint as interface.** A yes/no answer is one bit of information, but a well-targeted one from the right branch of a decision tree is worth a paragraph of vague prose. The model picks the next question; the user reacts. The interaction is faster, lower-stakes, and more honest — people commit to opinions they would have hedged on in writing.
 
-2. **Hard guardrails, not soft prompting.** The system prompt asks for good behavior; the [output guard](src/lib/guard.ts) enforces it. Multi-line output, batched questions, technology jargon, and missing question marks all fail the guard, trigger a regeneration, and — on a second failure — force the model into the PRD-write path. The model is never trusted to follow format rules on its own.
+2. **Hard guardrails, not soft prompting.** The system prompt asks for good behavior; the [output guard](src/lib/guard.ts) enforces it. Multi-line output, batched questions, technology jargon, and missing question marks fail the guard, trigger a regeneration, and on a second failure force the PRD-write path. The model is never trusted to follow format rules on its own.
 
 ## How it works
 
@@ -40,72 +38,68 @@ seed (one sentence)
 │       └──────────────┘                      │
 │                                             │
 │  on done / runaway / model-stop:            │
-│       force PRD → email PRD                 │
+│       force PRD → email PRD + methodology   │
 └─────────────────────────────────────────────┘
     │
     ▼
-PRD markdown emailed to operator + stored
+PRD + methodology disclosure emailed and stored
 ```
 
-**Flow.** An admin creates a single-use invite. The invitee opens the link, writes one seed sentence, then answers yes/no questions one at a time until the model has enough to write the PRD — or until they tap *I'm done*. The PRD is generated, persisted, and emailed.
+An admin issues a single-use invite. The invitee writes one seed sentence, then answers yes/no questions until the model has enough or the invitee taps *I'm done*. The PRD and its companion methodology document are generated, persisted, and emailed.
 
-**Key files.**
-- [src/lib/interview-engine.ts](src/lib/interview-engine.ts) — turn loop, retry policy, runaway ceiling, PRD-forcing fallback
-- [src/lib/guard.ts](src/lib/guard.ts) — output classifier; the only thing standing between the model and the user
-- [src/lib/skill/idea-seeding-agent.md](src/lib/skill/idea-seeding-agent.md) — the system prompt, bundled into the build so it ships with the serverless function rather than being read from disk at runtime
-- [src/app/i/[token]/q/interview.tsx](src/app/i/[token]/q/interview.tsx) — the client-side card that masks model latency with optimistic animation and a cycling loading word
+Key files:
 
-**Failure modes I cared about.**
-- *Model misbehaves on format.* The guard rejects and the engine regenerates once; a second reject forces the stop-confirm path so the session never dead-ends.
-- *Model never stops asking.* A hard ceiling at 40 turns short-circuits to PRD generation.
-- *Model refuses to write the PRD.* The forcer appends an increasingly explicit instruction and accepts a best-effort markdown blob on the last attempt — the operator always gets something to read.
-- *Latency feels dead.* Optimistic card transitions and a cycling word make the wait feel like motion rather than a stall.
+- [src/lib/interview-engine.ts](src/lib/interview-engine.ts) — turn loop, retry policy, 40-turn runaway ceiling, PRD-forcing fallback
+- [src/lib/guard.ts](src/lib/guard.ts) — output classifier; the only thing between the model and the user
+- [src/lib/skill/idea-seeding-agent.md](src/lib/skill/idea-seeding-agent.md) — system prompt, bundled at build time
+- [src/app/i/[token]/q/interview.tsx](src/app/i/[token]/q/interview.tsx) — client card; masks model latency with a cycling word
+
+Failure handling:
+
+- *Bad format.* Guard rejects, engine regenerates once, second reject forces the stop-confirm path. No dead-ends.
+- *No termination.* A 40-turn ceiling short-circuits to PRD generation.
+- *PRD refusal.* The forcer appends an increasingly explicit instruction and accepts a best-effort markdown blob on the last attempt. The operator always gets something to read.
+- *Latency feel.* Optimistic card transitions and a cycling loading word turn the wait into motion.
+
+## Result
+
+A finished session produces:
+
+- A PRD in markdown, clean enough for an AI coding agent to consume directly.
+- A companion methodology document naming the model, the system-prompt SHA-256 fingerprint, the sampling parameters, and the human-oversight protocol — frozen at finalization time.
+- A persisted turn log in Postgres with the seed, every question, every answer, and the construct-validity probe used to confirm the interview was about the right thing.
+
+Both documents share the session ID in their filenames and headers so they stay linked if separated in transit.
 
 ## Survey methodology
 
-Verity sits in the highest-risk quadrant of the AAPOR taxonomy for AI in survey research — it is both an *AI Interviewer* (asking questions) and an *AI Analyst* (synthesizing the final artifact from collected responses). That framing maps onto three concrete obligations from the [AAPOR Task Force on Responsible AI Integration in Survey Research (2026)](https://aapor.org/wp-content/uploads/2026/05/Responsible-AI-Integration-In-Survey-Research.pdf), each implemented as code that runs on every session or every week:
+Verity sits in the highest-risk quadrant of the [AAPOR Task Force on Responsible AI Integration in Survey Research (2026)](https://aapor.org/wp-content/uploads/2026/05/Responsible-AI-Integration-In-Survey-Research.pdf) taxonomy — both an AI Interviewer and an AI Analyst. Three recommendations from that report are implemented as runtime behavior:
 
-**1. Required Disclosures, as a companion document (§5 — Disclosure).** Every completed session emits two linked files:
+1. **Required Disclosures, as a companion document (§5).** Each session emits `prd-<id>.md` and `methodology-<id>.md`. The methodology lists tasks performed by AI, plain-language role description, human oversight, N=1 respondent, model id, system-prompt fingerprint, statefulness, and sampling parameters. Provenance is frozen at finalization. See [src/lib/disclosure.ts](src/lib/disclosure.ts).
 
-- `prd-<session-id>.md` — the substantive PRD. Clean for downstream consumers (notably AI coding agents). Carries an invisible HTML-comment header naming its companion methodology document.
-- `methodology-<session-id>.md` — the AAPOR-style disclosure: tasks performed by AI, plain-language role description, human oversight and validation, number of human respondents (N=1), model identifier, system-prompt SHA-256 fingerprint, statefulness, sampling parameters, and date of generation.
+2. **Pre-flight construct-validity probe (§4.3.1).** Before the first question, a separate model call restates the seed's goal, scope, and in/out-of-bounds examples. Persisted on the session, surfaced to the reviewer, log-only — not fed back into the interview prompt, so brief-vs-interview drift remains auditable. See [src/lib/construct-brief.ts](src/lib/construct-brief.ts).
 
-Both documents share the Verity session ID in their filenames and headers, so the association survives if the files are separated in transit. Provenance is frozen at finalization time — model and prompt fingerprint reflect the conditions that produced *this specific* PRD, not whatever is configured today. Following survey-research convention, the methodology lives outside the deliverable's body rather than inside it. See [src/lib/disclosure.ts](src/lib/disclosure.ts).
-
-**2. Pre-flight construct-validity probe (§4.3.1 — Validity).** Before the first interview question, an auditor LLM call restates the seed's intent — goal, scope, in-bounds and out-of-bounds examples — and persists the result on the session. A reviewer can later confirm the interview was about the *right thing*; a session whose interview targeted the wrong construct is identifiable after the fact. The probe is log-only by design (not fed back into the interview system prompt) so brief-vs-interview drift remains auditable. See [src/lib/construct-brief.ts](src/lib/construct-brief.ts).
-
-**3. Continuous reliability monitoring (§4.1.3 + §4.2.4 — Reliability).** A fixed reference dataset of five seeds with deterministic answer scripts replays through the engine each week. Key output distributions — turn count, guard-reject rate, mean question length, PRD heading presence, termination path — are diffed against a committed baseline. Drift beyond stated tolerances opens a GitHub Issue rather than degrading silently. The canary runs entirely off the database so it never pollutes the admin view, and uses the same model id as production so silent provider-side changes show up as drift. See [src/lib/canaries/](src/lib/canaries/), [scripts/canary.ts](scripts/canary.ts), and [.github/workflows/canary.yml](.github/workflows/canary.yml).
-
-## Stack
-
-- **Next.js 14** App Router, React 18, TypeScript, server actions for the interview loop
-- **Postgres** via Drizzle ORM; schema in [src/lib/db/schema.ts](src/lib/db/schema.ts) (invites, sessions, turns)
-- **Anthropic SDK** for model calls
-- **iron-session** for admin auth, **Resend** for transactional email
-- **Tailwind** with a Material 3 token layer; **Framer Motion** for the interview card
-- Deployed on Vercel
-
-## Why I built it
-
-I wanted to test whether the right interaction model could make an LLM useful for people who do not write well-formed prompts. The yes/no constraint started as a joke and turned out to be the thing the product is about: it shifts the work of articulation from the user to the model, where it should have been the whole time.
-
-It is also a forcing function for me. Every design decision — guard rules, retry policy, latency masking, the choice to bundle the system prompt at build time — comes from a question the constraint surfaced.
+3. **Continuous reliability monitoring (§4.1.3, §4.2.4).** A fixed set of five seeds with deterministic answer scripts replays through the engine weekly. Turn count, guard-reject rate, mean question length, PRD heading presence, and termination path are diffed against a committed baseline. Drift opens a GitHub Issue. The canary uses the same model id as production so silent provider-side changes show up as drift. See [src/lib/canaries/](src/lib/canaries/) and [.github/workflows/canary.yml](.github/workflows/canary.yml).
 
 ## Try it
 
-Verity is invite-only by design (single-use tokens, no public signup). If you want to walk through it, reach out and I will issue you a token.
+Verity is invite-only by design — single-use tokens, no public signup. Reach out and I will issue you a token.
+
+## Stack
+
+Next.js 14 (App Router) with server actions, React 18, TypeScript. Postgres via Drizzle ORM ([schema](src/lib/db/schema.ts): invites, sessions, turns). Anthropic SDK for model calls. iron-session for admin auth, Resend for transactional email. Tailwind with a Material 3 token layer, Framer Motion for the interview card. Deployed on Vercel.
 
 ## Running locally
 
 ```
-cp .env.example .env.local      # fill in Postgres URL, Anthropic key, Resend key, session secret
+cp .env.example .env.local      # Postgres URL, Anthropic key, Resend key, session secret
 npm install
 npm run db:migrate
 npm run dev
 ```
 
-Tests: `npm test`. Type-check: `npm run typecheck`.
+`npm test` runs vitest. `npm run typecheck` runs tsc. `npm run canary` replays the reliability seeds against the live model and requires `ANTHROPIC_API_KEY`.
 
 ## Deploys
 
-Vercel uses `npm run vercel-build`, which applies any pending Drizzle migrations before building Next.js (`drizzle-kit migrate && next build`). This keeps the schema in lockstep with the code on every deploy — no manual migration step required when a PR adds a new migration file. `DATABASE_URL` must be available at build time (not runtime-only) in the Vercel project settings for this to work.
+Vercel runs `npm run vercel-build`, which applies pending Drizzle migrations before building (`drizzle-kit migrate && next build`). The schema travels with the code on every deploy. `DATABASE_URL` must be available at build time, not just runtime.

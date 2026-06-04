@@ -51,7 +51,8 @@
       "Read(//c/Program Files/**)",
       "Read(//c/Users/LCAC/AppData/Local/Programs/**)",
       "Bash(git config *)",
-      "Bash(git credential *)"
+      "Bash(git credential *)",
+      "Bash(git stash *)"
     ]
   }
 }
