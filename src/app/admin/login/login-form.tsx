@@ -11,7 +11,7 @@ function SubmitButton() {
       disabled={pending}
       className="mt-8 w-full rounded bg-primary py-4 text-label-sm font-bold uppercase tracking-engrave text-surface-container-lowest transition-all hover:brightness-110 disabled:opacity-30"
     >
-      {pending ? "Authenticating…" : "Authenticate"}
+      {pending ? "Logging in…" : "Login"}
     </button>
   );
 }
@@ -21,20 +21,21 @@ export default function LoginForm() {
 
   return (
     <form action={formAction} className="w-full max-w-sm">
-      <div className="flex items-center gap-3">
-        <span className="inline-block h-1.5 w-1.5 bg-primary-container" />
-        <span className="text-label-sm uppercase tracking-engrave text-on-surface-variant">
-          Verity // Admin
-        </span>
+      <div className="text-center">
+        <h1 className="text-display-lg-mobile uppercase tracking-engrave text-on-surface">
+          Verity
+        </h1>
+        <p className="mt-3 text-label-sm uppercase tracking-engrave text-on-surface-variant opacity-70">
+          Admin
+        </p>
       </div>
-      <h1 className="mt-8 text-headline-md text-on-surface">Restricted access</h1>
 
       <input
         type="password"
         name="password"
         autoComplete="current-password"
-        placeholder="CREDENTIAL"
-        className="mt-8 w-full border-b border-hairline bg-transparent pb-3 text-body-lg text-on-surface outline-none transition-colors placeholder:text-label-sm placeholder:uppercase placeholder:tracking-engrave placeholder:text-on-surface-variant/40 focus:border-primary"
+        placeholder="Password"
+        className="mt-10 w-full border-b border-hairline bg-transparent pb-3 text-body-lg text-on-surface outline-none transition-colors placeholder:text-on-surface-variant/40 focus:border-primary"
       />
       {state?.error && (
         <p className="mt-4 text-label-sm uppercase tracking-engrave text-error">
