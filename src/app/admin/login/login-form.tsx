@@ -9,9 +9,9 @@ function SubmitButton() {
     <button
       type="submit"
       disabled={pending}
-      className="mt-4 w-full rounded-full bg-primary py-3 font-semibold text-on-primary transition active:scale-[0.98] disabled:opacity-40"
+      className="mt-8 w-full rounded bg-primary py-4 text-label-sm font-bold uppercase tracking-engrave text-surface-container-lowest transition-all hover:brightness-110 disabled:opacity-30"
     >
-      {pending ? "Signing in…" : "Sign in"}
+      {pending ? "Authenticating…" : "Authenticate"}
     </button>
   );
 }
@@ -20,22 +20,26 @@ export default function LoginForm() {
   const [state, formAction] = useFormState(login, {});
 
   return (
-    <form
-      action={formAction}
-      className="w-full max-w-sm rounded-md3-xl bg-surface-container-high p-7 shadow-md3-2"
-    >
-      <h1 className="text-center text-xl font-semibold text-primary">
-        Idea Seeder — Admin
-      </h1>
+    <form action={formAction} className="w-full max-w-sm">
+      <div className="flex items-center gap-3">
+        <span className="inline-block h-1.5 w-1.5 bg-primary-container" />
+        <span className="text-label-sm uppercase tracking-engrave text-on-surface-variant">
+          Verity // Admin
+        </span>
+      </div>
+      <h1 className="mt-8 text-headline-md text-on-surface">Restricted access</h1>
+
       <input
         type="password"
         name="password"
         autoComplete="current-password"
-        placeholder="Password"
-        className="mt-5 w-full rounded-md3-lg border border-outline-variant bg-surface-container-low p-3 text-on-surface outline-none focus:border-primary"
+        placeholder="CREDENTIAL"
+        className="mt-8 w-full border-b border-hairline bg-transparent pb-3 text-body-lg text-on-surface outline-none transition-colors placeholder:text-label-sm placeholder:uppercase placeholder:tracking-engrave placeholder:text-on-surface-variant/40 focus:border-primary"
       />
       {state?.error && (
-        <p className="mt-3 text-center text-sm text-error">{state.error}</p>
+        <p className="mt-4 text-label-sm uppercase tracking-engrave text-error">
+          {state.error}
+        </p>
       )}
       <SubmitButton />
     </form>

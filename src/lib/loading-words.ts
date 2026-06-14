@@ -1,11 +1,13 @@
+// Telemetry-style processing states surfaced while the model resolves the next
+// turn. Engraved-uppercase, instrument tone — no consumer-grade flourish.
 const WORDS = [
-  "planting",
-  "sprouting",
-  "watering",
-  "rooting",
-  "blooming",
-  "growing",
-  "weeding",
+  "ANALYZING",
+  "PROCESSING",
+  "COMPUTING",
+  "EVALUATING",
+  "RESOLVING",
+  "PARSING",
+  "QUERYING",
 ];
 
 export function randomLoadingWord(): string {

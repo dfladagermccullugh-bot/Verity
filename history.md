@@ -26,6 +26,37 @@ completed to-dos, they land here so the handoff stays lean. Newest first.
 
 ---
 
+## 2026-06-14 — Midnight Precision reskin
+
+Full experiential refashion of the UI from the green Material 3 theme to
+**Midnight Precision** (Technical Minimalism), driven by a provided `design.md`
+(source of truth) with a screenshot + inspiration HTML for the instrument chrome.
+Decisions: full reskin, flat M3-style color treatment, "precision" tone.
+
+- **Foundation:** `globals.css` → dark-only Midnight Precision `--md-*` palette
+  (+ new `hairline` token); `tailwind.config.ts` → Inter, sharp radii, shadows
+  neutralized, display/label type scale, `tracking-engrave`, spacing tokens,
+  scanline/pulse animations; `layout.tsx` → Inter + forced dark, theme toggle
+  removed, title "VERITY".
+- **Chrome:** new `src/components/chrome.tsx` (brand header, faint 12-col grid,
+  scanline, context tag, status dot, telemetry footer). Footer `PROTOCOL` is the
+  real skill-prompt fingerprint, threaded from the server; no fake latency.
+- **Surfaces restyled:** landing, seed form, interview card (centerpiece —
+  context tag = turn counter, big display question, YES=gold / NO=hairline / done
+  link), done screen, and the full admin set (login, registry list, brief detail,
+  new-invite).
+- **Tone:** retired the puppy (`puppy.tsx` deleted, `lottie-react`/`puppy.json`
+  now orphaned) and the gardening loading words (now telemetry verbs); copy is
+  engraved-uppercase.
+- **Conflicts resolved:** `design.md` prose contradicted its own tokens/screenshot
+  (white-vs-gold primary; pure-black-vs-#131313); followed tokens + screenshot.
+  The screenshot's `DECLINE/CONFIRM CHOICE` was a mock — kept the real yes/no/done
+  product contract, applied only the aesthetic.
+- **Verification:** typecheck clean, `npm run build` passes, 65 tests still green,
+  landing route smoke-tested at HTTP 200. DB-backed routes not yet screenshotted.
+
+---
+
 ## AAPOR survey-methodology arc (PRs #5–#12, 2026-06-03)
 
 Verity's defining work: mapping runtime behavior 1:1 to three recommendations

@@ -3,122 +3,49 @@
 @tailwind utilities;
 
 /*
-  Material 3 token palette.
-  Values are stored as "R G B" so Tailwind can apply alpha via rgb(var() / <alpha>).
-  Source hue is green to preserve the original brand feel; everything else is
-  derived from M3's tonal-palette roles.
+  Midnight Precision token palette.
+  Technical Minimalism: nocturnal obsidian surfaces, Signal Gold as the sole
+  functional accent, flat tonal layering (no gradients, no shadows). Values are
+  stored as "R G B" so Tailwind can apply alpha via rgb(var() / <alpha>).
+  Dark-only by design — the brand is nocturnal; there is no light scheme.
 */
 
 :root {
-  /* Light scheme (default) */
-  --md-primary: 31 107 67;
-  --md-on-primary: 255 255 255;
-  --md-primary-container: 170 244 197;
-  --md-on-primary-container: 0 33 17;
+  --md-primary: 242 202 80;
+  --md-on-primary: 60 47 0;
+  --md-primary-container: 212 175 55;
+  --md-on-primary-container: 85 67 0;
 
-  --md-secondary: 79 99 84;
-  --md-on-secondary: 255 255 255;
-  --md-secondary-container: 210 234 213;
-  --md-on-secondary-container: 10 31 18;
+  --md-secondary: 198 198 199;
+  --md-on-secondary: 47 49 49;
+  --md-secondary-container: 69 71 71;
+  --md-on-secondary-container: 180 181 181;
 
-  --md-surface: 247 252 245;
-  --md-on-surface: 24 29 24;
-  --md-surface-variant: 221 229 220;
-  --md-on-surface-variant: 65 73 65;
+  --md-surface: 19 19 19;
+  --md-on-surface: 229 226 225;
+  --md-surface-variant: 53 53 52;
+  --md-on-surface-variant: 208 197 175;
 
-  --md-surface-container-lowest: 255 255 255;
-  --md-surface-container-low: 242 247 240;
-  --md-surface-container: 236 241 234;
-  --md-surface-container-high: 230 235 229;
-  --md-surface-container-highest: 225 229 224;
+  --md-surface-container-lowest: 14 14 14;
+  --md-surface-container-low: 28 27 27;
+  --md-surface-container: 32 31 31;
+  --md-surface-container-high: 42 42 42;
+  --md-surface-container-highest: 53 53 52;
 
-  --md-outline: 113 121 113;
-  --md-outline-variant: 193 201 192;
+  --md-outline: 153 144 124;
+  --md-outline-variant: 77 70 53;
 
-  --md-error: 186 26 26;
-  --md-on-error: 255 255 255;
-  --md-error-container: 255 218 214;
-  --md-on-error-container: 65 0 2;
-
-  --md-inverse-surface: 45 50 45;
-  --md-inverse-on-surface: 239 244 237;
-  --md-inverse-primary: 143 215 170;
-
-  color-scheme: light;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --md-primary: 143 215 170;
-    --md-on-primary: 0 57 32;
-    --md-primary-container: 0 82 47;
-    --md-on-primary-container: 170 244 197;
-
-    --md-secondary: 182 206 185;
-    --md-on-secondary: 33 53 39;
-    --md-secondary-container: 55 75 61;
-    --md-on-secondary-container: 210 234 213;
-
-    --md-surface: 16 20 17;
-    --md-on-surface: 225 229 224;
-    --md-surface-variant: 65 73 65;
-    --md-on-surface-variant: 193 201 192;
-
-    --md-surface-container-lowest: 11 16 12;
-    --md-surface-container-low: 24 29 24;
-    --md-surface-container: 28 33 29;
-    --md-surface-container-high: 38 43 39;
-    --md-surface-container-highest: 49 54 51;
-
-    --md-outline: 139 147 139;
-    --md-outline-variant: 65 73 65;
-
-    --md-error: 255 180 171;
-    --md-on-error: 105 0 5;
-    --md-error-container: 147 0 10;
-    --md-on-error-container: 255 218 214;
-
-    --md-inverse-surface: 225 229 224;
-    --md-inverse-on-surface: 45 50 45;
-    --md-inverse-primary: 31 107 67;
-
-    color-scheme: dark;
-  }
-}
-
-:root[data-theme="dark"] {
-  --md-primary: 143 215 170;
-  --md-on-primary: 0 57 32;
-  --md-primary-container: 0 82 47;
-  --md-on-primary-container: 170 244 197;
-
-  --md-secondary: 182 206 185;
-  --md-on-secondary: 33 53 39;
-  --md-secondary-container: 55 75 61;
-  --md-on-secondary-container: 210 234 213;
-
-  --md-surface: 16 20 17;
-  --md-on-surface: 225 229 224;
-  --md-surface-variant: 65 73 65;
-  --md-on-surface-variant: 193 201 192;
-
-  --md-surface-container-lowest: 11 16 12;
-  --md-surface-container-low: 24 29 24;
-  --md-surface-container: 28 33 29;
-  --md-surface-container-high: 38 43 39;
-  --md-surface-container-highest: 49 54 51;
-
-  --md-outline: 139 147 139;
-  --md-outline-variant: 65 73 65;
+  /* Neutral charcoal structural stroke (#2a2a2a). */
+  --md-hairline: 42 42 42;
 
   --md-error: 255 180 171;
   --md-on-error: 105 0 5;
   --md-error-container: 147 0 10;
   --md-on-error-container: 255 218 214;
 
-  --md-inverse-surface: 225 229 224;
-  --md-inverse-on-surface: 45 50 45;
-  --md-inverse-primary: 31 107 67;
+  --md-inverse-surface: 229 226 225;
+  --md-inverse-on-surface: 49 48 48;
+  --md-inverse-primary: 115 92 0;
 
   color-scheme: dark;
 }
@@ -139,10 +66,8 @@ button {
   -webkit-tap-highlight-color: transparent;
 }
 
-/*
-  Selection uses the primary container so it reads as M3 on either scheme.
-*/
+/* Selection reads as a faint gold wash — the signal accent, used sparingly. */
 ::selection {
-  background: rgb(var(--md-primary-container));
-  color: rgb(var(--md-on-primary-container));
+  background: rgb(var(--md-primary-container) / 0.35);
+  color: rgb(var(--md-on-surface));
 }

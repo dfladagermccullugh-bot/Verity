@@ -17,59 +17,63 @@ export default async function PrdView({ params }: { params: { id: string } }) {
   });
 
   return (
-    <main className="mx-auto max-w-3xl p-6">
+    <main className="mx-auto max-w-3xl px-margin-mobile py-16 md:px-margin-desktop">
       <div className="flex items-center justify-between">
-        <Link href="/admin/prds" className="text-sm text-primary hover:underline">
-          ← Back
+        <Link
+          href="/admin/prds"
+          className="text-label-sm uppercase tracking-engrave text-on-surface-variant transition-colors hover:text-on-surface"
+        >
+          ← Registry
         </Link>
-        <div className="flex gap-4 text-sm">
+        <div className="flex gap-5 text-label-sm uppercase tracking-engrave">
           <a
             href={`/api/admin/prd/${session!.id}`}
-            className="text-primary hover:underline"
+            className="text-primary transition-colors hover:brightness-110"
           >
-            Download PRD
+            Download brief
           </a>
           {session!.methodologyMarkdown && (
             <a
               href={`/api/admin/prd/${session!.id}/methodology`}
-              className="text-primary hover:underline"
+              className="text-on-surface-variant transition-colors hover:text-on-surface"
             >
-              Download methodology
+              Methodology
             </a>
           )}
         </div>
       </div>
-      <p className="mt-4 text-sm text-on-surface-variant">
+
+      <p className="mt-10 text-body-md text-on-surface-variant">
         {invite?.inviteeName} · seed: {session!.seed}
       </p>
-      <p className="mt-1 font-mono text-xs text-on-surface-variant">
+      <p className="mt-1 font-mono text-label-sm uppercase tracking-engrave text-on-surface-variant opacity-60">
         session: {session!.id}
       </p>
 
       {session!.constructBrief && (
-        <details className="mt-6 rounded-md3-lg border border-outline-variant bg-surface-container-low">
-          <summary className="cursor-pointer p-4 text-xs font-semibold uppercase tracking-wider text-on-surface-variant">
-            Construct brief (validity check, AAPOR §4.3.1)
+        <details className="mt-10 border border-hairline">
+          <summary className="cursor-pointer p-4 text-label-sm uppercase tracking-engrave text-on-surface-variant">
+            Construct brief — validity check (AAPOR §4.3.1)
           </summary>
-          <pre className="whitespace-pre-wrap border-t border-outline-variant p-6 text-sm leading-relaxed text-on-surface">
+          <pre className="whitespace-pre-wrap border-t border-hairline p-6 text-body-md leading-relaxed text-on-surface">
             {session!.constructBrief}
           </pre>
         </details>
       )}
 
-      <h2 className="mt-6 text-xs font-semibold uppercase tracking-wider text-on-surface-variant">
-        PRD
+      <h2 className="mt-10 text-label-sm uppercase tracking-engrave text-on-surface-variant">
+        Brief
       </h2>
-      <pre className="mt-2 whitespace-pre-wrap rounded-md3-lg border border-outline-variant bg-surface-container-high p-6 text-sm leading-relaxed text-on-surface">
+      <pre className="mt-3 whitespace-pre-wrap border border-hairline bg-surface-container-low p-8 text-body-md leading-relaxed text-on-surface">
         {session!.prdMarkdown}
       </pre>
 
       {session!.methodologyMarkdown && (
-        <details className="mt-6 rounded-md3-lg border border-outline-variant bg-surface-container-low">
-          <summary className="cursor-pointer p-4 text-xs font-semibold uppercase tracking-wider text-on-surface-variant">
+        <details className="mt-10 border border-hairline">
+          <summary className="cursor-pointer p-4 text-label-sm uppercase tracking-engrave text-on-surface-variant">
             Methodology disclosure (AAPOR 2026) — companion document
           </summary>
-          <pre className="whitespace-pre-wrap border-t border-outline-variant p-6 text-sm leading-relaxed text-on-surface">
+          <pre className="whitespace-pre-wrap border-t border-hairline p-6 text-body-md leading-relaxed text-on-surface">
             {session!.methodologyMarkdown}
           </pre>
         </details>

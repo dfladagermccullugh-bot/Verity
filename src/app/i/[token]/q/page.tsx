@@ -3,6 +3,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { invites, sessions, turns } from "@/lib/db/schema";
 import { verifyInviteToken } from "@/lib/tokens";
+import { getSkillVersion } from "@/lib/skill/version";
 import Interview from "./interview";
 
 export const dynamic = "force-dynamic";
@@ -40,8 +41,8 @@ export default async function InterviewPage({
   if (!pending) {
     return (
       <main className="flex min-h-screen items-center justify-center p-6">
-        <p className="text-center text-on-surface-variant">
-          One moment — please refresh this page.
+        <p className="text-label-sm uppercase tracking-engrave text-on-surface-variant">
+          Standby — refresh to resume
         </p>
       </main>
     );
@@ -52,6 +53,7 @@ export default async function InterviewPage({
       token={token}
       initialQuestion={pending.questionText}
       initialAnswered={answeredCount}
+      protocol={getSkillVersion()}
     />
   );
 }

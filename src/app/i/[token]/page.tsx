@@ -9,8 +9,15 @@ export const dynamic = "force-dynamic";
 
 function InvalidLink({ message }: { message: string }) {
   return (
-    <main className="flex min-h-screen items-center justify-center p-6">
-      <p className="max-w-sm text-center text-on-surface-variant">{message}</p>
+    <main className="flex min-h-screen items-center justify-center px-margin-mobile md:px-margin-desktop">
+      <div className="max-w-md text-center">
+        <p className="text-label-sm uppercase tracking-engrave text-error">
+          Access denied
+        </p>
+        <p className="mt-4 text-body-lg text-on-surface-variant opacity-80">
+          {message}
+        </p>
+      </div>
     </main>
   );
 }

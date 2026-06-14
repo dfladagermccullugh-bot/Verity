@@ -4,7 +4,7 @@ Lean, session-to-session working memory. Keep this under ~5k tokens. When an
 item goes stale or a to-do is done, move it to [history.md](history.md) and
 trim it from here.
 
-_Last updated: 2026-06-14_
+_Last updated: 2026-06-14 (Midnight Precision reskin)_
 
 ## What Verity is
 
@@ -50,6 +50,32 @@ Drizzle (`invites`, `sessions`, `turns`). iron-session admin auth, Resend email,
 Tailwind + Material 3 tokens, Framer Motion. Deployed on Vercel
 (`vercel-build` = `drizzle-kit migrate && next build`).
 
+## Design system — Midnight Precision (current)
+
+The UI was refashioned from the old green Material 3 theme to **Midnight
+Precision** (Technical Minimalism): nocturnal obsidian surfaces, **Signal Gold**
+(`primary #f2ca50` / `primary-container #d4af37`) as the sole accent, **Inter**
+everywhere, sharp corners (0px containers / 4px interactive), **no shadows** —
+flat tonal layering + 1px charcoal hairlines. Source of truth was a provided
+`design.md` (palette + type scale); a screenshot + inspiration HTML guided the
+"instrument" chrome. Dark-only by design (theme toggle removed).
+
+- Palette lives in `src/app/globals.css` as `--md-*` vars (dark-only `:root`).
+  Token **names** are unchanged from before, so components stayed token-driven —
+  added one token: `hairline` (`#2a2a2a`).
+- `tailwind.config.ts` — Inter, sharp radii, `boxShadow` neutralized to `none`,
+  type scale (`text-display-xl/-lg`, `text-label-sm`, etc.), `tracking-engrave`,
+  spacing tokens, `animate-scanline` / `animate-pulse-dot`.
+- `src/components/chrome.tsx` — shared `BrandHeader`, `GridUnderlay`, `Scanline`,
+  `ContextTag`, `StatusDot`, `TelemetryFooter` (footer `PROTOCOL` = the real skill
+  fingerprint, threaded from the server; no fake latency).
+- Tone is now "precision": puppy + gardening loading words retired; loading words
+  are telemetry verbs; copy is engraved-uppercase.
+- **Deliberate calls** (design.md prose contradicted its own tokens/screenshot):
+  followed the **tokens + screenshot** — gold-filled primary (not white), `#131313`
+  surface (not pure black). Screenshot's `DECLINE/CONFIRM CHOICE` was a mock; kept
+  the real yes/no/done contract, applied the aesthetic (YES=gold, NO=hairline).
+
 ## Rest of the surface (reviewed, for orientation)
 
 - **Entry / invitee flow:** `src/actions/interview.ts` — `startSession`
@@ -73,8 +99,11 @@ Tailwind + Material 3 tokens, Framer Motion. Deployed on Vercel
 
 ## Current health (verified this session)
 
-- `npm run typecheck` — clean.
+- `npm run typecheck` — clean. `npm run build` — passes (all routes compile).
 - `npm test` — 65 passing (guard 19, canary-compare 15, disclosure 21, construct-brief 10).
+- Landing route (`/`) smoke-tested via `npm start` → HTTP 200 with new chrome.
+- **Not yet visually QA'd:** the DB-backed routes (interview, done, admin) — they
+  build and typecheck but haven't been rendered with live data/screenshots.
 - Note: a fresh clone needs `npm ci` before typecheck/test will run.
 - All three AAPOR iterations are **shipped** (PRs #5–#12): Required Disclosures, construct-validity probe, reliability canaries. README "Survey methodology" section enumerates all three.
 
@@ -94,6 +123,12 @@ Tailwind + Material 3 tokens, Framer Motion. Deployed on Vercel
    Superseded by handoff.md — safe to delete. Note: `src/lib/canaries/compare.ts`
    (line ~15) has a comment citing "the NEXT-SESSION.md handoff" for its
    tolerances; update that reference if you delete the file.
+
+3. **Reskin loose ends (cleanup).** `public/puppy.json` is now orphaned and the
+   `lottie-react` dependency is unused — both can be removed (drop the dep with a
+   lockfile update so `npm ci` stays consistent). `README.md` "Stack" line still
+   says "Material 3 token layer" and the methodology copy/branding predates the
+   Midnight Precision identity — refresh when convenient.
 
 ## Backlog / deferred ideas (not committed work)
 
