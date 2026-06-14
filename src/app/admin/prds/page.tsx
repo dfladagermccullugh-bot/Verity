@@ -32,37 +32,45 @@ export default async function PrdsPage() {
   }
 
   return (
-    <main className="mx-auto max-w-5xl p-6">
+    <main className="mx-auto max-w-5xl px-margin-mobile py-16 md:px-margin-desktop">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-primary">PRDs</h1>
+        <div className="flex items-center gap-3">
+          <span className="inline-block h-1.5 w-1.5 bg-primary-container" />
+          <h1 className="text-label-sm uppercase tracking-engrave text-on-surface-variant">
+            Verity // Brief Registry
+          </h1>
+        </div>
         <form action={logout}>
-          <button className="text-sm text-on-surface-variant hover:underline">
+          <button className="text-label-sm uppercase tracking-engrave text-on-surface-variant transition-colors hover:text-on-surface">
             Sign out
           </button>
         </form>
       </div>
 
-      <div className="mt-6">
+      <div className="mt-10">
         <NewInvite />
       </div>
 
-      <div className="mt-8 overflow-x-auto rounded-md3-lg border border-outline-variant">
-        <table className="w-full text-left text-sm">
-          <thead className="bg-surface-container text-on-surface-variant">
-            <tr>
-              <th className="p-3">Invitee</th>
-              <th className="p-3">Seed</th>
-              <th className="p-3">Started</th>
-              <th className="p-3">Questions</th>
-              <th className="p-3">Status</th>
-              <th className="p-3">PRD</th>
+      <div className="mt-12 overflow-x-auto border border-hairline">
+        <table className="w-full text-left text-body-md">
+          <thead>
+            <tr className="border-b border-hairline text-label-sm uppercase tracking-engrave text-on-surface-variant">
+              <th className="p-4 font-semibold">Invitee</th>
+              <th className="p-4 font-semibold">Seed</th>
+              <th className="p-4 font-semibold">Started</th>
+              <th className="p-4 font-semibold">Turns</th>
+              <th className="p-4 font-semibold">Status</th>
+              <th className="p-4 font-semibold">Brief</th>
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 && (
               <tr>
-                <td colSpan={6} className="p-6 text-center text-on-surface-variant">
-                  No sessions yet.
+                <td
+                  colSpan={6}
+                  className="p-8 text-center text-label-sm uppercase tracking-engrave text-on-surface-variant opacity-60"
+                >
+                  No sessions on record
                 </td>
               </tr>
             )}
@@ -77,36 +85,42 @@ export default async function PrdsPage() {
                   )
                 : null;
               return (
-                <tr key={session.id} className="border-t border-outline-variant">
-                  <td className="p-3">{invite.inviteeName}</td>
-                  <td className="max-w-[18rem] truncate p-3 text-on-surface-variant">
+                <tr
+                  key={session.id}
+                  className="border-t border-hairline text-on-surface"
+                >
+                  <td className="p-4">{invite.inviteeName}</td>
+                  <td className="max-w-[18rem] truncate p-4 text-on-surface-variant">
                     {session.seed}
                   </td>
-                  <td className="p-3 text-on-surface-variant">
+                  <td className="p-4 text-on-surface-variant">
                     {fmtDate(session.startedAt)}
                   </td>
-                  <td className="p-3">{qCount}</td>
-                  <td className="p-3">
+                  <td className="p-4 font-mono">{qCount}</td>
+                  <td className="p-4">
                     {completed ? (
-                      <span className="text-primary">
-                        done · {durationS}s
+                      <span className="inline-flex items-center gap-2 text-label-sm uppercase tracking-engrave text-primary">
+                        <span className="inline-block h-1.5 w-1.5 bg-primary-container" />
+                        Done · {durationS}s
                       </span>
                     ) : (
-                      <span className="text-on-surface-variant">in progress</span>
+                      <span className="text-label-sm uppercase tracking-engrave text-on-surface-variant">
+                        In progress
+                      </span>
                     )}
                   </td>
-                  <td className="p-3">
+                  <td className="p-4">
                     {completed ? (
-                      <span className="flex gap-3">
+                      <span className="flex gap-4 text-label-sm uppercase tracking-engrave">
                         <Link
                           href={`/admin/prds/${session.id}`}
-                          className="text-primary hover:underline"
+                          className="text-primary transition-colors hover:brightness-110"
                         >
                           View
                         </Link>
                         <a
                           href={`/api/admin/prd/${session.id}`}
-                          className="text-primary hover:underline"
+                          className="text-on-surface-variant transition-colors hover:text-on-surface"
                         >
                           .md
                         </a>
@@ -122,10 +136,10 @@ export default async function PrdsPage() {
         </table>
       </div>
 
-      <div className="mt-6 flex justify-end">
+      <div className="mt-8 flex justify-end">
         <a
           href="/api/admin/export"
-          className="rounded-full border border-outline px-4 py-2 text-sm text-primary hover:bg-primary/10"
+          className="rounded border border-hairline px-5 py-3 text-label-sm uppercase tracking-engrave text-on-surface-variant transition-colors hover:border-on-surface-variant hover:text-on-surface"
         >
           Export training data
         </a>

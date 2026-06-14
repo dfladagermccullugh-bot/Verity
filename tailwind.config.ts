@@ -27,6 +27,9 @@ const config: Config = {
         "surface-container-highest": token("surface-container-highest"),
         outline: token("outline"),
         "outline-variant": token("outline-variant"),
+        // Neutral charcoal hairline — the structural 1px stroke from the
+        // Midnight Precision system. Flat, no gradient.
+        hairline: token("hairline"),
         error: token("error"),
         "on-error": token("on-error"),
         "error-container": token("error-container"),
@@ -37,30 +40,86 @@ const config: Config = {
       },
       fontFamily: {
         sans: [
-          "Roboto",
+          "var(--font-inter)",
+          "Inter",
           "ui-sans-serif",
           "system-ui",
           "-apple-system",
           "Segoe UI",
           "sans-serif",
         ],
-        display: [
-          "var(--font-display)",
-          "ui-serif",
-          "Georgia",
-          "serif",
+        // Display uses the same neutral Inter face — hierarchy comes from
+        // scale, not font variety (Technical Minimalism).
+        display: ["var(--font-inter)", "Inter", "ui-sans-serif", "sans-serif"],
+      },
+      fontSize: {
+        "display-xl": [
+          "72px",
+          { lineHeight: "1.1", letterSpacing: "-0.04em", fontWeight: "600" },
+        ],
+        "display-lg": [
+          "48px",
+          { lineHeight: "1.05", letterSpacing: "-0.02em", fontWeight: "600" },
+        ],
+        "display-lg-mobile": [
+          "32px",
+          { lineHeight: "1.2", letterSpacing: "-0.02em", fontWeight: "600" },
+        ],
+        "headline-md": [
+          "24px",
+          { lineHeight: "1.4", letterSpacing: "-0.01em", fontWeight: "600" },
+        ],
+        "body-lg": ["18px", { lineHeight: "1.6", fontWeight: "400" }],
+        "body-md": ["16px", { lineHeight: "1.6", fontWeight: "400" }],
+        "label-sm": [
+          "12px",
+          { lineHeight: "1.0", letterSpacing: "0.2em", fontWeight: "600" },
         ],
       },
+      letterSpacing: {
+        engrave: "0.25em",
+      },
+      spacing: {
+        gutter: "24px",
+        "margin-mobile": "16px",
+        "margin-desktop": "64px",
+      },
+      maxWidth: {
+        frame: "1440px",
+      },
       borderRadius: {
-        md3: "12px",
-        "md3-lg": "16px",
-        "md3-xl": "28px",
+        // Architectural & sharp: 0px grounds large surfaces, 4px is the only
+        // tactile hint, reserved for interactive elements.
+        none: "0px",
+        sm: "2px",
+        DEFAULT: "4px",
+        md: "4px",
+        lg: "4px",
+        xl: "4px",
+        full: "9999px",
+        // Legacy aliases kept sharp so any missed usage stays on-system.
+        md3: "4px",
+        "md3-lg": "4px",
+        "md3-xl": "0px",
       },
       boxShadow: {
-        "md3-1":
-          "0 1px 2px 0 rgb(0 0 0 / 0.30), 0 1px 3px 1px rgb(0 0 0 / 0.15)",
-        "md3-2":
-          "0 1px 2px 0 rgb(0 0 0 / 0.30), 0 2px 6px 2px rgb(0 0 0 / 0.15)",
+        // No shadows in Midnight Precision — depth comes from tonal layering.
+        "md3-1": "none",
+        "md3-2": "none",
+      },
+      keyframes: {
+        scanline: {
+          "0%": { transform: "translateY(-100%)" },
+          "100%": { transform: "translateY(100vh)" },
+        },
+        pulseDot: {
+          "0%, 100%": { opacity: "0.3" },
+          "50%": { opacity: "1" },
+        },
+      },
+      animation: {
+        scanline: "scanline 8s linear infinite",
+        "pulse-dot": "pulseDot 1.1s ease-in-out infinite",
       },
     },
   },

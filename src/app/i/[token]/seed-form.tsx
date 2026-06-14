@@ -5,6 +5,13 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { startSession } from "@/actions/interview";
 import { randomLoadingWord } from "@/lib/loading-words";
+import {
+  BrandHeader,
+  Scanline,
+  GridUnderlay,
+  ContextTag,
+  TelemetryFooter,
+} from "@/components/chrome";
 
 const SEED_MAX = 1000;
 
@@ -18,7 +25,7 @@ export default function SeedForm({
   const router = useRouter();
   const [seed, setSeed] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [loadingWord, setLoadingWord] = useState("planting");
+  const [loadingWord, setLoadingWord] = useState("INITIALIZING");
   const [pending, startTransition] = useTransition();
 
   function begin() {
@@ -38,46 +45,66 @@ export default function SeedForm({
   const count = seed.length;
 
   return (
-    <main className="flex min-h-screen items-center justify-center p-6">
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-        className="w-full max-w-md rounded-md3-xl bg-surface-container-high p-7 shadow-md3-2"
-      >
-        <h1 className="text-center text-2xl font-semibold text-primary">
-          Idea Seeder
-        </h1>
-        <p className="mt-2 text-center text-sm text-on-surface-variant">
-          Hi {inviteeName} — describe your idea in a sentence or two. Then just tap
-          yes or no.
-        </p>
-
-        <textarea
-          value={seed}
-          onChange={(e) => setSeed(e.target.value.slice(0, SEED_MAX))}
-          maxLength={SEED_MAX}
-          rows={5}
-          disabled={pending}
-          placeholder="e.g. An app that reminds my grandkids to call me"
-          className="mt-5 w-full resize-none rounded-md3-lg border border-outline-variant bg-surface-container-low p-4 text-base text-on-surface outline-none placeholder:text-on-surface-variant/60 focus:border-primary disabled:opacity-50"
-        />
-        <div className="mt-1 text-right text-xs text-on-surface-variant">
-          {count}/{SEED_MAX}
-        </div>
-
-        {error && (
-          <p className="mt-3 text-center text-sm text-error">{error}</p>
-        )}
-
-        <button
-          onClick={begin}
-          disabled={pending || seed.trim().length === 0}
-          className="mt-4 w-full rounded-full bg-primary py-4 text-lg font-semibold text-on-primary transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
+    <>
+      <Scanline />
+      <BrandHeader />
+      <main className="relative flex min-h-screen items-center justify-center px-margin-mobile md:px-margin-desktop">
+        <GridUnderlay />
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+          className="z-10 w-full max-w-3xl"
         >
-          {pending ? `${loadingWord}…` : "Begin"}
-        </button>
-      </motion.div>
-    </main>
+          <ContextTag label="Intake // Premise" />
+
+          <h1 className="mt-10 text-display-lg-mobile text-on-surface md:text-display-lg">
+            Operative {inviteeName}.
+          </h1>
+          <p className="mt-5 max-w-2xl border-l border-hairline pl-6 text-body-lg text-on-surface-variant opacity-80">
+            State the premise in one or two sentences. The system will
+            interrogate via binary response until the brief is complete.
+          </p>
+
+          <div className="mt-12">
+            <textarea
+              value={seed}
+              onChange={(e) => setSeed(e.target.value.slice(0, SEED_MAX))}
+              maxLength={SEED_MAX}
+              rows={3}
+              disabled={pending}
+              autoFocus
+              placeholder="A reusable water bottle that nudges you to drink throughout the day."
+              className="w-full resize-none border-b border-hairline bg-transparent pb-4 text-headline-md text-on-surface outline-none transition-colors placeholder:text-on-surface-variant/40 focus:border-primary disabled:opacity-50"
+            />
+            <div className="mt-2 text-right text-label-sm uppercase tracking-engrave text-on-surface-variant opacity-60">
+              {count} / {SEED_MAX}
+            </div>
+          </div>
+
+          {error && (
+            <p className="mt-6 text-label-sm uppercase tracking-engrave text-error">
+              {error}
+            </p>
+          )}
+
+          <div className="mt-12">
+            <button
+              onClick={begin}
+              disabled={pending || seed.trim().length === 0}
+              className="group relative flex w-full items-center justify-between rounded bg-primary px-10 py-5 text-surface-container-lowest transition-all duration-300 hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-30 md:w-80"
+            >
+              <span className="text-label-sm font-bold uppercase tracking-engrave">
+                {pending ? loadingWord : "Initiate"}
+              </span>
+              <span aria-hidden className="text-lg leading-none">
+                {pending ? "·" : "→"}
+              </span>
+            </button>
+          </div>
+        </motion.div>
+      </main>
+      <TelemetryFooter status="Intake" />
+    </>
   );
 }
