@@ -18,6 +18,11 @@ completed to-dos, they land here so the handoff stays lean. Newest first.
   is wired but not yet meaningful. Carried into handoff as the top to-do.
 - `NEXT-SESSION.md` identified as fully stale (its iterations 2 & 3 both shipped);
   superseded by `handoff.md`.
+- Followed up with a comprehensive read of every source file (auth/middleware,
+  moderation, tokens, session, admin actions, email, download/export routes,
+  client components, canary compare). Captured the full surface map and a few
+  minor residue findings (in-memory rate limiter, `idea-seeder`→Verity naming,
+  a stale `NEXT-SESSION.md` reference in `compare.ts`) in the handoff.
 
 ---
 

@@ -50,6 +50,27 @@ Drizzle (`invites`, `sessions`, `turns`). iron-session admin auth, Resend email,
 Tailwind + Material 3 tokens, Framer Motion. Deployed on Vercel
 (`vercel-build` = `drizzle-kit migrate && next build`).
 
+## Rest of the surface (reviewed, for orientation)
+
+- **Entry / invitee flow:** `src/actions/interview.ts` — `startSession`
+  (validates token, expiry, single-use, moderates seed, inserts session, runs
+  `beginInterview`) and `answer`. Seed capped at 1000 chars; one session per
+  invite enforced. Client card is `src/app/i/[token]/q/interview.tsx` (optimistic
+  transitions, cycling loading word from `loading-words.ts`).
+- **Moderation:** `src/lib/moderation.ts` — hard-block keyword prefilter + a
+  one-word Claude classifier; **fails open** on error (seed is low-sensitivity).
+- **Auth / security:** `middleware.ts` — in-memory IP rate limit (80 req/60s) +
+  gates `/admin/*` (except login) by unsealing the iron-session cookie.
+  `src/lib/tokens.ts` — HMAC-signed single-use invite tokens (timing-safe verify).
+  `src/lib/session.ts` — iron-session admin cookie. `src/actions/admin.ts` —
+  password login (timing-safe), `createInvite` (7-day expiry).
+- **Admin / output:** `src/app/admin/prds/` list + detail (detail surfaces the
+  construct brief). Download routes under `src/app/api/admin/`: `prd/[id]` (PRD
+  md), `prd/[id]/methodology` (methodology md), `export` (full training-data
+  JSON of completed + abandoned sessions). `src/lib/email.ts` — Resend: PRD in
+  body, methodology as attachment, to `DAVIN_EMAIL`; fails silently since the
+  PRD is already persisted.
+
 ## Current health (verified this session)
 
 - `npm run typecheck` — clean.
@@ -70,7 +91,9 @@ Tailwind + Material 3 tokens, Framer Motion. Deployed on Vercel
 
 2. **Retire `NEXT-SESSION.md`.** It described AAPOR iterations 2 & 3, both now
    shipped, so it is fully stale and competes with this file as "the handoff."
-   Superseded by handoff.md — safe to delete.
+   Superseded by handoff.md — safe to delete. Note: `src/lib/canaries/compare.ts`
+   (line ~15) has a comment citing "the NEXT-SESSION.md handoff" for its
+   tolerances; update that reference if you delete the file.
 
 ## Backlog / deferred ideas (not committed work)
 
@@ -84,6 +107,17 @@ Tailwind + Material 3 tokens, Framer Motion. Deployed on Vercel
 - **Subset audit of historical transcripts** — the methodology doc currently
   states none has been conducted; a periodic human spot-check would let that
   line claim more.
+
+## Minor observations (low priority, not blocking)
+
+- **Rate limiter is in-memory and per-instance** (`middleware.ts` `Map`), so on
+  Vercel it isn't shared across serverless instances and resets on cold start.
+  Fine for an invite-only tool; revisit only if abuse becomes real.
+- **Naming residue:** package name is still `idea-seeder`, the admin cookie is
+  `idea_seeder_admin`, and the recipient env var is `DAVIN_EMAIL` — the product
+  is "Verity". Cosmetic; renaming the cookie would log out current admins.
+- **Moderation fails open** by design — acceptable given the prefilter, but worth
+  remembering if the threat model changes.
 
 ## Conventions / gotchas
 
