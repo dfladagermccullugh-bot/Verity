@@ -4,7 +4,7 @@ Lean, session-to-session working memory. Keep this under ~5k tokens. When an
 item goes stale or a to-do is done, move it to [history.md](history.md) and
 trim it from here.
 
-_Last updated: 2026-06-14 (reskin + landing/login cleanup; next focus = functional)_
+_Last updated: 2026-06-15 (next focus = multi-round feedback loop, design phase)_
 
 ## What Verity is
 
@@ -50,36 +50,24 @@ Drizzle (`invites`, `sessions`, `turns`). iron-session admin auth, Resend email,
 Tailwind + Material 3 tokens, Framer Motion. Deployed on Vercel
 (`vercel-build` = `drizzle-kit migrate && next build`).
 
-## Design system — Midnight Precision (current)
+## Design system — Midnight Precision (shipped)
 
-The UI was refashioned from the old green Material 3 theme to **Midnight
-Precision** (Technical Minimalism): nocturnal obsidian surfaces, **Signal Gold**
-(`primary #f2ca50` / `primary-container #d4af37`) as the sole accent, **Inter**
-everywhere, sharp corners (0px containers / 4px interactive), **no shadows** —
-flat tonal layering + 1px charcoal hairlines. Source of truth was a provided
-`design.md` (palette + type scale); a screenshot + inspiration HTML guided the
-"instrument" chrome. Dark-only by design (theme toggle removed).
+Dark-only Technical Minimalism: obsidian surfaces, **Signal Gold** (`primary
+#f2ca50` / `#d4af37`) as the sole accent, **Inter**, sharp corners (0px
+containers / 4px interactive), no shadows, flat tonal layering + 1px charcoal
+hairlines. Palette = `--md-*` vars in `globals.css` (token *names* unchanged, so
+components stayed token-driven; added `hairline #2a2a2a`). Type scale / radii /
+animations in `tailwind.config.ts`; shared instrument chrome in
+`src/components/chrome.tsx` (footer `PROTOCOL` = real skill fingerprint). Tone is
+"precision" (puppy + gardening words retired). Full detail in history.md.
 
-- Palette lives in `src/app/globals.css` as `--md-*` vars (dark-only `:root`).
-  Token **names** are unchanged from before, so components stayed token-driven —
-  added one token: `hairline` (`#2a2a2a`).
-- `tailwind.config.ts` — Inter, sharp radii, `boxShadow` neutralized to `none`,
-  type scale (`text-display-xl/-lg`, `text-label-sm`, etc.), `tracking-engrave`,
-  spacing tokens, `animate-scanline` / `animate-pulse-dot`.
-- `src/components/chrome.tsx` — shared `BrandHeader`, `GridUnderlay`, `Scanline`,
-  `ContextTag`, `StatusDot`, `TelemetryFooter` (footer `PROTOCOL` = the real skill
-  fingerprint, threaded from the server; no fake latency).
-- Tone is now "precision": puppy + gardening loading words retired; loading words
-  are telemetry verbs; copy is engraved-uppercase.
-- **Deliberate calls** (design.md prose contradicted its own tokens/screenshot):
-  followed the **tokens + screenshot** — gold-filled primary (not white), `#131313`
-  surface (not pure black). Screenshot's `DECLINE/CONFIRM CHOICE` was a mock; kept
-  the real yes/no/done contract, applied the aesthetic (YES=gold, NO=hairline).
-- **Per-page tweaks since:** landing (`/`) and admin login (`/admin/login`) were
-  intentionally stripped of the instrument chrome (no scanline/header/footer
-  context tag) — they show just the grid + centered `Verity` wordmark + minimal
-  copy. Login language simplified ("Login"/"Password", not "Authenticate"). The
-  invitee flow (seed/interview/done) keeps the full chrome.
+- **Deliberate calls:** design.md prose contradicted its own tokens/screenshot —
+  followed tokens+screenshot (gold primary not white; `#131313` not pure black).
+  Screenshot's DECLINE/CONFIRM was a mock; kept the real yes/no/done contract
+  (YES=gold, NO=hairline).
+- **Per-page:** landing (`/`) + admin login (`/admin/login`) are stripped of
+  chrome (no scanline/header/footer) — just grid + centered `Verity` wordmark;
+  login language plain. The invitee flow (seed/interview/done) keeps full chrome.
 
 ## Rest of the surface (reviewed, for orientation)
 
@@ -111,6 +99,61 @@ flat tonal layering + 1px charcoal hairlines. Source of truth was a provided
   build and typecheck but haven't been rendered with live data/screenshots.
 - Note: a fresh clone needs `npm ci` before typecheck/test will run.
 - All three AAPOR iterations are **shipped** (PRs #5–#12): Required Disclosures, construct-validity probe, reliability canaries. README "Survey methodology" section enumerates all three.
+
+## Next focus — multi-round feedback loop (vision; design phase, nothing built)
+
+**Sacred constraint:** the respondent's surface never grows — one thing to click,
+then yes/no, one question per page, nothing to remember. All new machinery is
+server/operator side. The invite token already lives in the URL, so "one thing to
+click" is already satisfied; build on that.
+
+Three problems and the proposed elegant approaches:
+
+1. **Capture "anything else" without a free-text dump.** A persistent text box
+   defeats the linear purpose. Fix = **gated escape hatch**: before the final
+   "write the PRD?" confirm, ask one binary — *"Anything important I haven't asked
+   about?"* No → finalize. Yes → reveal a single few-words capture, which becomes
+   a seed addendum and the **yes/no interview resumes** to probe it. The free text
+   *aims the interviewer*; it is not the artifact. Opt-in, so the default path
+   stays pure.
+
+2. **Follow-up cycles.** A session becomes a **sequence of rounds**. After each
+   round, a **critic / gap-analysis pass** (separate model call over transcript +
+   PRD) decides whether anything is ambiguous/missing; if so it emits the next
+   round's opening questions. PRD becomes **versioned** (v1→v2, append/revise),
+   and the diff history is itself a portfolio artifact. Each round looks identical
+   to the respondent. This is the "another process informs the loop" vision — it's
+   another AAPOR Analyst role, continuous-evaluation theme like the canaries.
+   Default trigger: **critic proposes, operator approves** (human in loop, no
+   respondent spam).
+
+3. **Tracking without a typed code.** A code they *type* contradicts "never
+   remember anything." Resolution: **the link is the identity** — the URL token
+   already corresponds to every response across rounds. Rule: the identifier is
+   carried by the link, never typed. Give each respondent a **durable personal
+   URL** that always shows "what's next" (round-1 seed form / pending question /
+   caught-up). Optional human-readable resume phrase (`river-mauve-7`) as a
+   device-portability fallback — never required input.
+
+**Pivotal fork (answer first — it shapes everything): how does round 2 reach
+them?**
+- **Contact channel** — collect respondent email/SMS at round 1 → *push* a
+  one-click link per round; codes/memory dissolve, works on any device. Cost: one
+  extra intake field (trade against minimalism).
+- **Anonymous** — today's model (invitee is *named* but no contact stored; PRD
+  goes to `DAVIN_EMAIL`, not the respondent) → they must *return* via a durable /
+  bookmarked link, resume phrase as backstop.
+
+Open decisions to settle before building:
+1. **Contact vs. anonymous** (the big one).
+2. **Follow-up trigger:** automated critic / critic-proposes+operator-approves
+   (recommended) / downstream-consumer-driven.
+3. **Escape hatch:** gated few-words-then-resume (proposed) vs. zero-typing-ever
+   (critic loop carries all gap-catching).
+
+Likely schema shift when built: a durable **respondent** identity; `sessions` →
+**rounds** linked to a respondent; **PRD versions**. Write a concrete design doc
+once the three decisions land, then build incrementally.
 
 ## Open to-dos (priority order)
 
