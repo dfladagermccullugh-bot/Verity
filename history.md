@@ -5,6 +5,51 @@ completed to-dos, they land here so the handoff stays lean. Newest first.
 
 ---
 
+## 2026-06-15 — Survey-methodology measurement layer + multi-round (shipped)
+
+Translated the applicable rules from *Survey Methodology* (Groves et al.) — the
+measurement-inference half only; the representation half (sampling/weighting/
+coverage) was deliberately excluded as meaningless for an n=1 tool — into 15
+features, all built in one effort. The respondent surface stayed exactly
+yes/no/done; everything new is backend/operator-side.
+
+**Decisions locked with the user:** all-at-once scope; **zero typing ever** (no
+escape-hatch text box, no fourth button — the critic carries all gap-catching);
+**anonymous durable-link identity** (no contact stored; revisit resumes the next
+round, pull-based); **fully automated critic** (opens the next round itself, no
+operator approval, fail-safe on error).
+
+**What shipped:**
+- *Question quality:* deterministic anti-leading check (`anti-leading.ts`) wired
+  into the generation retry loop next to the guard; construct-dimension tagging
+  (`dimensions.ts`) per turn. Both deterministic ⇒ no per-turn model call.
+- *Seed phase:* construct brief extended with decision + unit; non-blocking
+  seed-quality warnings (`seed-quality.ts`).
+- *Multi-round:* new `rounds` table; `sessions` became the durable respondent
+  container (status lifecycle, `resumePhrase`, latest-round mirror); `turns`
+  gained `roundId` + measurement metadata. `interview-engine.ts` rewritten to be
+  round-aware (`finalizeRound` freezes per-round PRD/methodology/analysis,
+  versioned). Between-round critic (`critic.ts`) off the hot path. Durable-link
+  resume routing driven by pending-turn presence; `/done` sticky; invite consumed
+  only at true completion.
+- *Backend data:* per-round analysis (`analysis.ts` — acquiescence,
+  straightlining, latency/satisficing, leading rate, coverage, triangulation
+  reliability) shipped as a third companion doc with download route, email
+  attachment, admin version-history/diff view, and a richer per-session→rounds→
+  turns export.
+- *Disclosure:* methodology doc now discloses adaptive tailoring, the
+  anti-leading check, PRD version, and the analysis companion.
+
+**Verification:** typecheck clean; `npm test` 109/109 (was 65; +44 across
+anti-leading, dimensions, analysis, critic, seed-quality, disclosure); `npm run
+build` passes incl. the new analysis route. Migration `0003` generated, not
+applied (no DB in container). Not run live: dev-server multi-round E2E and the
+canary's model run (need `DATABASE_URL`/`ANTHROPIC_API_KEY`) — carried into the
+handoff to-dos. Supersedes the 2026-06-15 "Product direction discussed" entry
+below: that vision is now built.
+
+---
+
 ## 2026-06-14 — Handoff/history split
 
 - Reviewed the full project (method, capabilities, directive). Established the
