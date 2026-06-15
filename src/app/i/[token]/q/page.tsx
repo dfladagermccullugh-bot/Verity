@@ -25,20 +25,16 @@ export default async function InterviewPage({
     where: eq(sessions.inviteId, invite!.id),
   });
   if (!session) redirect(`/i/${token}`);
-  if (session!.completedAt) redirect(`/i/${token}/done`);
-
-  const all = await db
-    .select()
-    .from(turns)
-    .where(eq(turns.sessionId, session!.id));
-  const answeredCount = all.filter((t) => t.answer != null).length;
 
   const [pending] = await db
     .select()
     .from(turns)
     .where(and(eq(turns.sessionId, session!.id), isNull(turns.answer)));
 
+  // No question waiting: a complete session is done; otherwise the next round's
+  // question is still being prepared — invite a refresh.
   if (!pending) {
+    if (session!.status === "complete") redirect(`/i/${token}/done`);
     return (
       <main className="flex min-h-screen items-center justify-center p-6">
         <p className="text-label-sm uppercase tracking-engrave text-on-surface-variant">
@@ -47,6 +43,15 @@ export default async function InterviewPage({
       </main>
     );
   }
+
+  // Progress reflects the current round only.
+  const all = await db
+    .select()
+    .from(turns)
+    .where(eq(turns.sessionId, session!.id));
+  const answeredCount = all.filter(
+    (t) => t.roundId === pending.roundId && t.answer != null
+  ).length;
 
   return (
     <Interview

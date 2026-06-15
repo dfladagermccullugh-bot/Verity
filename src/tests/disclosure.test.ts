@@ -2,9 +2,12 @@ import { describe, it, expect } from "vitest";
 import {
   buildPrdHeader,
   buildMethodologyDocument,
+  buildAnalysisDocument,
   prdFilename,
   methodologyFilename,
+  analysisFilename,
 } from "@/lib/disclosure";
+import { computeAnalysis } from "@/lib/analysis";
 import { getSkillVersion } from "@/lib/skill/version";
 import { getModelName } from "@/lib/anthropic";
 
@@ -118,5 +121,58 @@ describe("buildMethodologyDocument — AAPOR Required Disclosures", () => {
     });
     expect(withProbe).toMatch(/\*\*Construct-validity probe:\*\*/);
     expect(withProbe).toMatch(/AAPOR §4\.3\.1/);
+  });
+
+  it("discloses adaptive tailoring as a deliberate departure", () => {
+    expect(doc).toMatch(/adaptively tailored/);
+  });
+
+  it("discloses the deterministic anti-leading check", () => {
+    expect(doc).toMatch(/anti-leading/);
+  });
+
+  it("defaults the PRD version to 1 and reflects a supplied version", () => {
+    expect(doc).toMatch(/\*\*PRD version \(round\):\*\* 1/);
+    const v2 = buildMethodologyDocument({
+      sessionId: SESSION_ID,
+      date: DATE,
+      prdVersion: 2,
+    });
+    expect(v2).toMatch(/\*\*PRD version \(round\):\*\* 2/);
+  });
+
+  it("references the analysis companion only when present", () => {
+    expect(doc).not.toMatch(/Response-quality analysis/);
+    const withAnalysis = buildMethodologyDocument({
+      sessionId: SESSION_ID,
+      date: DATE,
+      analysisPresent: true,
+    });
+    expect(withAnalysis).toMatch(/Response-quality analysis/);
+    expect(withAnalysis).toContain(analysisFilename(SESSION_ID));
+  });
+});
+
+describe("buildAnalysisDocument — companion analysis file", () => {
+  const analysis = computeAnalysis([
+    { answer: "yes", timeToAnswerMs: 1500, constructDimension: "problem", leadingVerdict: "clean" },
+    { answer: "no", timeToAnswerMs: 2500, constructDimension: "scale", leadingVerdict: "clean" },
+  ]);
+  const doc = buildAnalysisDocument({ sessionId: SESSION_ID, date: DATE, analysis, prdVersion: 2 });
+
+  it("derives the analysis filename from the session ID", () => {
+    expect(analysisFilename(SESSION_ID)).toBe(`analysis-${SESSION_ID}.md`);
+  });
+
+  it("opens with an HTML-comment header linking to the companion PRD and version", () => {
+    const firstLine = doc.split("\n")[0];
+    expect(firstLine.startsWith("<!--")).toBe(true);
+    expect(firstLine).toContain(SESSION_ID);
+    expect(firstLine).toContain("PRD v2");
+    expect(firstLine).toContain(prdFilename(SESSION_ID));
+  });
+
+  it("renders the analysis body", () => {
+    expect(doc).toMatch(/# Response-Quality Analysis/);
   });
 });

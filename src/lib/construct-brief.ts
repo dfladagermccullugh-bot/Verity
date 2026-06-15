@@ -26,6 +26,8 @@ You will receive the seed. Respond with a single JSON object — no prose, no ma
 
 {
   "goal": "One sentence stating the construct being elicited: what kind of PRD this seed implies.",
+  "decision": "One sentence stating the decision this PRD must support: what someone will do with it.",
+  "unit": "The unit of analysis the seed describes: one of 'feature', 'product', 'workflow', or 'service'.",
   "scope": "One sentence stating the in-bounds and out-of-bounds boundaries of the elicitation.",
   "inBoundsExamples": ["3–5 short phrases naming concrete topics the interview SHOULD cover"],
   "outOfBoundsExamples": ["3–5 short phrases naming concrete topics the interview should NOT cover"]
@@ -35,6 +37,10 @@ Be specific to this seed. Avoid generic phrasing that would apply to any product
 
 export interface ConstructBriefJson {
   goal: string;
+  /** The decision the PRD supports. Optional for backward compatibility. */
+  decision?: string;
+  /** Unit of analysis (feature/product/workflow/service). Optional. */
+  unit?: string;
   scope: string;
   inBoundsExamples: string[];
   outOfBoundsExamples: string[];
@@ -63,6 +69,8 @@ function parseBrief(raw: string): ConstructBriefJson | null {
     if (!isStringArray(obj.outOfBoundsExamples)) return null;
     return {
       goal: obj.goal,
+      decision: typeof obj.decision === "string" ? obj.decision : undefined,
+      unit: typeof obj.unit === "string" ? obj.unit : undefined,
       scope: obj.scope,
       inBoundsExamples: obj.inBoundsExamples,
       outOfBoundsExamples: obj.outOfBoundsExamples,
@@ -76,11 +84,19 @@ function parseBrief(raw: string): ConstructBriefJson | null {
 export function briefToMarkdown(brief: ConstructBriefJson): string {
   const inList = brief.inBoundsExamples.map((s) => `- ${s}`).join("\n");
   const outList = brief.outOfBoundsExamples.map((s) => `- ${s}`).join("\n");
+  const decisionBlock = brief.decision
+    ? ["## Decision supported", "", brief.decision, ""]
+    : [];
+  const unitBlock = brief.unit
+    ? ["## Unit of analysis", "", brief.unit, ""]
+    : [];
   return [
     "## Goal",
     "",
     brief.goal,
     "",
+    ...decisionBlock,
+    ...unitBlock,
     "## Scope",
     "",
     brief.scope,

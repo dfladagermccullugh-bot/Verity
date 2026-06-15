@@ -22,6 +22,15 @@ function pad(n: number): string {
   return String(n).padStart(2, "0");
 }
 
+/** Coarse device class from viewport width — backend paradata only. */
+function deviceClass(): string | null {
+  if (typeof window === "undefined") return null;
+  const w = window.innerWidth;
+  if (w < 640) return "mobile";
+  if (w < 1024) return "tablet";
+  return "desktop";
+}
+
 const blockVariants = {
   enter: (dir: number) => ({ opacity: 0, x: -dir * 40 }),
   center: { opacity: 1, x: 0 },
@@ -71,8 +80,16 @@ export default function Interview({
     if (value !== "done") setAnswered((a) => a + 1);
     setQKey((k) => k + 1);
     const ms = Date.now() - shownAt.current;
+    const paradata = {
+      timeToAnswerMs: ms,
+      deviceClass: deviceClass(),
+      viewport:
+        typeof window !== "undefined"
+          ? `${window.innerWidth}x${window.innerHeight}`
+          : null,
+    };
     startTransition(async () => {
-      const res = await submitAnswer(token, value, ms);
+      const res = await submitAnswer(token, value, paradata);
       if (!res.ok) {
         setError(res.error);
         if (value !== "done") setAnswered((a) => Math.max(0, a - 1));
