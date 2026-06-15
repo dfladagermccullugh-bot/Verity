@@ -30,6 +30,9 @@ export default async function DonePage({
     where: eq(sessions.inviteId, invite.id),
   });
   if (!session) redirect(`/i/${token}`);
+  // Sticky once any round has been compiled. A follow-up round may already be
+  // queued (pull-based) — the respondent reaches it by reopening their link,
+  // not by being bounced from this screen.
   if (!session.completedAt) redirect(`/i/${token}/q`);
 
   return (

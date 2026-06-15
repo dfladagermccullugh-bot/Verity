@@ -1,14 +1,37 @@
 import "server-only";
-import { and, asc, eq, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, isNull } from "drizzle-orm";
 import { db } from "./db";
-import { invites, sessions, turns, type Session, type Turn } from "./db/schema";
+import {
+  invites,
+  rounds,
+  sessions,
+  turns,
+  type Round,
+  type Session,
+  type Turn,
+} from "./db/schema";
 import { callModel, type ChatMessage } from "./anthropic";
 import { guardOutput, STOP_CONFIRM } from "./guard";
+import { detectLeading } from "./anti-leading";
+import { classifyDimension } from "./dimensions";
+import { computeAnalysis } from "./analysis";
+import { critiqueRound } from "./critic";
 import { sendPrdEmail } from "./email";
-import { buildPrdHeader, buildMethodologyDocument } from "./disclosure";
+import {
+  buildPrdHeader,
+  buildMethodologyDocument,
+  buildAnalysisDocument,
+} from "./disclosure";
 import { buildConstructBrief } from "./construct-brief";
 
 export const RUNAWAY_CEILING = 40;
+
+/** Paradata captured alongside each answer (Survey Methodology §15). */
+export interface AnswerParadata {
+  timeToAnswerMs: number | null;
+  deviceClass?: string | null;
+  viewport?: string | null;
+}
 
 /** Build the model conversation from the seed + already-answered turns. */
 function messagesFromTurns(seed: string, allTurns: Turn[]): ChatMessage[] {
@@ -21,6 +44,7 @@ function messagesFromTurns(seed: string, allTurns: Turn[]): ChatMessage[] {
   return messages;
 }
 
+/** All turns for a session, across rounds, ordered by step. */
 async function loadTurns(sessionId: string): Promise<Turn[]> {
   return db
     .select()
@@ -29,23 +53,67 @@ async function loadTurns(sessionId: string): Promise<Turn[]> {
     .orderBy(asc(turns.step));
 }
 
+function maxStep(allTurns: Turn[]): number {
+  return allTurns.reduce((m, t) => Math.max(m, t.step), 0);
+}
+
 type NextShape =
   | { kind: "question"; text: string }
   | { kind: "stop_confirm" }
   | { kind: "prd"; markdown: string };
 
-/** Call the model, run the guard, regenerate once on reject, then fall back to stop-confirm. */
-async function generateNextShape(messages: ChatMessage[]): Promise<NextShape> {
-  for (let attempt = 0; attempt < 2; attempt++) {
+/** A generated shape plus the diagnostics recorded on the resulting turn. */
+interface GenResult {
+  shape: NextShape;
+  regenCount: number;
+  guardRejections: string[];
+  leadingRewrites: number;
+}
+
+/**
+ * Call the model, run the guard AND the deterministic anti-leading check,
+ * regenerating on any rejection. After repeated failures, fall back to the
+ * stop-confirm path. Returns the accepted shape with per-turn diagnostics.
+ */
+async function generateNextShape(messages: ChatMessage[]): Promise<GenResult> {
+  const guardRejections: string[] = [];
+  let leadingRewrites = 0;
+  let regenCount = 0;
+
+  for (let attempt = 0; attempt < 3; attempt++) {
     const raw = await callModel(messages);
     const g = guardOutput(raw);
-    if (g.kind === "question") return { kind: "question", text: g.text };
-    if (g.kind === "stop_confirm") return { kind: "stop_confirm" };
-    if (g.kind === "prd") return { kind: "prd", markdown: g.markdown };
-    // reject → loop once more
+
+    if (g.kind === "question") {
+      const lead = detectLeading(g.text);
+      if (lead.leading) {
+        guardRejections.push(`leading:${lead.reason}`);
+        leadingRewrites += 1;
+        regenCount += 1;
+        continue; // regenerate a neutrally-phrased question
+      }
+      return {
+        shape: { kind: "question", text: g.text },
+        regenCount,
+        guardRejections,
+        leadingRewrites,
+      };
+    }
+    if (g.kind === "stop_confirm")
+      return { shape: { kind: "stop_confirm" }, regenCount, guardRejections, leadingRewrites };
+    if (g.kind === "prd")
+      return {
+        shape: { kind: "prd", markdown: g.markdown },
+        regenCount,
+        guardRejections,
+        leadingRewrites,
+      };
+
+    guardRejections.push(g.reason);
+    regenCount += 1;
   }
-  // Two rejects → force the stop-confirm path.
-  return { kind: "stop_confirm" };
+
+  return { shape: { kind: "stop_confirm" }, regenCount, guardRejections, leadingRewrites };
 }
 
 /** Drive the model to emit the final PRD markdown. Best-effort, never throws. */
@@ -59,7 +127,6 @@ async function forcePrd(messages: ChatMessage[]): Promise<string> {
     const raw = await callModel(convo);
     const g = guardOutput(raw);
     if (g.kind === "prd") return g.markdown;
-    // Nudge harder and retry.
     convo.push({ role: "assistant", content: raw });
     convo.push({
       role: "user",
@@ -67,45 +134,125 @@ async function forcePrd(messages: ChatMessage[]): Promise<string> {
         "Write the PRD now. Begin your reply with the line ===PRD=== and include every required section.",
     });
   }
-  // Last resort: take whatever the model said so Davin still gets content.
   const fallback = await callModel(convo);
   return fallback.replace(/^===PRD===\s*/, "");
 }
 
-async function finalizeWithPrd(session: Session, markdown: string): Promise<void> {
-  // Freeze methodology provenance with the artifact. The PRD itself carries
-  // only an invisible HTML-comment header linking it to the companion
-  // methodology document; the full AAPOR disclosure lives in a separate field
-  // so it can be distributed as its own file. Both documents share the session
-  // ID in their filenames and headers, so the association survives separation.
-  //
-  // Re-read the session before building the methodology document — the
-  // in-memory copy is from before the construct-brief probe ran.
+/** Insert a pending question turn, computing its measurement metadata. */
+async function insertTurn(
+  session: Session,
+  round: Round,
+  step: number,
+  questionText: string,
+  gen: GenResult,
+  priorRoundAnswered: Turn[]
+): Promise<void> {
+  const dimension = classifyDimension(questionText);
+  const isTriangulationProbe = priorRoundAnswered.some(
+    (t) => t.constructDimension === dimension
+  );
+  await db.insert(turns).values({
+    sessionId: session.id,
+    roundId: round.id,
+    step,
+    questionText,
+    answer: null,
+    timeToAnswerMs: null,
+    constructDimension: dimension,
+    regenCount: gen.regenCount,
+    guardRejections: JSON.stringify(gen.guardRejections),
+    leadingVerdict: gen.leadingRewrites > 0 ? "rewritten" : "clean",
+    isTriangulationProbe,
+    deviceClass: null,
+    viewport: null,
+  });
+}
+
+/** The active (latest) round for a session. */
+async function getActiveRound(
+  sessionId: string,
+  pending: Turn | null
+): Promise<Round | null> {
+  if (pending?.roundId) {
+    const r = await db.query.rounds.findFirst({
+      where: eq(rounds.id, pending.roundId),
+    });
+    if (r) return r;
+  }
+  const rs = await db
+    .select()
+    .from(rounds)
+    .where(eq(rounds.sessionId, sessionId))
+    .orderBy(desc(rounds.roundNumber));
+  return rs[0] ?? null;
+}
+
+/**
+ * Finalize a round: build + freeze the PRD, methodology, and analysis
+ * documents; mirror the latest version onto the session; email the operator;
+ * then run the gap-analysis critic. If the critic opens a follow-up round,
+ * generate its first question and leave the session active. Otherwise mark the
+ * session complete and consume the invite.
+ */
+async function finalizeRound(
+  session: Session,
+  round: Round,
+  markdown: string,
+  terminationReason: string
+): Promise<void> {
   const fresh = await db.query.sessions.findFirst({
     where: eq(sessions.id, session.id),
   });
   const constructBriefPresent = !!fresh?.constructBrief;
 
+  const roundTurns = await db
+    .select()
+    .from(turns)
+    .where(eq(turns.roundId, round.id))
+    .orderBy(asc(turns.step));
+
+  const analysis = computeAnalysis(
+    roundTurns.map((t) => ({
+      answer: t.answer,
+      timeToAnswerMs: t.timeToAnswerMs,
+      constructDimension: t.constructDimension,
+      leadingVerdict: t.leadingVerdict,
+    }))
+  );
+  const analysisMarkdown = buildAnalysisDocument({
+    sessionId: session.id,
+    analysis,
+    prdVersion: round.prdVersion,
+  });
+
   const prdMarkdown = buildPrdHeader({ sessionId: session.id }) + markdown;
   const methodologyMarkdown = buildMethodologyDocument({
     sessionId: session.id,
     constructBriefPresent,
+    prdVersion: round.prdVersion,
+    analysisPresent: true,
   });
 
+  const now = new Date();
   await db
-    .update(sessions)
+    .update(rounds)
     .set({
+      status: "complete",
+      terminationReason,
+      completedAt: now,
       prdMarkdown,
       methodologyMarkdown,
-      completedAt: new Date(),
-      abandonedAtStep: null,
+      analysisMarkdown,
     })
-    .where(eq(sessions.id, session.id));
-  await db
-    .update(invites)
-    .set({ consumedAt: new Date() })
-    .where(eq(invites.id, session.inviteId));
+    .where(eq(rounds.id, round.id));
 
+  // Mirror the latest version onto the session for the existing routes/screens.
+  await db
+    .update(sessions)
+    .set({ prdMarkdown, methodologyMarkdown, completedAt: now, abandonedAtStep: null })
+    .where(eq(sessions.id, session.id));
+
+  // Email this version promptly, independent of whether more rounds follow.
   const invite = await db.query.invites.findFirst({
     where: eq(invites.id, session.inviteId),
   });
@@ -113,9 +260,61 @@ async function finalizeWithPrd(session: Session, markdown: string): Promise<void
     inviteeName: invite?.inviteeName ?? "Unknown",
     seed: session.seed,
     sessionId: session.id,
+    prdVersion: round.prdVersion,
     prdMarkdown,
     methodologyMarkdown,
+    analysisMarkdown,
   });
+
+  // Gap-analysis critic (off the hot path). Fail-safe: never opens on error.
+  const transcript = roundTurns
+    .filter((t) => t.answer != null && t.answer !== "done")
+    .map((t) => `Q${t.step}: ${t.questionText}\nA: ${t.answer}`)
+    .join("\n");
+  const critique = await critiqueRound(session.seed, transcript, markdown);
+
+  if (critique.openNewRound) {
+    const [next] = await db
+      .insert(rounds)
+      .values({
+        sessionId: session.id,
+        roundNumber: round.roundNumber + 1,
+        prdVersion: round.prdVersion + 1,
+        status: "in_progress",
+        focusBrief: critique.focus,
+      })
+      .returning();
+
+    const allTurns = await loadTurns(session.id);
+    const messages = messagesFromTurns(session.seed, allTurns);
+    messages.push({
+      role: "user",
+      content: `(Continue the interview. The analyst flagged these gaps to focus on next: ${critique.focus} Ask the next single yes/no question.)`,
+    });
+    const gen = await generateNextShape(messages);
+
+    if (gen.shape.kind === "question") {
+      await insertTurn(session, next, maxStep(allTurns) + 1, gen.shape.text, gen, []);
+      await db
+        .update(sessions)
+        .set({ status: "active" })
+        .where(eq(sessions.id, session.id));
+      return;
+    }
+
+    // The follow-up round produced no question — close it and complete.
+    await db
+      .update(rounds)
+      .set({ status: "complete", terminationReason: "degenerate", completedAt: new Date() })
+      .where(eq(rounds.id, next.id));
+  }
+
+  // No further rounds: complete the session and consume the invite.
+  await db.update(sessions).set({ status: "complete" }).where(eq(sessions.id, session.id));
+  await db
+    .update(invites)
+    .set({ consumedAt: new Date() })
+    .where(eq(invites.id, session.inviteId));
 }
 
 /** The currently-displayed (unanswered) turn, if any. */
@@ -130,8 +329,7 @@ export async function pendingTurn(sessionId: string) {
 
 /**
  * Best-effort sidecar call: run the construct-validity probe and persist the
- * brief on the session. Never throws — a missing brief must not block the
- * interview, only flag it as missing in the methodology disclosure.
+ * brief on the session. Never throws.
  */
 async function persistConstructBrief(session: Session): Promise<void> {
   try {
@@ -147,34 +345,35 @@ async function persistConstructBrief(session: Session): Promise<void> {
   }
 }
 
-/** Step 1: first model call after the seed is submitted. */
+/** Step 1: first model call after the seed is submitted. Opens round 1. */
 export async function beginInterview(session: Session): Promise<
   | { kind: "question"; text: string }
   | { kind: "done" }
 > {
-  // Fire the AAPOR §4.3.1 construct-validity probe before generating the
-  // first question. Awaited so the brief is on file (or known-missing) before
-  // any substantive content is produced.
   await persistConstructBrief(session);
 
-  const messages: ChatMessage[] = [{ role: "user", content: session.seed }];
-  const shape = await generateNextShape(messages);
+  const [round] = await db
+    .insert(rounds)
+    .values({ sessionId: session.id, roundNumber: 1, prdVersion: 1, status: "in_progress" })
+    .returning();
 
-  if (shape.kind === "question") {
-    await db.insert(turns).values({
-      sessionId: session.id,
-      step: 1,
-      questionText: shape.text,
-      answer: null,
-      timeToAnswerMs: null,
-    });
-    return { kind: "question", text: shape.text };
+  const messages: ChatMessage[] = [{ role: "user", content: session.seed }];
+  const gen = await generateNextShape(messages);
+
+  if (gen.shape.kind === "question") {
+    await insertTurn(session, round, 1, gen.shape.text, gen, []);
+    return { kind: "question", text: gen.shape.text };
   }
 
   // Degenerate first turn — model jumped straight to stop/PRD.
   const markdown =
-    shape.kind === "prd" ? shape.markdown : await forcePrd(messages);
-  await finalizeWithPrd(session, markdown);
+    gen.shape.kind === "prd" ? gen.shape.markdown : await forcePrd(messages);
+  await finalizeRound(
+    session,
+    round,
+    markdown,
+    gen.shape.kind === "prd" ? "model_prd" : "degenerate"
+  );
   return { kind: "done" };
 }
 
@@ -182,49 +381,71 @@ export async function beginInterview(session: Session): Promise<
 export async function submitAnswer(
   session: Session,
   answer: "yes" | "no" | "done",
-  timeToAnswerMs: number | null
+  paradata: AnswerParadata
 ): Promise<{ kind: "question"; text: string } | { kind: "done" }> {
-  if (session.completedAt) return { kind: "done" };
+  if (session.status === "complete") return { kind: "done" };
 
-  // One fetch covers pending lookup, history rebuild, answered count, and next-step number.
   const allTurns = await loadTurns(session.id);
   const pending = allTurns.find((t) => t.answer == null) ?? null;
+  const activeRound = await getActiveRound(session.id, pending);
 
   if (pending) {
     await db
       .update(turns)
-      .set({ answer, timeToAnswerMs })
+      .set({
+        answer,
+        timeToAnswerMs: paradata.timeToAnswerMs,
+        deviceClass: paradata.deviceClass ?? null,
+        viewport: paradata.viewport ?? null,
+      })
       .where(eq(turns.id, pending.id));
-    pending.answer = answer; // reflect the write in-memory; avoids a refetch
+    pending.answer = answer; // reflect in-memory; avoids a refetch
   }
 
+  if (!activeRound) return { kind: "done" }; // safety: nothing to drive
+
   const messages = messagesFromTurns(session.seed, allTurns);
-  const count = allTurns.reduce((n, t) => (t.answer != null ? n + 1 : n), 0);
-  const nextStep = allTurns.reduce((m, t) => Math.max(m, t.step), 0) + 1;
+  const answeredInRound = allTurns.filter(
+    (t) => t.roundId === activeRound.id && t.answer != null
+  ).length;
 
   // Invitee asked to finish, or runaway ceiling reached → go straight to PRD.
-  if (answer === "done" || count >= RUNAWAY_CEILING) {
+  if (answer === "done" || answeredInRound >= RUNAWAY_CEILING) {
     const markdown = await forcePrd(messages);
-    await finalizeWithPrd(session, markdown);
+    await finalizeRound(
+      session,
+      activeRound,
+      markdown,
+      answer === "done" ? "done_by_user" : "ceiling"
+    );
     return { kind: "done" };
   }
 
-  const shape = await generateNextShape(messages);
+  const gen = await generateNextShape(messages);
 
-  if (shape.kind === "question") {
-    await db.insert(turns).values({
-      sessionId: session.id,
-      step: nextStep,
-      questionText: shape.text,
-      answer: null,
-      timeToAnswerMs: null,
-    });
-    return { kind: "question", text: shape.text };
+  if (gen.shape.kind === "question") {
+    const priorRoundAnswered = allTurns.filter(
+      (t) => t.roundId === activeRound.id && t.answer != null
+    );
+    await insertTurn(
+      session,
+      activeRound,
+      maxStep(allTurns) + 1,
+      gen.shape.text,
+      gen,
+      priorRoundAnswered
+    );
+    return { kind: "question", text: gen.shape.text };
   }
 
   // stop_confirm or prd → finish silently (invitee never sees the confirmation).
   const markdown =
-    shape.kind === "prd" ? shape.markdown : await forcePrd(messages);
-  await finalizeWithPrd(session, markdown);
+    gen.shape.kind === "prd" ? gen.shape.markdown : await forcePrd(messages);
+  await finalizeRound(
+    session,
+    activeRound,
+    markdown,
+    gen.shape.kind === "prd" ? "model_prd" : "forced_prd"
+  );
   return { kind: "done" };
 }

@@ -1,10 +1,35 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { eq } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { sessions, invites } from "@/lib/db/schema";
+import { sessions, invites, rounds } from "@/lib/db/schema";
 
 export const dynamic = "force-dynamic";
+
+/** Naive line-level diff between two PRD versions — enough to show what the
+ *  follow-up round changed. */
+function lineDiff(oldText: string, newText: string): { added: string[]; removed: string[] } {
+  const norm = (s: string) =>
+    s
+      .split("\n")
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0);
+  const oldLines = new Set(norm(oldText));
+  const newLines = new Set(norm(newText));
+  const added = [...newLines].filter((l) => !oldLines.has(l));
+  const removed = [...oldLines].filter((l) => !newLines.has(l));
+  return { added, removed };
+}
+
+function parseWarnings(s: string | null): string[] {
+  if (!s) return [];
+  try {
+    const v = JSON.parse(s);
+    return Array.isArray(v) ? v.map(String) : [];
+  } catch {
+    return [];
+  }
+}
 
 export default async function PrdView({ params }: { params: { id: string } }) {
   const session = await db.query.sessions.findFirst({
@@ -15,6 +40,13 @@ export default async function PrdView({ params }: { params: { id: string } }) {
   const invite = await db.query.invites.findFirst({
     where: eq(invites.id, session!.inviteId),
   });
+
+  const sessionRounds = await db
+    .select()
+    .from(rounds)
+    .where(eq(rounds.sessionId, session!.id))
+    .orderBy(asc(rounds.roundNumber));
+  const warnings = parseWarnings(session!.seedWarnings);
 
   return (
     <main className="mx-auto max-w-3xl px-margin-mobile py-16 md:px-margin-desktop">
@@ -40,6 +72,12 @@ export default async function PrdView({ params }: { params: { id: string } }) {
               Methodology
             </a>
           )}
+          <a
+            href={`/api/admin/prd/${session!.id}/analysis`}
+            className="text-on-surface-variant transition-colors hover:text-on-surface"
+          >
+            Analysis
+          </a>
         </div>
       </div>
 
@@ -47,8 +85,16 @@ export default async function PrdView({ params }: { params: { id: string } }) {
         {invite?.inviteeName} · seed: {session!.seed}
       </p>
       <p className="mt-1 font-mono text-label-sm uppercase tracking-engrave text-on-surface-variant opacity-60">
-        session: {session!.id}
+        session: {session!.id} · status: {session!.status} · rounds:{" "}
+        {sessionRounds.length}
+        {session!.resumePhrase ? ` · resume: ${session!.resumePhrase}` : ""}
       </p>
+
+      {warnings.length > 0 && (
+        <p className="mt-3 text-label-sm uppercase tracking-engrave text-error opacity-80">
+          Seed warnings: {warnings.join(", ")}
+        </p>
+      )}
 
       {session!.constructBrief && (
         <details className="mt-10 border border-hairline">
@@ -62,11 +108,52 @@ export default async function PrdView({ params }: { params: { id: string } }) {
       )}
 
       <h2 className="mt-10 text-label-sm uppercase tracking-engrave text-on-surface-variant">
-        Brief
+        Brief — latest version (v
+        {sessionRounds.length > 0
+          ? sessionRounds[sessionRounds.length - 1].prdVersion
+          : 1}
+        )
       </h2>
       <pre className="mt-3 whitespace-pre-wrap border border-hairline bg-surface-container-low p-8 text-body-md leading-relaxed text-on-surface">
         {session!.prdMarkdown}
       </pre>
+
+      {/* Round / version history. */}
+      {sessionRounds.map((r, i) => {
+        const prev = i > 0 ? sessionRounds[i - 1] : null;
+        const diff =
+          prev && prev.prdMarkdown && r.prdMarkdown
+            ? lineDiff(prev.prdMarkdown, r.prdMarkdown)
+            : null;
+        return (
+          <details key={r.id} className="mt-6 border border-hairline">
+            <summary className="cursor-pointer p-4 text-label-sm uppercase tracking-engrave text-on-surface-variant">
+              Round {r.roundNumber} · PRD v{r.prdVersion} ·{" "}
+              {r.terminationReason ?? r.status}
+            </summary>
+            <div className="border-t border-hairline p-6 text-body-md leading-relaxed text-on-surface">
+              {r.focusBrief && (
+                <p className="mb-4 text-on-surface-variant">
+                  Critic focus: {r.focusBrief}
+                </p>
+              )}
+              {diff && (
+                <div className="mb-4 font-mono text-label-sm">
+                  <p className="text-primary">+ {diff.added.length} lines added</p>
+                  <p className="text-on-surface-variant">
+                    − {diff.removed.length} lines removed
+                  </p>
+                </div>
+              )}
+              {r.analysisMarkdown && (
+                <pre className="mt-2 whitespace-pre-wrap border-t border-hairline pt-4 text-body-md">
+                  {r.analysisMarkdown}
+                </pre>
+              )}
+            </div>
+          </details>
+        );
+      })}
 
       {session!.methodologyMarkdown && (
         <details className="mt-10 border border-hairline">

@@ -11,6 +11,7 @@
 
 import { callModel, type ChatMessage, getModelName } from "../anthropic";
 import { guardOutput, STOP_CONFIRM } from "../guard";
+import { detectLeading } from "../anti-leading";
 import { RUNAWAY_CEILING } from "../interview-engine";
 import type { SeedFixture, SeedMetrics } from "./types";
 
@@ -31,10 +32,15 @@ async function generateNextShape(
   messages: ChatMessage[],
   counters: RunCounters,
 ): Promise<Shape> {
-  for (let attempt = 0; attempt < 2; attempt++) {
+  for (let attempt = 0; attempt < 3; attempt++) {
     const raw = await callModel(messages);
     const g = guardOutput(raw);
     if (g.kind === "question") {
+      // Mirror production: a leading question is rejected and regenerated.
+      if (detectLeading(g.text).leading) {
+        counters.rejects += 1;
+        continue;
+      }
       counters.accepts += 1;
       counters.questionLengths.push(g.text.length);
       return { kind: "question", text: g.text };

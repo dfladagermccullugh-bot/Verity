@@ -1,10 +1,21 @@
 import { NextResponse } from "next/server";
 import { asc, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { sessions, turns } from "@/lib/db/schema";
+import { rounds, sessions, turns } from "@/lib/db/schema";
 import { isAdmin } from "@/lib/session";
+import { computeAnalysis } from "@/lib/analysis";
 
 export const dynamic = "force-dynamic";
+
+function parseJsonArray(s: string | null): unknown[] {
+  if (!s) return [];
+  try {
+    const v = JSON.parse(s);
+    return Array.isArray(v) ? v : [];
+  } catch {
+    return [];
+  }
+}
 
 export async function GET() {
   if (!(await isAdmin())) {
@@ -12,65 +23,77 @@ export async function GET() {
   }
 
   const allSessions = await db.select().from(sessions);
-  const completed_sessions: unknown[] = [];
-  const abandoned_sessions: unknown[] = [];
   const versions = new Set<string>();
+  const exported: unknown[] = [];
 
   for (const s of allSessions) {
     versions.add(s.skillVersion);
-    const rows = await db
+
+    const sessionRounds = await db
+      .select()
+      .from(rounds)
+      .where(eq(rounds.sessionId, s.id))
+      .orderBy(asc(rounds.roundNumber));
+
+    const sessionTurns = await db
       .select()
       .from(turns)
       .where(eq(turns.sessionId, s.id))
       .orderBy(asc(turns.step));
 
-    const transcript = rows.map((t) => ({
-      step: t.step,
-      question: t.questionText,
-      answer: t.answer,
-      time_to_answer_ms: t.timeToAnswerMs,
-    }));
-
-    if (s.completedAt) {
-      const answered = rows.filter((t) => t.answer != null).length;
-      completed_sessions.push({
-        session_id: s.id,
-        seed: s.seed,
-        skill_version: s.skillVersion,
-        started_at: s.startedAt,
-        completed_at: s.completedAt,
-        total_questions: answered,
-        total_duration_seconds: Math.round(
-          (new Date(s.completedAt).getTime() -
-            new Date(s.startedAt).getTime()) /
-            1000
-        ),
-        transcript,
-        prd_markdown: s.prdMarkdown,
-      });
-    } else {
-      const lastStep = rows.reduce((m, r) => Math.max(m, r.step), 0) || null;
-      const durMs = rows.reduce(
-        (sum, r) => sum + (r.timeToAnswerMs ?? 0),
-        0
+    const roundPayloads = sessionRounds.map((r) => {
+      const roundTurns = sessionTurns.filter((t) => t.roundId === r.id);
+      const transcript = roundTurns.map((t) => ({
+        step: t.step,
+        question: t.questionText,
+        answer: t.answer,
+        time_to_answer_ms: t.timeToAnswerMs,
+        construct_dimension: t.constructDimension,
+        regen_count: t.regenCount,
+        guard_rejections: parseJsonArray(t.guardRejections),
+        leading_verdict: t.leadingVerdict,
+        is_triangulation_probe: t.isTriangulationProbe,
+        device_class: t.deviceClass,
+        viewport: t.viewport,
+      }));
+      const analysis = computeAnalysis(
+        roundTurns.map((t) => ({
+          answer: t.answer,
+          timeToAnswerMs: t.timeToAnswerMs,
+          constructDimension: t.constructDimension,
+          leadingVerdict: t.leadingVerdict,
+        }))
       );
-      abandoned_sessions.push({
-        session_id: s.id,
-        seed: s.seed,
-        skill_version: s.skillVersion,
-        started_at: s.startedAt,
-        abandoned_at_step: lastStep,
-        total_duration_seconds: Math.round(durMs / 1000),
+      return {
+        round_number: r.roundNumber,
+        prd_version: r.prdVersion,
+        status: r.status,
+        termination_reason: r.terminationReason,
+        focus_brief: r.focusBrief,
+        started_at: r.startedAt,
+        completed_at: r.completedAt,
         transcript,
-      });
-    }
+        analysis,
+        prd_markdown: r.prdMarkdown,
+      };
+    });
+
+    exported.push({
+      session_id: s.id,
+      seed: s.seed,
+      skill_version: s.skillVersion,
+      status: s.status,
+      seed_warnings: parseJsonArray(s.seedWarnings),
+      started_at: s.startedAt,
+      completed_at: s.completedAt,
+      rounds: roundPayloads,
+    });
   }
 
   const payload = {
     exported_at: new Date().toISOString(),
     skill_versions_seen: [...versions],
-    completed_sessions,
-    abandoned_sessions,
+    sessions: exported,
   };
 
   const date = new Date().toISOString().slice(0, 10);

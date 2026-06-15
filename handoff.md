@@ -4,7 +4,7 @@ Lean, session-to-session working memory. Keep this under ~5k tokens. When an
 item goes stale or a to-do is done, move it to [history.md](history.md) and
 trim it from here.
 
-_Last updated: 2026-06-15 (next focus = multi-round feedback loop, design phase)_
+_Last updated: 2026-06-15 (multi-round + survey-methodology measurement layer shipped)_
 
 ## What Verity is
 
@@ -31,24 +31,40 @@ design constraint, not a disclaimer.
 ## Architecture at a glance
 
 ```
-seed → construct-validity probe (sidecar) → interview loop
-        (model → guard → persist turn) → on done / 40-turn ceiling / model-stop
-        → force PRD → email PRD + methodology + store
+seed → seed-quality warnings + construct-validity probe (sidecar) →
+  ROUND loop: (model → guard → anti-leading → persist turn w/ metadata)
+    → on done / 40-turn ceiling / model-stop → force PRD
+    → finalize round (freeze PRD + methodology + analysis, vN) → email
+    → gap-analysis critic → open next round (auto) OR complete + consume invite
+durable anonymous link resumes into the next round on revisit (pull-based)
 ```
 
 Key files:
-- `src/lib/interview-engine.ts` — turn loop, retry policy, 40-turn ceiling, `forcePrd` fallback, `finalizeWithPrd`.
-- `src/lib/guard.ts` — deterministic classifier → `question | stop_confirm | prd | reject`. Rejects multiline, batched, jargon, >200 chars, missing `?`.
-- `src/lib/construct-brief.ts` — AAPOR §4.3.1 pre-flight probe; one-shot call, JSON→markdown; **log-only**, non-fatal.
-- `src/lib/disclosure.ts` — PRD header + standalone methodology companion doc; provenance **frozen at finalize**.
+- `src/lib/interview-engine.ts` — **round-aware** turn loop, retry policy (guard + anti-leading), 40-turn ceiling, `forcePrd`, `finalizeRound` (per-round PRD/methodology/analysis + critic + next-round/complete).
+- `src/lib/guard.ts` — deterministic *form* classifier → `question | stop_confirm | prd | reject`. Rejects multiline, batched, jargon, >200 chars, missing `?`.
+- `src/lib/anti-leading.ts` — deterministic *semantic* check; rejects tag questions, loaded openers, presupposition. Runs in the same retry loop; no model call.
+- `src/lib/dimensions.ts` — keyword classifier mapping each question to one of 10 coverage dimensions (per-turn tag; drives coverage + triangulation).
+- `src/lib/analysis.ts` — pure per-round metrics (acquiescence, straightlining, latency, leading rate, coverage, triangulation reliability) + markdown render.
+- `src/lib/critic.ts` — between-round gap-analysis (`callModelOneShot`); fail-safe (never opens a round on parse/transport error). Off the hot path.
+- `src/lib/seed-quality.ts` — non-blocking seed warnings (vague / double-barreled / presupposition / too-short).
+- `src/lib/construct-brief.ts` — AAPOR §4.3.1 pre-flight probe (now also captures decision + unit); **log-only**, non-fatal.
+- `src/lib/disclosure.ts` — PRD header + methodology + **analysis** companion docs; provenance + version **frozen per round**.
 - `src/lib/anthropic.ts` — `callModel` (interview, prompt-cached) + `callModelOneShot` (sidecars). Model from `ANTHROPIC_MODEL`, default `claude-sonnet-4-6`; `MAX_TOKENS=4096`.
-- `src/lib/skill/idea-seeding-agent.md` — system prompt, webpack-inlined at build; `version.ts` derives a SHA-256 fingerprint used in the disclosure.
-- `src/lib/canaries/` + `scripts/canary.ts` + `.github/workflows/canary.yml` — weekly reliability drift suite.
+- `src/lib/canaries/` + `scripts/canary.ts` — weekly drift suite (`run-one.ts` mirrors the anti-leading reject so canary tracks real behavior).
 
 Stack: Next.js 14 (App Router, server actions), React 18, TS. Postgres via
-Drizzle (`invites`, `sessions`, `turns`). iron-session admin auth, Resend email,
-Tailwind + Material 3 tokens, Framer Motion. Deployed on Vercel
-(`vercel-build` = `drizzle-kit migrate && next build`).
+Drizzle (`invites`, `sessions`, `rounds`, `turns` — see migration `0003`).
+iron-session admin auth, Resend email, Tailwind + Material 3 tokens, Framer
+Motion. Deployed on Vercel (`vercel-build` = `drizzle-kit migrate && next build`).
+
+**Data model (post-0003):** `sessions` is the durable respondent container
+(`status` active|complete, `resumePhrase`, `seedWarnings`, + latest-round mirror
+of `prdMarkdown`/`methodologyMarkdown`/`completedAt`). `rounds` (canonical per
+version): `roundNumber`, `prdVersion`, `status`, `terminationReason`,
+`focusBrief`, and frozen `prd/methodology/analysisMarkdown`. `turns` gained
+`roundId` + measurement metadata (`constructDimension`, `regenCount`,
+`guardRejections`, `leadingVerdict`, `isTriangulationProbe`, `deviceClass`,
+`viewport`).
 
 ## Design system — Midnight Precision (shipped)
 
@@ -84,89 +100,85 @@ animations in `tailwind.config.ts`; shared instrument chrome in
   `src/lib/session.ts` — iron-session admin cookie. `src/actions/admin.ts` —
   password login (timing-safe), `createInvite` (7-day expiry).
 - **Admin / output:** `src/app/admin/prds/` list + detail (detail surfaces the
-  construct brief). Download routes under `src/app/api/admin/`: `prd/[id]` (PRD
-  md), `prd/[id]/methodology` (methodology md), `export` (full training-data
-  JSON of completed + abandoned sessions). `src/lib/email.ts` — Resend: PRD in
-  body, methodology as attachment, to `DAVIN_EMAIL`; fails silently since the
-  PRD is already persisted.
+  construct brief, seed warnings, **round/version history with a PRD diff**, and
+  the analysis per round). Download routes under `src/app/api/admin/`: `prd/[id]`
+  (latest PRD md), `prd/[id]/methodology`, `prd/[id]/analysis` (latest round's
+  analysis), `export` (training-data JSON, now **per-session → rounds → turns**
+  with full per-turn metadata + computed analysis). `src/lib/email.ts` — Resend:
+  PRD in body, methodology + analysis as attachments, versioned subject, to
+  `DAVIN_EMAIL`; emails **every round** so Davin always has the latest version;
+  fails silently since the PRD is already persisted.
 
 ## Current health (verified this session)
 
-- `npm run typecheck` — clean. `npm run build` — passes (all routes compile).
-- `npm test` — 65 passing (guard 19, canary-compare 15, disclosure 21, construct-brief 10).
-- Landing (`/`) and admin login (`/admin/login`) smoke-tested via `npm start` → HTTP 200.
-- **Not yet visually QA'd:** the DB-backed routes (interview, done, admin) — they
-  build and typecheck but haven't been rendered with live data/screenshots.
-- Note: a fresh clone needs `npm ci` before typecheck/test will run.
-- All three AAPOR iterations are **shipped** (PRs #5–#12): Required Disclosures, construct-validity probe, reliability canaries. README "Survey methodology" section enumerates all three.
+- `npm run typecheck` — clean. `npm run build` — passes (all routes incl. new
+  `prd/[id]/analysis` compile).
+- `npm test` — **109 passing** (was 65; +44: anti-leading 10, dimensions 7,
+  analysis 8, critic 7, seed-quality 5, disclosure +7). Existing suites green.
+- **Not run live this session** (no `DATABASE_URL` / `ANTHROPIC_API_KEY` in the
+  container): the dev server / multi-round end-to-end and the canary's actual
+  model run. Logic verified by typecheck + unit tests only — **needs live QA**.
+- Note: a fresh clone needs `npm ci`. The canary under `tsx` also needs the
+  `server-only` shim/package (pre-existing; not installed here).
+- All three original AAPOR iterations remain shipped (PRs #5–#12). The
+  **survey-methodology measurement layer (15 features)** is now shipped on top
+  (this session) — see history.md.
 
-## Next focus — multi-round feedback loop (vision; design phase, nothing built)
+## Multi-round + measurement layer (shipped this session)
 
-**Sacred constraint:** the respondent's surface never grows — one thing to click,
-then yes/no, one question per page, nothing to remember. All new machinery is
-server/operator side. The invite token already lives in the URL, so "one thing to
-click" is already satisfied; build on that.
+The multi-round feedback loop and the 15-feature survey-methodology layer are
+**built and merged** (full detail in history.md). Sacred constraint held: the
+respondent surface is still exactly yes/no/done — every new feature is backend /
+operator-side.
 
-Three problems and the proposed elegant approaches:
+**Decisions that were locked (and how they landed):**
+- **Zero typing ever** — no escape-hatch text box, no fourth button. Gap-catching
+  is entirely the automated between-round critic. So "it depends" / yes-drift are
+  handled *analytically* (acquiescence + straightlining + triangulation), not via
+  UI.
+- **Anonymous / durable link** — no contact stored. The invite token is the
+  durable identity; revisiting the link resumes into the next round (pull-based).
+  A `resumePhrase` is generated + stored as a backstop (no resolver route yet).
+- **Fully automated critic** — opens the next round itself at finalize; no
+  operator approval step. Fail-safe: never opens on a parse/transport error.
 
-1. **Capture "anything else" without a free-text dump.** A persistent text box
-   defeats the linear purpose. Fix = **gated escape hatch**: before the final
-   "write the PRD?" confirm, ask one binary — *"Anything important I haven't asked
-   about?"* No → finalize. Yes → reveal a single few-words capture, which becomes
-   a seed addendum and the **yes/no interview resumes** to probe it. The free text
-   *aims the interviewer*; it is not the artifact. Opt-in, so the default path
-   stays pure.
-
-2. **Follow-up cycles.** A session becomes a **sequence of rounds**. After each
-   round, a **critic / gap-analysis pass** (separate model call over transcript +
-   PRD) decides whether anything is ambiguous/missing; if so it emits the next
-   round's opening questions. PRD becomes **versioned** (v1→v2, append/revise),
-   and the diff history is itself a portfolio artifact. Each round looks identical
-   to the respondent. This is the "another process informs the loop" vision — it's
-   another AAPOR Analyst role, continuous-evaluation theme like the canaries.
-   Default trigger: **critic proposes, operator approves** (human in loop, no
-   respondent spam).
-
-3. **Tracking without a typed code.** A code they *type* contradicts "never
-   remember anything." Resolution: **the link is the identity** — the URL token
-   already corresponds to every response across rounds. Rule: the identifier is
-   carried by the link, never typed. Give each respondent a **durable personal
-   URL** that always shows "what's next" (round-1 seed form / pending question /
-   caught-up). Optional human-readable resume phrase (`river-mauve-7`) as a
-   device-portability fallback — never required input.
-
-**Pivotal fork (answer first — it shapes everything): how does round 2 reach
-them?**
-- **Contact channel** — collect respondent email/SMS at round 1 → *push* a
-  one-click link per round; codes/memory dissolve, works on any device. Cost: one
-  extra intake field (trade against minimalism).
-- **Anonymous** — today's model (invitee is *named* but no contact stored; PRD
-  goes to `DAVIN_EMAIL`, not the respondent) → they must *return* via a durable /
-  bookmarked link, resume phrase as backstop.
-
-Open decisions to settle before building:
-1. **Contact vs. anonymous** (the big one).
-2. **Follow-up trigger:** automated critic / critic-proposes+operator-approves
-   (recommended) / downstream-consumer-driven.
-3. **Escape hatch:** gated few-words-then-resume (proposed) vs. zero-typing-ever
-   (critic loop carries all gap-catching).
-
-Likely schema shift when built: a durable **respondent** identity; `sessions` →
-**rounds** linked to a respondent; **PRD versions**. Write a concrete design doc
-once the three decisions land, then build incrementally.
+**Design notes worth remembering:**
+- Routing is driven by *pending-turn presence*, not `completedAt`: a pending turn
+  → `/q`; else `status==="complete"` → `/done`. `/done` is sticky after a round
+  (does not bounce into a queued next round); the respondent reaches round N+1 by
+  reopening their link.
+- Invite is consumed only at **true** completion, so the durable link keeps
+  resolving across rounds.
+- Each round freezes its own PRD/methodology/analysis at version `prdVersion`.
+- Anti-leading + dimension tagging are deterministic ⇒ **zero added model calls
+  per turn**; only the critic adds one call, at finalize, off the hot path.
+- Out of scope by design: the representation half of TSE (sampling, weighting,
+  coverage) — meaningless for an n=1 tool.
 
 ## Open to-dos (priority order)
 
-1. **Baseline the canary suite — the one real blocker.**
-   `src/lib/canaries/baseline.json` is still a sentinel: `"model": null`,
-   `"seeds": {}`. Until it is populated the weekly workflow cannot detect drift.
-   Action: run `npm run canary:rebaseline` once with `ANTHROPIC_API_KEY` and the
-   **production** `ANTHROPIC_MODEL` set, eyeball the per-seed table, commit the
-   result with a message explaining the baseline conditions. Also confirm the
-   GitHub repo has secret `ANTHROPIC_API_KEY` and var `ANTHROPIC_MODEL` set, or
-   the scheduled run will fail.
+1. **Apply migration `0003` + live-QA the multi-round flow.** Migration
+   `drizzle/0003_rounds_and_measurement.sql` is generated but **not applied**
+   (no DB in the build container). It is additive/non-destructive, but assumes
+   **empty/dev data**: `sessions.status` defaults to `active`, so any pre-existing
+   completed session would read as "in progress" until backfilled
+   (`update sessions set status='complete' where completed_at is not null`).
+   Confirm no real rows (admin is locked out, so likely none) or backfill, then
+   run a real interview end-to-end: verify yes/no/done is still the only surface,
+   a leading question gets rewritten, turns carry dimension/regen metadata, a
+   round finalizes, the critic opens round 2, and reopening the link resumes into
+   it. Check admin detail (version history + diff + analysis), the three download
+   routes, and the export JSON shape.
 
-2. **Admin login is locked out (deferred by user).** `ADMIN_PASSWORD` is a
+2. **Re-baseline the canary suite.** Still a sentinel (`"model": null`,
+   `"seeds": {}`), AND the generation policy changed this session (anti-leading
+   reject added to `run-one.ts`, attempts 2→3), so the eventual baseline must be
+   captured against the new behavior. Run `npm run canary:rebaseline` once with
+   `ANTHROPIC_API_KEY` + production `ANTHROPIC_MODEL`, eyeball the per-seed table,
+   commit with a message explaining the baseline conditions. Confirm the repo has
+   secret `ANTHROPIC_API_KEY` and var `ANTHROPIC_MODEL`.
+
+3. **Admin login is locked out (deferred by user).** `ADMIN_PASSWORD` is a
    *Sensitive* Vercel env var, so its value is write-only and unrecoverable; the
    original was generated by a prior agent and not saved. Until it's rotated (set
    a new `ADMIN_PASSWORD` in Vercel → redeploy) no one can reach `/admin/*` to
@@ -174,13 +186,13 @@ once the three decisions land, then build incrementally.
    (`src/actions/admin.ts`); nothing is hard-coded. **Do not commit the secret to
    this repo.** User chose to defer rotation on 2026-06-14.
 
-3. **Retire `NEXT-SESSION.md`.** It described AAPOR iterations 2 & 3, both now
+4. **Retire `NEXT-SESSION.md`.** It described AAPOR iterations 2 & 3, both now
    shipped, so it is fully stale and competes with this file as "the handoff."
    Superseded by handoff.md — safe to delete. Note: `src/lib/canaries/compare.ts`
    (line ~15) has a comment citing "the NEXT-SESSION.md handoff" for its
    tolerances; update that reference if you delete the file.
 
-4. **Reskin loose ends (cleanup).** `public/puppy.json` is now orphaned and the
+5. **Reskin loose ends (cleanup).** `public/puppy.json` is now orphaned and the
    `lottie-react` dependency is unused — both can be removed (drop the dep with a
    lockfile update so `npm ci` stays consistent). `README.md` "Stack" line still
    says "Material 3 token layer" and the methodology copy/branding predates the
@@ -188,16 +200,21 @@ once the three decisions land, then build incrementally.
 
 ## Backlog / deferred ideas (not committed work)
 
-- **Close the construct-brief loop?** The brief is deliberately log-only today;
-  feeding it back into the interview system prompt would constrain question
-  generation but make brief-vs-interview drift harder to audit. Deferred on
-  purpose — revisit only with an auditing story.
-- **Ship the construct brief as a third companion file** (`brief-<id>.md`)
-  alongside `prd-<id>.md` / `methodology-<id>.md`. Today the methodology doc only
-  *references* that the probe ran; the brief itself lives in the session record.
-- **Subset audit of historical transcripts** — the methodology doc currently
-  states none has been conducted; a periodic human spot-check would let that
-  line claim more.
+- **Close the construct-brief loop?** Still log-only. The audit story it was
+  waiting on now exists (per-turn `constructDimension` tagging + the per-round
+  analysis/coverage map), so feeding the brief into the interview prompt is now
+  more defensible — but still deferred; revisit deliberately.
+- **Resume-phrase resolver route.** `resumePhrase` is generated + stored but
+  there's no `phrase → token` lookup yet; a respondent who loses the link can't
+  self-resume. Low priority (anonymous, pull-based by design).
+- **Per-round download routes.** `prd/[id]/analysis` (+ prd/methodology) serve
+  the *latest* round only; older versions are viewable inline in admin detail but
+  not individually downloadable. Add `?v=` if needed.
+- **Ship the construct brief itself as a companion file** (`brief-<id>.md`).
+  The *analysis* companion file shipped this session; the brief still lives only
+  in the session record + admin view.
+- **Subset audit of historical transcripts** — methodology doc still states none
+  conducted; a periodic human spot-check would let that line claim more.
 
 ## Minor observations (low priority, not blocking)
 
