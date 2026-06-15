@@ -26,6 +26,33 @@ completed to-dos, they land here so the handoff stays lean. Newest first.
 
 ---
 
+## 2026-06-15 — Product direction discussed (no code)
+
+Explored the multi-round feedback-loop vision: gated escape hatch for end-of-
+survey capture, rounds + critic/gap-analysis loop with versioned PRDs, and
+link-as-identity tracking (no typed code). Full proposal + the three open
+decisions live in handoff.md under "Next focus." Nothing built yet.
+
+---
+
+## 2026-06-14 — Post-reskin cleanup + admin-access finding
+
+- Landing (`/`): stripped the instrument chrome (brand header, scanline,
+  telemetry footer); now just grid + centered `Verity` wordmark + "Verity is
+  invite-only" line.
+- Admin login (`/admin/login`): brought in line with the landing page — removed
+  scanline and the context-tag/"Restricted access" chrome; simplified language
+  ("Authenticate"→"Login", "CREDENTIAL"→"Password").
+- **Admin password investigation:** confirmed `ADMIN_PASSWORD` is read from env
+  (`src/actions/admin.ts`), never hard-coded or committed. A prior agent generated
+  it via `crypto.randomBytes(9).toString('base64url')` (trace in
+  `.claude/settings.local.json` allowlist) and set it directly in Vercel as a
+  *Sensitive* var — so it's unrecoverable. Login is effectively locked until
+  rotated; user deferred. (Carried as a to-do; secret intentionally NOT stored
+  in-repo.)
+
+---
+
 ## 2026-06-14 — Midnight Precision reskin
 
 Full experiential refashion of the UI from the green Material 3 theme to
