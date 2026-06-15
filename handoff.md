@@ -226,6 +226,16 @@ operator-side.
   is "Verity". Cosmetic; renaming the cookie would log out current admins.
 - **Moderation fails open** by design — acceptable given the prefilter, but worth
   remembering if the threat model changes.
+- **Critic-trigger is model-judged + invisible (from a 2026-06-15 live test).** A
+  follow-up round opens only when the critic (`src/lib/critic.ts`) returns
+  `openNewRound: true` *and* a non-empty `focus`; it's instructed to do so only on
+  a material gap, fail-safes to "stop" on any malformed/errored output, and is
+  fully automated (no admin button by design). **Gap:** when the critic declines,
+  its verdict/reasoning is **not persisted** (`focusBrief` is saved only when a
+  round opens), so a one-round session has no record of *why* it stopped.
+  Candidate next-session work: (a) persist the critic verdict every finalize;
+  (b) optional manual "open another round" control in admin. A user test session
+  closing out after one round is expected behavior, not a bug.
 
 ## Conventions / gotchas
 
