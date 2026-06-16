@@ -70,13 +70,11 @@ const config: Config = {
         ],
         "body-lg": ["18px", { lineHeight: "1.6", fontWeight: "400" }],
         "body-md": ["16px", { lineHeight: "1.6", fontWeight: "400" }],
+        // Calm small label — normal tracking, medium weight (no engraved caps).
         "label-sm": [
-          "12px",
-          { lineHeight: "1.0", letterSpacing: "0.2em", fontWeight: "600" },
+          "12.5px",
+          { lineHeight: "1.4", letterSpacing: "0", fontWeight: "500" },
         ],
-      },
-      letterSpacing: {
-        engrave: "0.25em",
       },
       spacing: {
         gutter: "24px",
@@ -117,17 +115,12 @@ const config: Config = {
           "0 2px 4px rgb(15 15 15 / 0.06), 0 4px 12px rgb(15 15 15 / 0.08)",
       },
       keyframes: {
-        scanline: {
-          "0%": { transform: "translateY(-100%)" },
-          "100%": { transform: "translateY(100vh)" },
-        },
         pulseDot: {
           "0%, 100%": { opacity: "0.3" },
           "50%": { opacity: "1" },
         },
       },
       animation: {
-        scanline: "scanline 8s linear infinite",
         "pulse-dot": "pulseDot 1.1s ease-in-out infinite",
       },
     },

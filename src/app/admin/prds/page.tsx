@@ -53,20 +53,20 @@ export default async function PrdsPage({
     <main className="mx-auto max-w-6xl px-margin-mobile py-16 md:px-margin-desktop">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <span className="inline-block h-1.5 w-1.5 bg-primary-container" />
-          <h1 className="text-label-sm uppercase tracking-engrave text-on-surface-variant">
+          <span className="inline-block h-1.5 w-1.5 rounded-full bg-primary" />
+          <h1 className="text-label-sm text-on-surface-variant">
             Verity // PRD Registry{showArchived ? " · Archived" : ""}
           </h1>
         </div>
         <div className="flex items-center gap-5">
           <Link
             href={showArchived ? "/admin/prds" : "/admin/prds?archived=1"}
-            className="text-label-sm uppercase tracking-engrave text-on-surface-variant transition-colors hover:text-on-surface"
+            className="text-label-sm text-on-surface-variant transition-colors hover:text-on-surface"
           >
             {showArchived ? "← Active" : "Archived"}
           </Link>
           <form action={logout}>
-            <button className="text-label-sm uppercase tracking-engrave text-on-surface-variant transition-colors hover:text-on-surface">
+            <button className="text-label-sm text-on-surface-variant transition-colors hover:text-on-surface">
               Sign out
             </button>
           </form>
@@ -77,10 +77,10 @@ export default async function PrdsPage({
         <NewInvite />
       </div>
 
-      <div className="mt-12 overflow-x-auto border border-hairline">
+      <div className="mt-12 overflow-x-auto rounded-xl border border-hairline shadow-elevation-1">
         <table className="w-full text-left align-top text-body-md">
           <thead>
-            <tr className="border-b border-hairline text-label-sm uppercase tracking-engrave text-on-surface-variant">
+            <tr className="border-b border-hairline text-label-sm text-on-surface-variant">
               <th className="whitespace-nowrap p-3 font-semibold">Invitee</th>
               <th className="p-3 font-semibold">Seed</th>
               <th className="whitespace-nowrap p-3 font-semibold">Started</th>
@@ -102,7 +102,7 @@ export default async function PrdsPage({
               <tr>
                 <td
                   colSpan={7}
-                  className="p-8 text-center text-label-sm uppercase tracking-engrave text-on-surface-variant opacity-60"
+                  className="p-8 text-center text-label-sm text-on-surface-variant opacity-60"
                 >
                   {showArchived ? "No archived sessions" : "No sessions on record"}
                 </td>
@@ -136,21 +136,21 @@ export default async function PrdsPage({
                   <td className="p-3 font-mono">{qCount}</td>
                   <td className="whitespace-nowrap p-3">
                     {session.status === "complete" ? (
-                      <span className="inline-flex items-center gap-2 text-label-sm uppercase tracking-engrave text-primary">
-                        <span className="inline-block h-1.5 w-1.5 bg-primary-container" />
+                      <span className="inline-flex items-center gap-2 text-label-sm text-primary">
+                        <span className="inline-block h-1.5 w-1.5 rounded-full bg-primary" />
                         Complete{durationS != null ? ` · ${durationS}s` : ""}
                       </span>
                     ) : session.status === "awaiting_review" ? (
                       <span
-                        className="inline-flex items-center gap-2 text-label-sm uppercase tracking-engrave text-primary opacity-80"
+                        className="inline-flex items-center gap-2 text-label-sm text-primary opacity-80"
                         title="Round finalized — open another round or mark complete"
                       >
-                        <span className="inline-block h-1.5 w-1.5 animate-pulse bg-primary" />
+                        <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
                         Awaiting your review
                       </span>
                     ) : (
                       <span
-                        className="text-label-sm uppercase tracking-engrave text-on-surface-variant"
+                        className="text-label-sm text-on-surface-variant"
                         title="Respondent has an open question — no operator action yet"
                       >
                         Awaiting respondent
@@ -159,7 +159,7 @@ export default async function PrdsPage({
                   </td>
                   <td className="whitespace-nowrap p-3">
                     {hasBrief ? (
-                      <span className="flex gap-4 text-label-sm uppercase tracking-engrave">
+                      <span className="flex gap-4 text-label-sm">
                         <Link
                           href={`/admin/prds/${session.id}`}
                           className="text-primary transition-colors hover:brightness-110"
@@ -182,7 +182,7 @@ export default async function PrdsPage({
                       <input type="hidden" name="id" value={session.id} />
                       <button
                         type="submit"
-                        className="text-label-sm uppercase tracking-engrave text-on-surface-variant opacity-60 transition-opacity hover:opacity-100"
+                        className="text-label-sm text-on-surface-variant opacity-60 transition-opacity hover:opacity-100"
                       >
                         {showArchived ? "Restore" : "Archive"}
                       </button>
@@ -195,14 +195,14 @@ export default async function PrdsPage({
         </table>
       </div>
 
-      <p className="mt-3 text-label-sm uppercase tracking-engrave text-on-surface-variant opacity-50">
+      <p className="mt-3 text-label-sm text-on-surface-variant opacity-50">
         Turns = answered questions, cumulative across all rounds
       </p>
 
       <div className="mt-8 flex justify-end">
         <a
           href="/api/admin/export"
-          className="rounded border border-hairline px-5 py-3 text-label-sm uppercase tracking-engrave text-on-surface-variant transition-colors hover:border-on-surface-variant hover:text-on-surface"
+          className="rounded-full border border-hairline px-5 py-2.5 text-label-sm text-on-surface-variant transition-colors hover:border-on-surface-variant hover:text-on-surface"
         >
           Export training data
         </a>

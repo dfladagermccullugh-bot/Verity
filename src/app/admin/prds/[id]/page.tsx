@@ -55,11 +55,11 @@ export default async function PrdView({ params }: { params: { id: string } }) {
       <div className="flex items-center justify-between">
         <Link
           href="/admin/prds"
-          className="text-label-sm uppercase tracking-engrave text-on-surface-variant transition-colors hover:text-on-surface"
+          className="text-label-sm text-on-surface-variant transition-colors hover:text-on-surface"
         >
           ← Registry
         </Link>
-        <div className="flex gap-5 text-label-sm uppercase tracking-engrave">
+        <div className="flex gap-5 text-label-sm">
           <a
             href={`/api/admin/prd/${session!.id}`}
             className="text-primary transition-colors hover:brightness-110"
@@ -86,21 +86,21 @@ export default async function PrdView({ params }: { params: { id: string } }) {
       <p className="mt-10 text-body-md text-on-surface-variant">
         {invite?.inviteeName} · seed: {session!.seed}
       </p>
-      <p className="mt-1 font-mono text-label-sm uppercase tracking-engrave text-on-surface-variant opacity-60">
+      <p className="mt-1 font-mono text-label-sm text-on-surface-variant opacity-60">
         session: {session!.id} · status: {session!.status} · rounds:{" "}
         {sessionRounds.length}
         {session!.resumePhrase ? ` · resume: ${session!.resumePhrase}` : ""}
       </p>
 
       {warnings.length > 0 && (
-        <p className="mt-3 text-label-sm uppercase tracking-engrave text-error opacity-80">
+        <p className="mt-3 text-label-sm text-error opacity-80">
           Seed warnings: {warnings.join(", ")}
         </p>
       )}
 
       {session!.constructBrief && (
-        <details className="mt-10 border border-hairline">
-          <summary className="cursor-pointer p-4 text-label-sm uppercase tracking-engrave text-on-surface-variant">
+        <details className="mt-10 overflow-hidden rounded-xl border border-hairline">
+          <summary className="cursor-pointer p-4 text-label-sm text-on-surface-variant">
             Construct brief — validity check (AAPOR §4.3.1)
           </summary>
           <pre className="whitespace-pre-wrap border-t border-hairline p-6 text-body-md leading-relaxed text-on-surface">
@@ -109,22 +109,22 @@ export default async function PrdView({ params }: { params: { id: string } }) {
         </details>
       )}
 
-      <h2 className="mt-10 text-label-sm uppercase tracking-engrave text-on-surface-variant">
+      <h2 className="mt-10 text-label-sm text-on-surface-variant">
         PRD — latest version (v
         {sessionRounds.length > 0
           ? sessionRounds[sessionRounds.length - 1].prdVersion
           : 1}
         )
       </h2>
-      <pre className="mt-3 whitespace-pre-wrap border border-hairline bg-surface-container-low p-8 text-body-md leading-relaxed text-on-surface">
+      <pre className="mt-3 whitespace-pre-wrap rounded-xl border border-hairline bg-surface-container-low p-8 text-body-md leading-relaxed text-on-surface">
         {session!.prdMarkdown}
       </pre>
 
       {awaitingReview ? (
         <RoundActions sessionId={session!.id} />
       ) : session!.status === "active" ? (
-        <div className="mt-10 border border-hairline bg-surface-container-low p-6">
-          <p className="text-label-sm uppercase tracking-engrave text-on-surface-variant">
+        <div className="mt-10 rounded-xl border border-hairline bg-surface-container-low p-6">
+          <p className="text-label-sm text-on-surface-variant">
             Awaiting respondent
           </p>
           <p className="mt-3 text-body-md text-on-surface-variant">
@@ -135,8 +135,8 @@ export default async function PrdView({ params }: { params: { id: string } }) {
           </p>
         </div>
       ) : (
-        <div className="mt-10 border border-hairline bg-surface-container-low p-6">
-          <p className="text-label-sm uppercase tracking-engrave text-primary">
+        <div className="mt-10 rounded-xl border border-hairline bg-surface-container-low p-6">
+          <p className="text-label-sm text-primary">
             Complete
           </p>
           <p className="mt-3 text-body-md text-on-surface-variant">
@@ -155,8 +155,8 @@ export default async function PrdView({ params }: { params: { id: string } }) {
             ? lineDiff(prev.prdMarkdown, r.prdMarkdown)
             : null;
         return (
-          <details key={r.id} className="mt-6 border border-hairline">
-            <summary className="cursor-pointer p-4 text-label-sm uppercase tracking-engrave text-on-surface-variant">
+          <details key={r.id} className="mt-6 overflow-hidden rounded-xl border border-hairline">
+            <summary className="cursor-pointer p-4 text-label-sm text-on-surface-variant">
               Round {r.roundNumber} · PRD v{r.prdVersion} ·{" "}
               {r.terminationReason ?? r.status}
             </summary>
@@ -168,7 +168,7 @@ export default async function PrdView({ params }: { params: { id: string } }) {
               )}
               {r.criticRecommendOpen != null && (
                 <div className="mb-4 border-l border-hairline pl-4 text-on-surface-variant">
-                  <p className="text-label-sm uppercase tracking-engrave">
+                  <p className="text-label-sm">
                     Critic verdict (advisory):{" "}
                     {r.criticRecommendOpen
                       ? "recommends another round"
@@ -201,8 +201,8 @@ export default async function PrdView({ params }: { params: { id: string } }) {
       })}
 
       {session!.methodologyMarkdown && (
-        <details className="mt-10 border border-hairline">
-          <summary className="cursor-pointer p-4 text-label-sm uppercase tracking-engrave text-on-surface-variant">
+        <details className="mt-10 overflow-hidden rounded-xl border border-hairline">
+          <summary className="cursor-pointer p-4 text-label-sm text-on-surface-variant">
             Methodology disclosure (AAPOR 2026) — companion document
           </summary>
           <pre className="whitespace-pre-wrap border-t border-hairline p-6 text-body-md leading-relaxed text-on-surface">

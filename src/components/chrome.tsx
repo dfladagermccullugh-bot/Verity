@@ -1,68 +1,46 @@
 /**
- * Midnight Precision chrome — the instrument frame shared across the invitee
- * experience. Server-safe (no hooks): pure presentational structure.
+ * Verity chrome — the calm frame shared across the invitee experience.
+ * Server-safe (no hooks): pure presentational structure.
  *
- * Depth is tonal and flat: faint hairline grid, a single drifting scanline,
- * engraved-uppercase telemetry. Signal Gold appears only as small status dots.
+ * Warm Paper Calm: quiet sentence-case wordmark, soft neutral telemetry, a
+ * single blue dot for status. No atmospheric grid or scanline.
  */
 
-/** Tracked-uppercase wordmark, centered at the top of the viewport. */
+/** Quiet wordmark, centered at the top of the viewport. */
 export function BrandHeader() {
   return (
-    <header className="pointer-events-none fixed top-0 z-50 flex h-20 w-full items-center justify-center">
-      <span className="text-label-sm uppercase tracking-engrave text-on-surface-variant opacity-60">
+    <header className="pointer-events-none fixed top-0 z-50 flex h-16 w-full items-center justify-center">
+      <span className="text-sm font-semibold tracking-tight text-on-surface-variant">
         Verity
       </span>
     </header>
   );
 }
 
-/** Faint 12-column hairline underlay — structure without bulk. */
-export function GridUnderlay() {
-  return (
-    <div className="pointer-events-none absolute inset-0 grid grid-cols-12 opacity-[0.04]">
-      {Array.from({ length: 11 }).map((_, i) => (
-        <div key={i} className="h-full border-r border-hairline" />
-      ))}
-      <div className="h-full" />
-    </div>
-  );
-}
-
-/** Single gold-tinted line drifting down the viewport. Atmospheric only. */
-export function Scanline() {
-  return (
-    <div
-      aria-hidden
-      className="pointer-events-none fixed left-0 top-0 z-[100] h-px w-full animate-scanline bg-primary/5"
-    />
-  );
-}
-
-/** Small 6px status dot. Gold = active, charcoal = inactive. */
+/** Small 6px status dot. Blue = active, neutral = inactive. */
 export function StatusDot({ active = true }: { active?: boolean }) {
   return (
     <span
-      className={`inline-block h-1.5 w-1.5 ${
-        active ? "bg-primary-container" : "bg-hairline"
+      className={`inline-block h-1.5 w-1.5 rounded-full ${
+        active ? "bg-primary" : "bg-outline-variant"
       }`}
     />
   );
 }
 
-/** Context tag: gold dot + engraved label. e.g. "INTERROGATION SEQUENCE // 04". */
+/** Context tag: blue dot + quiet label. e.g. "Decision matrix // 04". */
 export function ContextTag({ label }: { label: string }) {
   return (
-    <div className="flex items-center gap-3">
+    <div className="flex items-center gap-2.5">
       <StatusDot />
-      <span className="text-label-sm uppercase tracking-engrave text-on-surface-variant">
+      <span className="text-label-sm font-medium text-on-surface-variant">
         {label}
       </span>
     </div>
   );
 }
 
-/** Industrial telemetry footer. `protocol` is the real skill-prompt fingerprint. */
+/** Quiet status footer. `protocol` is the real skill-prompt fingerprint. */
 export function TelemetryFooter({
   protocol,
   status = "Secure",
@@ -71,22 +49,20 @@ export function TelemetryFooter({
   status?: string;
 }) {
   return (
-    <footer className="pointer-events-none fixed bottom-0 z-50 flex h-20 w-full items-center justify-between px-margin-mobile opacity-30 md:px-margin-desktop">
-      <div className="flex items-center gap-10 text-[10px] uppercase tracking-engrave text-on-surface-variant">
+    <footer className="pointer-events-none fixed bottom-0 z-50 flex h-14 w-full items-center justify-between px-margin-mobile text-xs text-on-surface-variant md:px-margin-desktop">
+      <div className="flex items-center gap-6">
         <span className="flex items-center gap-2">
-          <span>Status</span>
+          <span className="opacity-60">Status</span>
           <span className="text-on-surface">{status}</span>
         </span>
         {protocol && (
           <span className="hidden items-center gap-2 sm:flex">
-            <span>Protocol</span>
+            <span className="opacity-60">Protocol</span>
             <span className="font-mono text-on-surface">V-{protocol}</span>
           </span>
         )}
       </div>
-      <div className="text-[10px] uppercase tracking-engrave text-on-surface-variant">
-        Verity // Midnight Precision
-      </div>
+      <div className="opacity-60">Verity</div>
     </footer>
   );
 }

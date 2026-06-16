@@ -1,13 +1,13 @@
-// Telemetry-style processing states surfaced while the model resolves the next
-// turn. Engraved-uppercase, instrument tone — no consumer-grade flourish.
+// Quiet processing states surfaced while the model resolves the next turn.
+// Calm, sentence-case tone to match the rest of the interface.
 const WORDS = [
-  "ANALYZING",
-  "PROCESSING",
-  "COMPUTING",
-  "EVALUATING",
-  "RESOLVING",
-  "PARSING",
-  "QUERYING",
+  "Analyzing…",
+  "Processing…",
+  "Computing…",
+  "Evaluating…",
+  "Resolving…",
+  "Parsing…",
+  "Querying…",
 ];
 
 export function randomLoadingWord(): string {

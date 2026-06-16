@@ -10,7 +10,7 @@ function Submit() {
     <button
       type="submit"
       disabled={pending}
-      className="rounded bg-primary px-6 py-3 text-label-sm font-bold uppercase tracking-engrave text-surface-container-lowest transition-all hover:brightness-110 disabled:opacity-30"
+      className="rounded-full bg-primary px-6 py-2.5 text-label-sm font-semibold text-on-primary shadow-elevation-1 transition-colors hover:brightness-95 disabled:opacity-40"
     >
       {pending ? "Issuing…" : "Issue invite"}
     </button>
@@ -18,17 +18,16 @@ function Submit() {
 }
 
 const fieldClass =
-  "mt-2 w-full border-b border-hairline bg-transparent pb-2 text-body-md text-on-surface outline-none transition-colors placeholder:text-on-surface-variant/40 focus:border-primary";
+  "mt-2 w-full rounded-lg border border-hairline bg-surface-container-low px-3 py-2 text-body-md text-on-surface outline-none transition-colors placeholder:text-on-surface-variant/50 focus:border-primary";
 
-const labelClass =
-  "block text-label-sm uppercase tracking-engrave text-on-surface-variant";
+const labelClass = "block text-label-sm font-medium text-on-surface-variant";
 
 export default function NewInvite() {
   const [state, formAction] = useFormState(createInvite, {});
   const [copied, setCopied] = useState(false);
 
   return (
-    <div className="border border-hairline p-6">
+    <div className="rounded-xl border border-hairline bg-surface p-6 shadow-elevation-1">
       <form action={formAction} className="flex flex-wrap items-end gap-6">
         <div>
           <label className={labelClass}>Invitee name</label>
@@ -42,14 +41,12 @@ export default function NewInvite() {
       </form>
 
       {state?.error && (
-        <p className="mt-4 text-label-sm uppercase tracking-engrave text-error">
-          {state.error}
-        </p>
+        <p className="mt-4 text-label-sm text-error">{state.error}</p>
       )}
 
       {state?.url && (
         <div className="mt-5 flex items-center gap-4">
-          <code className="flex-1 truncate border border-hairline bg-surface-container-low p-3 font-mono text-body-md text-primary">
+          <code className="flex-1 truncate rounded-lg border border-hairline bg-surface-container-low p-3 font-mono text-body-md text-primary">
             {state.url}
           </code>
           <button
@@ -59,7 +56,7 @@ export default function NewInvite() {
                 setTimeout(() => setCopied(false), 1500);
               });
             }}
-            className="rounded border border-hairline px-4 py-3 text-label-sm uppercase tracking-engrave text-on-surface-variant transition-colors hover:border-on-surface-variant hover:text-on-surface"
+            className="rounded-full border border-hairline px-4 py-2.5 text-label-sm text-on-surface-variant transition-colors hover:border-on-surface-variant hover:text-on-surface"
           >
             {copied ? "Copied" : "Copy"}
           </button>

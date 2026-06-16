@@ -37,7 +37,7 @@ export default async function InterviewPage({
     if (session!.completedAt) redirect(`/i/${token}/done`);
     return (
       <main className="flex min-h-screen items-center justify-center p-6">
-        <p className="text-label-sm uppercase tracking-engrave text-on-surface-variant">
+        <p className="text-label-sm text-on-surface-variant">
           Standby — refresh to resume
         </p>
       </main>
