@@ -12,8 +12,8 @@
 
 import type { Baseline, SeedMetrics } from "./types";
 
-/** Tolerances per the NEXT-SESSION.md handoff. Permissive on purpose: start
- *  loose, tighten as we learn what natural variance looks like. */
+/** Drift tolerances. Permissive on purpose: start loose, tighten as we learn
+ *  what natural variance looks like. */
 export const TOLERANCES = {
   /** Integer counts (e.g. turnCount) may drift by this many units. */
   countAbs: 1,
