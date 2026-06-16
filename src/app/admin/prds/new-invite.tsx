@@ -18,7 +18,7 @@ function Submit() {
 }
 
 const fieldClass =
-  "mt-2 w-full rounded-xs border border-hairline bg-surface-container-low px-3 py-2 text-body-md text-on-surface outline-none transition-colors placeholder:text-on-surface-variant/50 focus:border-primary";
+  "mt-2 w-full rounded-xs border border-hairline bg-surface-container-low px-3 py-2 text-body-md text-on-surface transition-colors placeholder:text-on-surface-variant/50 focus:border-primary";
 
 const labelClass = "block text-label-sm font-medium text-on-surface-variant";
 
@@ -30,18 +30,24 @@ export default function NewInvite() {
     <div className="rounded-lg border border-hairline bg-surface-container-lowest p-6 shadow-elevation-1">
       <form action={formAction} className="flex flex-wrap items-end gap-6">
         <div>
-          <label className={labelClass}>Invitee name</label>
-          <input name="name" className={fieldClass} />
+          <label htmlFor="invitee-name" className={labelClass}>
+            Invitee name
+          </label>
+          <input id="invitee-name" name="name" className={fieldClass} />
         </div>
         <div className="flex-1">
-          <label className={labelClass}>Note (optional)</label>
-          <input name="note" className={fieldClass} />
+          <label htmlFor="invite-note" className={labelClass}>
+            Note (optional)
+          </label>
+          <input id="invite-note" name="note" className={fieldClass} />
         </div>
         <Submit />
       </form>
 
       {state?.error && (
-        <p className="mt-4 text-label-sm text-error">{state.error}</p>
+        <p role="alert" className="mt-4 text-label-sm text-error">
+          {state.error}
+        </p>
       )}
 
       {state?.url && (

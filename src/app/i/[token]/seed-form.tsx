@@ -59,22 +59,34 @@ export default function SeedForm({
           </p>
 
           <div className="mt-12">
+            <label htmlFor="seed" className="sr-only">
+              Your premise — one or two sentences
+            </label>
             <textarea
+              id="seed"
               value={seed}
               onChange={(e) => setSeed(e.target.value.slice(0, SEED_MAX))}
               maxLength={SEED_MAX}
               rows={3}
               disabled={pending}
               autoFocus
+              aria-describedby="seed-count"
               placeholder="A reusable water bottle that nudges you to drink throughout the day."
-              className="w-full resize-none rounded-xs border border-hairline bg-surface-container-low p-5 text-headline-md text-on-surface outline-none transition-colors placeholder:text-on-surface-variant/50 focus:border-primary disabled:opacity-50"
+              className="w-full resize-none rounded-xs border border-hairline bg-surface-container-low p-5 text-headline-md text-on-surface transition-colors placeholder:text-on-surface-variant/50 focus:border-primary disabled:opacity-50"
             />
-            <div className="mt-2 text-right text-label-sm text-on-surface-variant">
+            <div
+              id="seed-count"
+              className="mt-2 text-right text-label-sm text-on-surface-variant"
+            >
               {count} / {SEED_MAX}
             </div>
           </div>
 
-          {error && <p className="mt-6 text-label-sm text-error">{error}</p>}
+          {error && (
+            <p role="alert" className="mt-6 text-label-sm text-error">
+              {error}
+            </p>
+          )}
 
           <div className="mt-10">
             <button

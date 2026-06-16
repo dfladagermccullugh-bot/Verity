@@ -55,28 +55,28 @@ export default async function PrdView({ params }: { params: { id: string } }) {
       <div className="flex items-center justify-between">
         <Link
           href="/admin/prds"
-          className="text-label-sm text-on-surface-variant transition-colors hover:text-on-surface"
+          className="text-label-sm text-on-surface-variant underline-offset-2 transition-colors hover:text-on-surface hover:underline focus-visible:underline"
         >
           ← Registry
         </Link>
         <div className="flex gap-5 text-label-sm">
           <a
             href={`/api/admin/prd/${session!.id}`}
-            className="text-primary transition-colors hover:brightness-110"
+            className="text-primary underline underline-offset-2 transition-colors hover:brightness-110"
           >
             Download PRD
           </a>
           {session!.methodologyMarkdown && (
             <a
               href={`/api/admin/prd/${session!.id}/methodology`}
-              className="text-on-surface-variant transition-colors hover:text-on-surface"
+              className="text-on-surface-variant underline-offset-2 transition-colors hover:text-on-surface hover:underline focus-visible:underline"
             >
               Methodology
             </a>
           )}
           <a
             href={`/api/admin/prd/${session!.id}/analysis`}
-            className="text-on-surface-variant transition-colors hover:text-on-surface"
+            className="text-on-surface-variant underline-offset-2 transition-colors hover:text-on-surface hover:underline focus-visible:underline"
           >
             Analysis
           </a>

@@ -61,7 +61,7 @@ export default async function PrdsPage({
         <div className="flex items-center gap-5">
           <Link
             href={showArchived ? "/admin/prds" : "/admin/prds?archived=1"}
-            className="text-label-sm text-on-surface-variant transition-colors hover:text-on-surface"
+            className="text-label-sm text-on-surface-variant underline-offset-2 transition-colors hover:text-on-surface hover:underline focus-visible:underline"
           >
             {showArchived ? "← Active" : "Archived"}
           </Link>
@@ -162,13 +162,13 @@ export default async function PrdsPage({
                       <span className="flex gap-4 text-label-sm">
                         <Link
                           href={`/admin/prds/${session.id}`}
-                          className="text-primary transition-colors hover:brightness-110"
+                          className="text-primary underline underline-offset-2 transition-colors hover:brightness-110"
                         >
                           View
                         </Link>
                         <a
                           href={`/api/admin/prd/${session.id}`}
-                          className="text-on-surface-variant transition-colors hover:text-on-surface"
+                          className="text-on-surface-variant underline-offset-2 transition-colors hover:text-on-surface hover:underline focus-visible:underline"
                         >
                           .md
                         </a>

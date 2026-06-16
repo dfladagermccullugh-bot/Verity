@@ -8,6 +8,10 @@ UI evolves — it is the artifact we review changes against.
 _Last audited: 2026-06-16 · scope: full invitee flow + admin surface · method:
 code + token review (no live a11y tooling run in-container)._
 
+_Update 2026-06-16: all five **P0** items implemented (verified by typecheck +
+120 tests + production build; live a11y verification still pending). P1/P2 remain
+open._
+
 ## How to read severity
 
 - **P0** — accessibility blocker or a consequential/irreversible action without a
@@ -19,7 +23,7 @@ code + token review (no live a11y tooling run in-container)._
 
 ## P0 — blockers
 
-### P0-1 · Pinch-zoom is disabled (`maximumScale: 1`) — `open`
+### P0-1 · Pinch-zoom is disabled (`maximumScale: 1`) — `done`
 - **Law:** Postel's Law (survive zoom / text resize); WCAG 1.4.4 Resize Text.
 - **Where:** `src/app/layout.tsx` — `viewport.maximumScale = 1`.
 - **Gap:** Locking maximum scale to 1 prevents users from pinch-zooming on mobile,
@@ -27,7 +31,7 @@ code + token review (no live a11y tooling run in-container)._
 - **Fix:** Remove `maximumScale` (and any `userScalable: false`); allow zoom to at
   least 5x. One-line change, zero design impact.
 
-### P0-2 · "Mark complete" is irreversible with no confirmation — `open`
+### P0-2 · "Mark complete" is irreversible with no confirmation — `done`
 - **Law:** Tesler / Peak-End / §5 Error Prevention (irreversible action MUST have
   confirmation, undo, or recovery); Fitts (opposing actions adjacent).
 - **Where:** `src/app/admin/prds/[id]/round-actions.tsx`.
@@ -39,7 +43,7 @@ code + token review (no live a11y tooling run in-container)._
   distinct, and increase separation between the two actions. Native `confirm()` is
   acceptable interim; a small inline confirm or dialog is better.
 
-### P0-3 · Form inputs have no programmatic labels — `open`
+### P0-3 · Form inputs have no programmatic labels — `done`
 - **Law:** Postel / Fitts / §3 Text input (programmatic label required; label MUST
   activate/focus input); WCAG 1.3.1 / 4.1.2.
 - **Where:**
@@ -53,7 +57,7 @@ code + token review (no live a11y tooling run in-container)._
 - **Fix:** Add real `<label htmlFor>` + matching `id` (or `aria-label`/`aria-labelledby`)
   for every input; never rely on placeholder as the only label.
 
-### P0-4 · No visible focus indicator that meets WCAG — `open`
+### P0-4 · No visible focus indicator that meets WCAG — `done`
 - **Law:** §5 Focus appearance (≥2px outline, ≥3:1 contrast); Jakob (keyboard
   semantics preserved).
 - **Where:** systemic — inputs use `outline-none` and replace it with only a 1px
@@ -64,7 +68,7 @@ code + token review (no live a11y tooling run in-container)._
   offset) in `globals.css` / a shared class; stop suppressing outline without an
   equivalent replacement.
 
-### P0-5 · Links communicate by color alone — `open`
+### P0-5 · Links communicate by color alone — `done`
 - **Law:** Von Restorff / §5 Use of color (link identity MUST NOT rely on color
   alone; underline or non-color cue required).
 - **Where:** `src/app/admin/prds/page.tsx` ("View", ".md"), `[id]/page.tsx`

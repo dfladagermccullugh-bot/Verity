@@ -28,15 +28,21 @@ export default function LoginForm() {
         <p className="mt-3 text-label-sm text-on-surface-variant">Admin</p>
       </div>
 
+      <label htmlFor="password" className="sr-only">
+        Admin password
+      </label>
       <input
+        id="password"
         type="password"
         name="password"
         autoComplete="current-password"
         placeholder="Password"
-        className="mt-10 w-full rounded-xs border border-hairline bg-surface-container-low px-4 py-3 text-body-md text-on-surface outline-none transition-colors placeholder:text-on-surface-variant/50 focus:border-primary"
+        className="mt-10 w-full rounded-xs border border-hairline bg-surface-container-low px-4 py-3 text-body-md text-on-surface transition-colors placeholder:text-on-surface-variant/50 focus:border-primary"
       />
       {state?.error && (
-        <p className="mt-4 text-label-sm text-error">{state.error}</p>
+        <p role="alert" className="mt-4 text-label-sm text-error">
+          {state.error}
+        </p>
       )}
       <SubmitButton />
     </form>
