@@ -10,11 +10,15 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "VERITY",
+  title: "Verity",
   description:
-    "A precision interview instrument. Binary response in, structured brief out.",
+    "A constrained-interview tool: one sentence in, a structured brief out — answered with only yes, no, or done.",
   robots: { index: false, follow: false },
 };
+
+// Set the persisted theme before paint to avoid a light/dark flash. Absent an
+// explicit choice, the OS preference (handled in globals.css) applies.
+const noFlashTheme = `try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark'){document.documentElement.setAttribute('data-theme',t);}}catch(e){}`;
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -28,8 +32,9 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={inter.variable}>
+    <html lang="en" className={inter.variable} suppressHydrationWarning>
       <body className="min-h-full bg-surface font-sans text-on-surface antialiased">
+        <script dangerouslySetInnerHTML={{ __html: noFlashTheme }} />
         {children}
       </body>
     </html>

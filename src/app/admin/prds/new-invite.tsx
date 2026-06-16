@@ -51,7 +51,7 @@ export default function NewInvite() {
       )}
 
       {state?.url && (
-        <div className="mt-5 flex items-center gap-4">
+        <div className="mt-5 flex items-center gap-4" aria-live="polite">
           <code className="flex-1 truncate rounded-md border border-hairline bg-surface-container-low p-3 font-mono text-body-md text-primary">
             {state.url}
           </code>
@@ -64,7 +64,7 @@ export default function NewInvite() {
             }}
             className="rounded-md border border-hairline px-4 py-2.5 text-label-sm text-on-surface-variant transition-colors hover:border-on-surface-variant hover:text-on-surface"
           >
-            {copied ? "Copied" : "Copy"}
+            <span aria-live="polite">{copied ? "Copied" : "Copy"}</span>
           </button>
         </div>
       )}

@@ -8,7 +8,9 @@ UI evolves — it is the artifact we review changes against.
 _Last audited: 2026-06-16 · scope: full invitee flow + admin surface · method:
 code + token review (no live a11y tooling run in-container)._
 
-_Update 2026-06-16: all five **P0** items implemented (verified by typecheck +
+_Update 2026-06-16: all P0, P1, and P2 items implemented (verified by typecheck +
+120 tests + production build; live a11y verification still pending). P2-4 is
+closed as wontfix (reversible by design)._
 120 tests + production build; live a11y verification still pending). P1/P2 remain
 open._
 
@@ -81,7 +83,7 @@ open._
 
 ## P1 — clear violations
 
-### P1-1 · Reduced-motion is not respected — `open`
+### P1-1 · Reduced-motion is not respected — `done`
 - **Law:** §5 Motion (interaction motion MUST respect `prefers-reduced-motion`).
 - **Where:** `interview.tsx` (slide transitions, animated progress bar, cycling
   loading word), `seed-form.tsx` (entrance), `tailwind.config.ts` `pulse-dot`
@@ -90,7 +92,7 @@ open._
   `prefers-reduced-motion: reduce` check (Framer `useReducedMotion()` + a CSS
   media query that disables `animate-pulse*`).
 
-### P1-2 · Status & error messages are not announced — `open`
+### P1-2 · Status & error messages are not announced — `done`
 - **Law:** Doherty / §5 Status messages (programmatically determinable without
   focus movement); §5 Error identification.
 - **Where:** error `<p>`s in `interview.tsx`, `seed-form.tsx`, `login-form.tsx`,
@@ -100,7 +102,7 @@ open._
   an `aria-live="polite"` region; link field errors with `aria-describedby` +
   `aria-invalid`.
 
-### P1-3 · Admin registry is unbounded (no pagination) and loads every turn — `open`
+### P1-3 · Admin registry is unbounded (no pagination) and loads every turn — `done`
 - **Law:** §4 Pagination (admin screens/data tables MUST paginate/filter/sort);
   Miller (scanning cost); also a real perf concern.
 - **Where:** `src/app/admin/prds/page.tsx` — selects all sessions and `db.select()
@@ -108,7 +110,7 @@ open._
 - **Fix:** Paginate the table (20–50/page per spec) and compute turn counts with a
   grouped SQL aggregate instead of loading all rows. Add sort/filter as the list grows.
 
-### P1-4 · Yes/No opposing actions are close together — `open`
+### P1-4 · Yes/No opposing actions are close together — `done`
 - **Law:** Fitts (opposing actions MUST NOT be close enough to mis-tap).
 - **Where:** `interview.tsx` — Yes (blue) and No are `gap-4` (16px) on mobile where
   they stack vertically, `gap-6` on desktop.
@@ -118,7 +120,7 @@ open._
 - **Fix:** Increase vertical separation on mobile (≥24px) and keep the confirm
   visually dominant; consider Y/N keyboard shortcuts as an enhancement.
 
-### P1-5 · PRD/methodology shown as raw `<pre>` markdown — `open`
+### P1-5 · PRD/methodology shown as raw `<pre>` markdown — `done`
 - **Law:** Aesthetic-Usability / Miller (walls of text need hierarchy).
 - **Where:** `[id]/page.tsx` — PRD, methodology, analysis, construct brief all in
   `<pre>` including raw `<!-- -->` comments and `---` rules.
@@ -127,7 +129,7 @@ open._
 - **Fix:** Render the markdown (a small renderer) for reading; keep the raw `.md`
   download for machine consumption.
 
-### P1-6 · Muted text stacks opacity on already-muted ink — `open`
+### P1-6 · Muted text stacks opacity on already-muted ink — `done`
 - **Law:** §5 Contrast (normal text ≥4.5:1).
 - **Where:** footer "Status" label `opacity-60` on `on-surface-variant`
   (`chrome.tsx`); "Turns = …" `opacity-50` and empty-state `opacity-60`
@@ -139,22 +141,22 @@ open._
 
 ## P2 — polish / robustness
 
-- **P2-1 · Disabled controls give no reason.** `seed-form.tsx` Begin is disabled
-  until non-empty with no hint; `interview.tsx` buttons disable on pending. Add a
-  short helper or `aria-disabled` + reason. (Tesler)
-- **P2-2 · Long model waits (>10s) lack progress/ETA.** Cycling word implies
-  activity but no description/ETA; acceptable (ETA unknown) but add a "still
-  working…" escalation past ~10s. (Doherty / §5)
-- **P2-3 · Table semantics.** Add `scope="col"` to `<th>`; ensure the table has an
-  accessible caption/name. (Jakob / §3)
-- **P2-4 · Archive lacks confirm but is reversible** (Restore exists) — acceptable;
-  documented here so it isn't "fixed" into needless friction. (§5 — reversible path
+- **P2-1 · Disabled controls give no reason — `done`.** Seed `Begin` now carries a
+  `title` hint when empty; the interview surface sets `aria-busy` while a turn is in
+  flight (and the loading line states what's happening). (Tesler)
+- **P2-2 · Long model waits (>10s) lack progress/ETA — `done`.** `LoadingLine`
+  escalates to a "still working…" message after ~10s. (Doherty / §5)
+- **P2-3 · Table semantics — `done`.** `scope="col"` on every `<th>` plus an
+  sr-only `<caption>` naming the view and page. (Jakob / §3)
+- **P2-4 · Archive lacks confirm but is reversible — `wontfix`** (Restore exists);
+  documented so it isn't "fixed" into needless friction. (§5 — reversible path
   already satisfies the rule.)
-- **P2-5 · Stale metadata copy.** `layout.tsx` title `VERITY` + "precision interview
-  instrument" predates the calm re-skin; cosmetic, non-blocking.
-- **P2-6 · Dark-mode toggle not built.** Infra + OS preference work; a user-facing
-  toggle would satisfy "disableable" expectations and aid the reduced-motion/contrast
-  story. (Aesthetic-Usability / control)
+- **P2-5 · Stale metadata copy — `done`.** `layout.tsx` title is now `Verity` with a
+  calm, accurate description.
+- **P2-6 · Dark-mode toggle — `done`.** `ThemeToggle` (admin header + invitee footer)
+  sets an explicit `[data-theme]` override and persists it; a no-flash script in
+  `layout.tsx` applies the choice before paint. OS preference still applies absent a
+  choice. (Aesthetic-Usability / control)
 
 ---
 

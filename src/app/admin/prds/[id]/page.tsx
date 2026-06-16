@@ -4,6 +4,7 @@ import { asc, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { sessions, invites, rounds } from "@/lib/db/schema";
 import RoundActions from "./round-actions";
+import Markdown from "@/components/markdown";
 
 export const dynamic = "force-dynamic";
 
@@ -86,7 +87,7 @@ export default async function PrdView({ params }: { params: { id: string } }) {
       <p className="mt-10 text-body-md text-on-surface-variant">
         {invite?.inviteeName} · seed: {session!.seed}
       </p>
-      <p className="mt-1 font-mono text-label-sm text-on-surface-variant opacity-60">
+      <p className="mt-1 font-mono text-label-sm text-on-surface-variant">
         session: {session!.id} · status: {session!.status} · rounds:{" "}
         {sessionRounds.length}
         {session!.resumePhrase ? ` · resume: ${session!.resumePhrase}` : ""}
@@ -103,9 +104,10 @@ export default async function PrdView({ params }: { params: { id: string } }) {
           <summary className="cursor-pointer p-4 text-label-sm text-on-surface-variant">
             Construct brief — validity check (AAPOR §4.3.1)
           </summary>
-          <pre className="whitespace-pre-wrap border-t border-hairline p-6 text-body-md leading-relaxed text-on-surface">
-            {session!.constructBrief}
-          </pre>
+          <Markdown
+            content={session!.constructBrief}
+            className="border-t border-hairline p-6 text-body-md"
+          />
         </details>
       )}
 
@@ -116,9 +118,10 @@ export default async function PrdView({ params }: { params: { id: string } }) {
           : 1}
         )
       </h2>
-      <pre className="mt-3 whitespace-pre-wrap rounded-xl border border-hairline bg-surface-container-low p-8 text-body-md leading-relaxed text-on-surface">
-        {session!.prdMarkdown}
-      </pre>
+      <Markdown
+        content={session!.prdMarkdown}
+        className="mt-3 rounded-xl border border-hairline bg-surface-container-low p-8 text-body-md"
+      />
 
       {awaitingReview ? (
         <RoundActions sessionId={session!.id} />
@@ -191,9 +194,10 @@ export default async function PrdView({ params }: { params: { id: string } }) {
                 </div>
               )}
               {r.analysisMarkdown && (
-                <pre className="mt-2 whitespace-pre-wrap border-t border-hairline pt-4 text-body-md">
-                  {r.analysisMarkdown}
-                </pre>
+                <Markdown
+                  content={r.analysisMarkdown}
+                  className="mt-2 border-t border-hairline pt-4 text-body-md"
+                />
               )}
             </div>
           </details>
@@ -205,9 +209,10 @@ export default async function PrdView({ params }: { params: { id: string } }) {
           <summary className="cursor-pointer p-4 text-label-sm text-on-surface-variant">
             Methodology disclosure (AAPOR 2026) — companion document
           </summary>
-          <pre className="whitespace-pre-wrap border-t border-hairline p-6 text-body-md leading-relaxed text-on-surface">
-            {session!.methodologyMarkdown}
-          </pre>
+          <Markdown
+            content={session!.methodologyMarkdown}
+            className="border-t border-hairline p-6 text-body-md"
+          />
         </details>
       )}
     </main>

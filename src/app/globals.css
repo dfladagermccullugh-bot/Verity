@@ -171,3 +171,20 @@ button {
   background: rgb(var(--md-primary) / 0.18);
   color: rgb(var(--md-on-surface));
 }
+
+/*
+  Reduced motion — honor the OS preference (WCAG 2.3.3 / animation from
+  interactions). Near-instant transitions and a single, non-looping animation
+  pass neutralize the infinite pulse and entrance/slide motion. Framer Motion
+  is JS-driven and is additionally gated via useReducedMotion() in components.
+*/
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

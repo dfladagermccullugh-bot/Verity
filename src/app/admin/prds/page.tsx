@@ -1,11 +1,16 @@
 import Link from "next/link";
-import { desc, eq, isNotNull, isNull } from "drizzle-orm";
+import { desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { invites, sessions, turns } from "@/lib/db/schema";
 import { logout, archiveSession, unarchiveSession } from "@/actions/admin";
 import NewInvite from "./new-invite";
+import ThemeToggle from "@/components/theme-toggle";
 
 export const dynamic = "force-dynamic";
+
+// Goal-directed admin table — paginated rather than unbounded (source-of-truth
+// §4). 25 rows/page sits inside the 20–50 desktop guidance.
+const PAGE_SIZE = 25;
 
 function fmtDate(d: Date | null): string {
   if (!d) return "—";
@@ -21,9 +26,24 @@ function fmtDate(d: Date | null): string {
 export default async function PrdsPage({
   searchParams,
 }: {
-  searchParams?: { archived?: string };
+  searchParams?: { archived?: string; page?: string };
 }) {
   const showArchived = searchParams?.archived === "1";
+  const filter = showArchived
+    ? isNotNull(sessions.archivedAt)
+    : isNull(sessions.archivedAt);
+
+  const [{ total }] = await db
+    .select({ total: sql<number>`count(*)::int` })
+    .from(sessions)
+    .where(filter);
+
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const requested = Number(searchParams?.page ?? "1");
+  const page = Number.isFinite(requested)
+    ? Math.min(Math.max(1, Math.trunc(requested)), pageCount)
+    : 1;
+  const offset = (page - 1) * PAGE_SIZE;
 
   const rows = await db
     .select({
@@ -32,22 +52,28 @@ export default async function PrdsPage({
     })
     .from(sessions)
     .innerJoin(invites, eq(sessions.inviteId, invites.id))
-    .where(
-      showArchived
-        ? isNotNull(sessions.archivedAt)
-        : isNull(sessions.archivedAt)
-    )
-    .orderBy(desc(sessions.startedAt));
+    .where(filter)
+    .orderBy(desc(sessions.startedAt))
+    .limit(PAGE_SIZE)
+    .offset(offset);
 
-  const allTurns = await db.select().from(turns);
-  const answeredBySession = new Map<string, number>();
-  for (const t of allTurns) {
-    if (t.answer != null)
-      answeredBySession.set(
-        t.sessionId,
-        (answeredBySession.get(t.sessionId) ?? 0) + 1
-      );
-  }
+  // Per-session answered counts as a grouped aggregate — never load every turn.
+  const counts = await db
+    .select({
+      sessionId: turns.sessionId,
+      n: sql<number>`count(*)::int`,
+    })
+    .from(turns)
+    .where(isNotNull(turns.answer))
+    .groupBy(turns.sessionId);
+  const answeredBySession = new Map<string, number>(
+    counts.map((c) => [c.sessionId, c.n])
+  );
+
+  const pageHref = (p: number) =>
+    `/admin/prds?${showArchived ? "archived=1&" : ""}page=${p}`;
+  const firstRow = total === 0 ? 0 : offset + 1;
+  const lastRow = offset + rows.length;
 
   return (
     <main className="mx-auto max-w-6xl px-margin-mobile py-16 md:px-margin-desktop">
@@ -65,6 +91,7 @@ export default async function PrdsPage({
           >
             {showArchived ? "← Active" : "Archived"}
           </Link>
+          <ThemeToggle />
           <form action={logout}>
             <button className="text-label-sm text-on-surface-variant transition-colors hover:text-on-surface">
               Sign out
@@ -79,20 +106,38 @@ export default async function PrdsPage({
 
       <div className="mt-12 overflow-x-auto rounded-xl border border-hairline shadow-elevation-1">
         <table className="w-full text-left align-top text-body-md">
+          <caption className="sr-only">
+            {showArchived ? "Archived" : "Active"} interview sessions — page {page}{" "}
+            of {pageCount}
+          </caption>
           <thead>
             <tr className="border-b border-hairline text-label-sm text-on-surface-variant">
-              <th className="whitespace-nowrap p-3 font-semibold">Invitee</th>
-              <th className="p-3 font-semibold">Seed</th>
-              <th className="whitespace-nowrap p-3 font-semibold">Started</th>
+              <th scope="col" className="whitespace-nowrap p-3 font-semibold">
+                Invitee
+              </th>
+              <th scope="col" className="p-3 font-semibold">
+                Seed
+              </th>
+              <th scope="col" className="whitespace-nowrap p-3 font-semibold">
+                Started
+              </th>
               <th
+                scope="col"
                 className="whitespace-nowrap p-3 font-semibold"
                 title="Cumulative answered questions across all rounds"
               >
                 Turns
               </th>
-              <th className="whitespace-nowrap p-3 font-semibold">Status</th>
-              <th className="whitespace-nowrap p-3 font-semibold">PRD</th>
-              <th className="whitespace-nowrap p-3 text-right font-semibold">
+              <th scope="col" className="whitespace-nowrap p-3 font-semibold">
+                Status
+              </th>
+              <th scope="col" className="whitespace-nowrap p-3 font-semibold">
+                PRD
+              </th>
+              <th
+                scope="col"
+                className="whitespace-nowrap p-3 text-right font-semibold"
+              >
                 Manage
               </th>
             </tr>
@@ -102,7 +147,7 @@ export default async function PrdsPage({
               <tr>
                 <td
                   colSpan={7}
-                  className="p-8 text-center text-label-sm text-on-surface-variant opacity-60"
+                  className="p-8 text-center text-label-sm text-on-surface-variant"
                 >
                   {showArchived ? "No archived sessions" : "No sessions on record"}
                 </td>
@@ -195,14 +240,51 @@ export default async function PrdsPage({
         </table>
       </div>
 
-      <p className="mt-3 text-label-sm text-on-surface-variant opacity-50">
-        Turns = answered questions, cumulative across all rounds
-      </p>
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+        <p className="text-label-sm text-on-surface-variant">
+          Turns = answered questions, cumulative across all rounds
+        </p>
+        {total > 0 && (
+          <div className="flex items-center gap-4 text-label-sm text-on-surface-variant">
+            <span aria-live="polite">
+              {firstRow}–{lastRow} of {total}
+            </span>
+            <span className="flex items-center gap-2">
+              {page > 1 ? (
+                <Link
+                  href={pageHref(page - 1)}
+                  rel="prev"
+                  className="rounded-md border border-hairline px-3 py-1.5 underline-offset-2 transition-colors hover:border-on-surface-variant hover:text-on-surface hover:underline focus-visible:underline"
+                >
+                  ← Prev
+                </Link>
+              ) : (
+                <span className="rounded-md border border-hairline px-3 py-1.5 opacity-40">
+                  ← Prev
+                </span>
+              )}
+              {page < pageCount ? (
+                <Link
+                  href={pageHref(page + 1)}
+                  rel="next"
+                  className="rounded-md border border-hairline px-3 py-1.5 underline-offset-2 transition-colors hover:border-on-surface-variant hover:text-on-surface hover:underline focus-visible:underline"
+                >
+                  Next →
+                </Link>
+              ) : (
+                <span className="rounded-md border border-hairline px-3 py-1.5 opacity-40">
+                  Next →
+                </span>
+              )}
+            </span>
+          </div>
+        )}
+      </div>
 
       <div className="mt-8 flex justify-end">
         <a
           href="/api/admin/export"
-          className="rounded-md border border-hairline px-5 py-2.5 text-label-sm text-on-surface-variant transition-colors hover:border-on-surface-variant hover:text-on-surface"
+          className="rounded-md border border-hairline px-5 py-2.5 text-label-sm text-on-surface-variant underline-offset-2 transition-colors hover:border-on-surface-variant hover:text-on-surface"
         >
           Export training data
         </a>
