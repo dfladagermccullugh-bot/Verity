@@ -8,7 +8,14 @@ import NewInvite from "./new-invite";
 export const dynamic = "force-dynamic";
 
 function fmtDate(d: Date | null): string {
-  return d ? new Date(d).toLocaleString() : "—";
+  if (!d) return "—";
+  return new Date(d).toLocaleString(undefined, {
+    year: "2-digit",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 export default async function PrdsPage({
@@ -43,7 +50,7 @@ export default async function PrdsPage({
   }
 
   return (
-    <main className="mx-auto max-w-5xl px-margin-mobile py-16 md:px-margin-desktop">
+    <main className="mx-auto max-w-6xl px-margin-mobile py-16 md:px-margin-desktop">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <span className="inline-block h-1.5 w-1.5 bg-primary-container" />
@@ -71,18 +78,23 @@ export default async function PrdsPage({
       </div>
 
       <div className="mt-12 overflow-x-auto border border-hairline">
-        <table className="w-full text-left text-body-md">
+        <table className="w-full text-left align-top text-body-md">
           <thead>
             <tr className="border-b border-hairline text-label-sm uppercase tracking-engrave text-on-surface-variant">
-              <th className="p-4 font-semibold">Invitee</th>
-              <th className="p-4 font-semibold">Seed</th>
-              <th className="p-4 font-semibold">Started</th>
-              <th className="p-4 font-semibold" title="Cumulative answered questions across all rounds">
-                Turns · all rounds
+              <th className="whitespace-nowrap p-3 font-semibold">Invitee</th>
+              <th className="p-3 font-semibold">Seed</th>
+              <th className="whitespace-nowrap p-3 font-semibold">Started</th>
+              <th
+                className="whitespace-nowrap p-3 font-semibold"
+                title="Cumulative answered questions across all rounds"
+              >
+                Turns
               </th>
-              <th className="p-4 font-semibold">Status</th>
-              <th className="p-4 font-semibold">PRD</th>
-              <th className="p-4 font-semibold" />
+              <th className="whitespace-nowrap p-3 font-semibold">Status</th>
+              <th className="whitespace-nowrap p-3 font-semibold">PRD</th>
+              <th className="whitespace-nowrap p-3 text-right font-semibold">
+                Manage
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -109,20 +121,20 @@ export default async function PrdsPage({
               return (
                 <tr
                   key={session.id}
-                  className="border-t border-hairline text-on-surface"
+                  className="border-t border-hairline align-top text-on-surface"
                 >
-                  <td className="p-4">{invite.inviteeName}</td>
+                  <td className="whitespace-nowrap p-3">{invite.inviteeName}</td>
                   <td
-                    className="max-w-[18rem] truncate p-4 text-on-surface-variant"
+                    className="max-w-[16rem] truncate p-3 text-on-surface-variant"
                     title={session.seed}
                   >
                     {session.seed}
                   </td>
-                  <td className="p-4 text-on-surface-variant">
+                  <td className="whitespace-nowrap p-3 text-on-surface-variant">
                     {fmtDate(session.startedAt)}
                   </td>
-                  <td className="p-4 font-mono">{qCount}</td>
-                  <td className="p-4">
+                  <td className="p-3 font-mono">{qCount}</td>
+                  <td className="whitespace-nowrap p-3">
                     {session.status === "complete" ? (
                       <span className="inline-flex items-center gap-2 text-label-sm uppercase tracking-engrave text-primary">
                         <span className="inline-block h-1.5 w-1.5 bg-primary-container" />
@@ -145,7 +157,7 @@ export default async function PrdsPage({
                       </span>
                     )}
                   </td>
-                  <td className="p-4">
+                  <td className="whitespace-nowrap p-3">
                     {hasBrief ? (
                       <span className="flex gap-4 text-label-sm uppercase tracking-engrave">
                         <Link
@@ -165,7 +177,7 @@ export default async function PrdsPage({
                       "—"
                     )}
                   </td>
-                  <td className="p-4 text-right">
+                  <td className="whitespace-nowrap p-3 text-right">
                     <form action={showArchived ? unarchiveSession : archiveSession}>
                       <input type="hidden" name="id" value={session.id} />
                       <button
@@ -182,6 +194,10 @@ export default async function PrdsPage({
           </tbody>
         </table>
       </div>
+
+      <p className="mt-3 text-label-sm uppercase tracking-engrave text-on-surface-variant opacity-50">
+        Turns = answered questions, cumulative across all rounds
+      </p>
 
       <div className="mt-8 flex justify-end">
         <a
