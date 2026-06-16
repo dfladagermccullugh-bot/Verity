@@ -27,8 +27,7 @@ const config: Config = {
         "surface-container-highest": token("surface-container-highest"),
         outline: token("outline"),
         "outline-variant": token("outline-variant"),
-        // Neutral charcoal hairline — the structural 1px stroke from the
-        // Midnight Precision system. Flat, no gradient.
+        // Hairline — the structural 1px stroke (#e9e9e7 in light).
         hairline: token("hairline"),
         error: token("error"),
         "on-error": token("on-error"),
@@ -88,24 +87,34 @@ const config: Config = {
         frame: "1440px",
       },
       borderRadius: {
-        // Architectural & sharp: 0px grounds large surfaces, 4px is the only
-        // tactile hint, reserved for interactive elements.
+        // Soft, friendly radii. Controls round at 6px, cards at 8–12px,
+        // pills/avatars fully round.
         none: "0px",
-        sm: "2px",
-        DEFAULT: "4px",
-        md: "4px",
-        lg: "4px",
-        xl: "4px",
+        sm: "4px",
+        DEFAULT: "6px",
+        md: "8px",
+        lg: "12px",
+        xl: "16px",
+        "2xl": "20px",
         full: "9999px",
-        // Legacy aliases kept sharp so any missed usage stays on-system.
-        md3: "4px",
-        "md3-lg": "4px",
-        "md3-xl": "0px",
+        // Legacy aliases remapped onto the soft scale.
+        md3: "8px",
+        "md3-lg": "12px",
+        "md3-xl": "16px",
       },
       boxShadow: {
-        // No shadows in Midnight Precision — depth comes from tonal layering.
-        "md3-1": "none",
-        "md3-2": "none",
+        // Soft, layered elevation — calm depth, never heavy.
+        "elevation-1":
+          "0 1px 2px rgb(15 15 15 / 0.06), 0 1px 3px rgb(15 15 15 / 0.04)",
+        "elevation-2":
+          "0 2px 4px rgb(15 15 15 / 0.06), 0 4px 12px rgb(15 15 15 / 0.08)",
+        "elevation-3":
+          "0 8px 24px rgb(15 15 15 / 0.12), 0 2px 8px rgb(15 15 15 / 0.06)",
+        // Legacy aliases mapped onto the new elevation stack.
+        "md3-1":
+          "0 1px 2px rgb(15 15 15 / 0.06), 0 1px 3px rgb(15 15 15 / 0.04)",
+        "md3-2":
+          "0 2px 4px rgb(15 15 15 / 0.06), 0 4px 12px rgb(15 15 15 / 0.08)",
       },
       keyframes: {
         scanline: {
