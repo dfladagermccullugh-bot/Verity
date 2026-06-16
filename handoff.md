@@ -55,10 +55,10 @@ Key files:
 - `src/lib/construct-brief.ts` — AAPOR §4.3.1 pre-flight probe (now also captures decision + unit); **log-only**, non-fatal.
 - `src/lib/disclosure.ts` — PRD header + methodology + **analysis** companion docs; provenance + version **frozen per round**.
 - `src/lib/anthropic.ts` — `callModel` (interview, prompt-cached) + `callModelOneShot` (sidecars). Model from `ANTHROPIC_MODEL`, default `claude-sonnet-4-6`; `MAX_TOKENS=4096`.
-- `src/lib/canaries/` + `scripts/canary.ts` — weekly drift suite (`run-one.ts` mirrors the anti-leading reject so canary tracks real behavior).
+- `src/lib/canaries/` + `scripts/canary.ts` — weekly drift suite (`run-one.ts` mirrors the anti-leading reject **and the coverage gate** so the canary tracks real engine behavior).
 
 Stack: Next.js 14 (App Router, server actions), React 18, TS. Postgres via
-Drizzle (`invites`, `sessions`, `rounds`, `turns` — see migration `0003`).
+Drizzle (`invites`, `sessions`, `rounds`, `turns` — migrations through `0004`).
 iron-session admin auth, Resend email, Tailwind (Midnight Precision design
 system; `--md-*` token names retained), Framer Motion. Deployed on Vercel
 (`vercel-build` = `drizzle-kit migrate && next build`).
@@ -117,32 +117,30 @@ animations in `tailwind.config.ts`; shared instrument chrome in
   `DAVIN_EMAIL`; emails **every round** so Davin always has the latest version;
   fails silently since the PRD is already persisted.
 
-## Current health (verified this session)
+## Current health (verified 2026-06-16)
 
 - `npm run typecheck` — clean. `npm run build` — passes (all routes incl. new
   `prd/[id]/analysis` compile).
 - `npm test` — **120 passing** (+11 coverage gate; was 109). Existing suites green.
-- **Not run live this session** (no `DATABASE_URL` / `ANTHROPIC_API_KEY` in the
-  container): the dev server / multi-round end-to-end and the canary's actual
-  model run. Logic verified by typecheck + unit tests only — **needs live QA**.
+- **Never run live** (no `DATABASE_URL` / `ANTHROPIC_API_KEY` in the container):
+  the dev server, the multi-round + operator flow, and the canary's model run.
+  Logic verified by typecheck + unit tests only — **the standing to-do is live QA.**
 - Note: a fresh clone needs `npm ci`. The canary under `tsx` also needs the
   `server-only` shim/package (pre-existing; not installed here).
-- All three original AAPOR iterations remain shipped (PRs #5–#12). The
-  **survey-methodology measurement layer (15 features)** is now shipped on top
-  (this session) — see history.md.
+- All three original AAPOR iterations remain shipped (PRs #5–#12); the
+  survey-methodology measurement layer (15 features) and the multi-round loop are
+  shipped on top — see history.md.
 
-## Multi-round + measurement layer (shipped this session)
+## Multi-round loop — durable design notes
 
-The multi-round feedback loop and the 15-feature survey-methodology layer are
-**built and merged** (full detail in history.md). Sacred constraint held: the
-respondent surface is still exactly yes/no/done — every new feature is backend /
-operator-side.
+The respondent surface is still exactly yes/no/done; every layer is backend /
+operator-side. Full build history in history.md.
 
-**Decisions that were locked (and how they landed):**
-- **Zero typing ever** — no escape-hatch text box, no fourth button. Gap-catching
-  is entirely the automated between-round critic. So "it depends" / yes-drift are
-  handled *analytically* (acquiescence + straightlining + triangulation), not via
-  UI.
+**Decisions that hold:**
+- **Zero typing ever** — no escape-hatch text box, no fourth button. Yes-drift /
+  "it depends" are handled *analytically* (acquiescence + straightlining +
+  triangulation) and bounded by the coverage gate, never via UI. Gap-catching
+  *across* rounds is operator-decided (the critic is advisory).
 - **Anonymous / durable link** — no contact stored. The invite token is the
   durable identity; revisiting the link resumes into the next round (pull-based).
   A `resumePhrase` is generated + stored as a backstop (no resolver route yet).
@@ -169,18 +167,19 @@ operator-side.
 
 ## Open to-dos (priority order)
 
-1. **Apply migration `0003` + live-QA the multi-round flow.** Migration
-   `drizzle/0003_rounds_and_measurement.sql` is generated but **not applied**
-   (no DB in the build container). It is additive/non-destructive, but assumes
-   **empty/dev data**: `sessions.status` defaults to `active`, so any pre-existing
-   completed session would read as "in progress" until backfilled
-   (`update sessions set status='complete' where completed_at is not null`).
-   Confirm no real rows (admin is locked out, so likely none) or backfill, then
-   run a real interview end-to-end: verify yes/no/done is still the only surface,
-   a leading question gets rewritten, turns carry dimension/regen metadata, a
-   round finalizes, the critic opens round 2, and reopening the link resumes into
-   it. Check admin detail (version history + diff + analysis), the three download
-   routes, and the export JSON shape.
+1. **Live-QA the full multi-round + operator flow.** No DB/API key in the
+   container, so this has never run live. Migrations `0003`+`0004` are additive
+   and auto-apply on deploy via `vercel-build` (or `npm run db:migrate` locally).
+   If the DB holds pre-`0003` completed rows, backfill
+   `update sessions set status='complete' where completed_at is not null`
+   (admin was locked out, so likely none). Then run an interview end-to-end and
+   verify: yes/no/done is the only surface; a leading question is rewritten;
+   turns carry dimension/regen metadata; the **coverage gate** keeps the round
+   going until ≥7/10 dimensions before the PRD; the round finalizes to
+   `awaiting_review` (NOT auto-completed); the critic verdict shows in admin; then
+   **Open another round** → respondent resumes via the *same* link → **Mark
+   complete** consumes the invite. Check admin detail (version history + diff +
+   analysis + critic verdict), the three download routes, and the export JSON.
 
 2. **Re-baseline the canary suite.** Still a sentinel (`"model": null`,
    `"seeds": {}`), AND the generation policy has changed twice now: anti-leading
@@ -192,15 +191,9 @@ operator-side.
    commit with a message explaining the baseline conditions. Confirm the repo has
    secret `ANTHROPIC_API_KEY` and var `ANTHROPIC_MODEL`.
 
-3. **Admin login — RESOLVED 2026-06-16.** `ADMIN_PASSWORD` was rotated by the
-   user in Vercel (set as a non-sensitive var this time, so it stays viewable)
-   and redeployed; `/admin/*` is reachable again. The app reads it from
-   `process.env.ADMIN_PASSWORD` (`src/actions/admin.ts`); the secret is **not**
-   committed to this repo by design. (History of the lockout is in history.md.)
-
-_(To-dos 4 & 5 — retire `NEXT-SESSION.md` and the puppy/lottie reskin cleanup —
-were completed 2026-06-16; see history.md. The README "Stack" line + branding had
-already been refreshed in `c4bc1ef`, so nothing remained there.)_
+_Recently closed (full detail in history.md): admin login restored (password
+rotated, 2026-06-16); `NEXT-SESSION.md` retired + puppy/lottie removed; operator-
+gated rounds + coverage gate shipped._
 
 ## Backlog / deferred ideas (not committed work)
 
@@ -215,8 +208,8 @@ already been refreshed in `c4bc1ef`, so nothing remained there.)_
   the *latest* round only; older versions are viewable inline in admin detail but
   not individually downloadable. Add `?v=` if needed.
 - **Ship the construct brief itself as a companion file** (`brief-<id>.md`).
-  The *analysis* companion file shipped this session; the brief still lives only
-  in the session record + admin view.
+  The analysis companion file already shipped; the brief still lives only in the
+  session record + admin view.
 - **Subset audit of historical transcripts** — methodology doc still states none
   conducted; a periodic human spot-check would let that line claim more.
 
@@ -230,11 +223,9 @@ already been refreshed in `c4bc1ef`, so nothing remained there.)_
   is "Verity". Cosmetic; renaming the cookie would log out current admins.
 - **Moderation fails open** by design — acceptable given the prefilter, but worth
   remembering if the threat model changes.
-- **~~Critic-trigger is model-judged + invisible~~ — RESOLVED 2026-06-16.** Both
-  gaps from the 2026-06-15 live test are fixed: (a) the critic verdict is now
-  persisted on every round (`criticRecommendOpen`/`criticGaps`/`criticFocus`) and
-  shown in admin; (b) round-opening is a manual admin control (`openRound`). The
-  "one-question round" that prompted this is also addressed by the coverage gate.
+- **Coverage floor is 7/10 and untuned against live data** (`COVERAGE_FLOOR` in
+  `coverage.ts`). The dimension classifier is keyword-based/blunt, so revisit the
+  floor once live QA shows real coverage distributions.
 
 ## Conventions / gotchas
 
