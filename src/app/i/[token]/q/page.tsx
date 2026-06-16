@@ -31,10 +31,10 @@ export default async function InterviewPage({
     .from(turns)
     .where(and(eq(turns.sessionId, session!.id), isNull(turns.answer)));
 
-  // No question waiting: a complete session is done; otherwise the next round's
-  // question is still being prepared — invite a refresh.
+  // No question waiting: a finalized round (awaiting review or complete) rests
+  // on /done; otherwise the next round's question is still being prepared.
   if (!pending) {
-    if (session!.status === "complete") redirect(`/i/${token}/done`);
+    if (session!.completedAt) redirect(`/i/${token}/done`);
     return (
       <main className="flex min-h-screen items-center justify-center p-6">
         <p className="text-label-sm uppercase tracking-engrave text-on-surface-variant">

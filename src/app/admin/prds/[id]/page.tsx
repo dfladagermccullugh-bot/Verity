@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { asc, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { sessions, invites, rounds } from "@/lib/db/schema";
+import RoundActions from "./round-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +22,7 @@ function lineDiff(oldText: string, newText: string): { added: string[]; removed:
   return { added, removed };
 }
 
-function parseWarnings(s: string | null): string[] {
+function parseStringArray(s: string | null): string[] {
   if (!s) return [];
   try {
     const v = JSON.parse(s);
@@ -46,7 +47,8 @@ export default async function PrdView({ params }: { params: { id: string } }) {
     .from(rounds)
     .where(eq(rounds.sessionId, session!.id))
     .orderBy(asc(rounds.roundNumber));
-  const warnings = parseWarnings(session!.seedWarnings);
+  const warnings = parseStringArray(session!.seedWarnings);
+  const awaitingReview = session!.status === "awaiting_review";
 
   return (
     <main className="mx-auto max-w-3xl px-margin-mobile py-16 md:px-margin-desktop">
@@ -118,6 +120,8 @@ export default async function PrdView({ params }: { params: { id: string } }) {
         {session!.prdMarkdown}
       </pre>
 
+      {awaitingReview && <RoundActions sessionId={session!.id} />}
+
       {/* Round / version history. */}
       {sessionRounds.map((r, i) => {
         const prev = i > 0 ? sessionRounds[i - 1] : null;
@@ -134,8 +138,24 @@ export default async function PrdView({ params }: { params: { id: string } }) {
             <div className="border-t border-hairline p-6 text-body-md leading-relaxed text-on-surface">
               {r.focusBrief && (
                 <p className="mb-4 text-on-surface-variant">
-                  Critic focus: {r.focusBrief}
+                  Opened to probe: {r.focusBrief}
                 </p>
+              )}
+              {r.criticRecommendOpen != null && (
+                <div className="mb-4 border-l border-hairline pl-4 text-on-surface-variant">
+                  <p className="text-label-sm uppercase tracking-engrave">
+                    Critic verdict (advisory):{" "}
+                    {r.criticRecommendOpen
+                      ? "recommends another round"
+                      : "no further round needed"}
+                  </p>
+                  {parseStringArray(r.criticGaps).length > 0 && (
+                    <p className="mt-2">
+                      Gaps: {parseStringArray(r.criticGaps).join("; ")}
+                    </p>
+                  )}
+                  {r.criticFocus && <p className="mt-1">Focus: {r.criticFocus}</p>}
+                </div>
               )}
               {diff && (
                 <div className="mb-4 font-mono text-label-sm">

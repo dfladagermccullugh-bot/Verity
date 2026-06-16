@@ -5,6 +5,51 @@ completed to-dos, they land here so the handoff stays lean. Newest first.
 
 ---
 
+## 2026-06-16 — Operator-gated rounds + content-validity coverage gate
+
+Reworked the multi-round loop after a live test showed a round finalizing after a
+single question and the critic auto-opening round 2 two seconds later. Two design
+weaknesses (no depth floor; fully-autonomous round-opening) and the AAPOR/Groves
+grounding were worked through with the user; all three recommended options chosen.
+
+**What changed:**
+- **Critic demoted from judge to advisor.** `finalizeRound` still runs the critic
+  but no longer opens rounds or consumes the invite. Its verdict is persisted on
+  the round (`criticRecommendOpen` / `criticGaps` / `criticFocus`, migration
+  `0004`) and the session moves to a new `awaiting_review` status. This fixes the
+  observability gap (a one-round session now records *why* it stopped) and is a
+  deliberate strengthening of AAPOR human-oversight for the highest-risk quadrant.
+- **Operator controls the loop.** New admin-gated server actions `openRound`
+  (→ `openFollowupRound` in the engine: creates round N+1 steered by the stored
+  critic focus, generates its first question, reactivates the session) and
+  `completeSession` (marks complete + consumes invite). Admin detail page gains a
+  `round-actions.tsx` panel (shown when `awaiting_review`) and surfaces the critic
+  verdict per round; list page shows an "Awaiting review" status.
+- **Within-round coverage gate** (`src/lib/coverage.ts`, pure/tested). The model
+  may not stop (PRD/stop-confirm) until ≥ `COVERAGE_FLOOR` (7 of 10) construct
+  dimensions are covered; otherwise `enforceCoverage` nudges it toward the
+  uncovered dimensions for one more question. Grounded in content validity
+  (Groves) rather than an arbitrary question count; an explicit respondent "done"
+  always wins, preserving the yes/no/done contract. Mirrored into the canary
+  `run-one.ts` so the suite still tracks real engine behavior.
+- **Routing** now keys off `completedAt` (finalized round → `/done`; new pending
+  turn → `/q`) so `awaiting_review` rests on `/done` until the operator extends.
+- **Disclosure** updated: round continuation is human-decided, the critic is
+  advisory, and the content-validity floor is named.
+
+**Decision trail:** considered a raw question-count floor (rejected — not a
+survey-methodology construct, trades content validity against respondent burden)
+and a prompt-only nudge (rejected as sole mechanism — "soft prompting" the project
+distrusts). Landed on a deterministic coverage gate + advisory critic + human
+gate. The previous fully-automated critic rationale is preserved below.
+
+**Verification:** typecheck clean; `npm test` 120/120 (+11 coverage); `npm run
+build` passes. Migration `0004` is additive (3 nullable columns on `rounds`);
+auto-applies on deploy via `vercel-build`. Not run live (no DB/API key in
+container) — needs the same live QA as to-do #1, now including the operator flow.
+
+---
+
 ## 2026-06-16 — Admin login restored (password rotated)
 
 The admin lockout (open since 2026-06-14) is resolved. User rotated

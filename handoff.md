@@ -4,7 +4,7 @@ Lean, session-to-session working memory. Keep this under ~5k tokens. When an
 item goes stale or a to-do is done, move it to [history.md](history.md) and
 trim it from here.
 
-_Last updated: 2026-06-16 (retired NEXT-SESSION.md + puppy/lottie cleanup; to-dos 1–3 still need a live env)_
+_Last updated: 2026-06-16 (operator-gated rounds + coverage gate shipped; critic now advisory)_
 
 ## What Verity is
 
@@ -32,20 +32,25 @@ design constraint, not a disclaimer.
 
 ```
 seed → seed-quality warnings + construct-validity probe (sidecar) →
-  ROUND loop: (model → guard → anti-leading → persist turn w/ metadata)
-    → on done / 40-turn ceiling / model-stop → force PRD
+  ROUND loop: (model → guard → anti-leading → coverage gate → persist turn w/ metadata)
+    → on done / 40-turn ceiling / (model-stop AND coverage met) → force PRD
     → finalize round (freeze PRD + methodology + analysis, vN) → email
-    → gap-analysis critic → open next round (auto) OR complete + consume invite
+    → gap-analysis critic = ADVISORY (verdict persisted; does NOT open rounds)
+    → session → `awaiting_review`
+  OPERATOR decides in admin: "Open another round" (openFollowupRound) OR
+    "Mark complete" (consume invite)
 durable anonymous link resumes into the next round on revisit (pull-based)
 ```
 
 Key files:
-- `src/lib/interview-engine.ts` — **round-aware** turn loop, retry policy (guard + anti-leading), 40-turn ceiling, `forcePrd`, `finalizeRound` (per-round PRD/methodology/analysis + critic + next-round/complete).
+- `src/lib/interview-engine.ts` — **round-aware** turn loop, retry policy (guard + anti-leading), **coverage gate** (`enforceCoverage`), 40-turn ceiling, `forcePrd`, `finalizeRound` (per-round docs + advisory critic verdict + `awaiting_review`), and `openFollowupRound` (operator-initiated round N+1).
+- `src/lib/coverage.ts` — **pure** content-validity gate: covered/uncovered dimensions + `coverageMet` (`COVERAGE_FLOOR = 7` of 10, tunable). Blocks a *model* stop until coverage met; an explicit "done" always wins.
 - `src/lib/guard.ts` — deterministic *form* classifier → `question | stop_confirm | prd | reject`. Rejects multiline, batched, jargon, >200 chars, missing `?`.
 - `src/lib/anti-leading.ts` — deterministic *semantic* check; rejects tag questions, loaded openers, presupposition. Runs in the same retry loop; no model call.
-- `src/lib/dimensions.ts` — keyword classifier mapping each question to one of 10 coverage dimensions (per-turn tag; drives coverage + triangulation).
+- `src/lib/dimensions.ts` — keyword classifier mapping each question to one of 10 coverage dimensions (per-turn tag; drives coverage gate + analysis + triangulation).
 - `src/lib/analysis.ts` — pure per-round metrics (acquiescence, straightlining, latency, leading rate, coverage, triangulation reliability) + markdown render.
-- `src/lib/critic.ts` — between-round gap-analysis (`callModelOneShot`); fail-safe (never opens a round on parse/transport error). Off the hot path.
+- `src/lib/critic.ts` — between-round gap-analysis (`callModelOneShot`); **advisory only** now — verdict is persisted on the round but a human opens/closes rounds. Fail-safe (stop on parse/transport error). Off the hot path.
+- `src/actions/admin.ts` — `openRound` / `completeSession` server actions (admin-gated); admin UI in `prds/[id]` (`round-actions.tsx`) surfaces them when `awaiting_review`.
 - `src/lib/seed-quality.ts` — non-blocking seed warnings (vague / double-barreled / presupposition / too-short).
 - `src/lib/construct-brief.ts` — AAPOR §4.3.1 pre-flight probe (now also captures decision + unit); **log-only**, non-fatal.
 - `src/lib/disclosure.ts` — PRD header + methodology + **analysis** companion docs; provenance + version **frozen per round**.
@@ -58,14 +63,16 @@ iron-session admin auth, Resend email, Tailwind (Midnight Precision design
 system; `--md-*` token names retained), Framer Motion. Deployed on Vercel
 (`vercel-build` = `drizzle-kit migrate && next build`).
 
-**Data model (post-0003):** `sessions` is the durable respondent container
-(`status` active|complete, `resumePhrase`, `seedWarnings`, + latest-round mirror
-of `prdMarkdown`/`methodologyMarkdown`/`completedAt`). `rounds` (canonical per
-version): `roundNumber`, `prdVersion`, `status`, `terminationReason`,
-`focusBrief`, and frozen `prd/methodology/analysisMarkdown`. `turns` gained
-`roundId` + measurement metadata (`constructDimension`, `regenCount`,
-`guardRejections`, `leadingVerdict`, `isTriangulationProbe`, `deviceClass`,
-`viewport`).
+**Data model (post-0004):** `sessions` is the durable respondent container
+(`status` **active | awaiting_review | complete**, `resumePhrase`, `seedWarnings`,
++ latest-round mirror of `prdMarkdown`/`methodologyMarkdown`/`completedAt`).
+`rounds` (canonical per version): `roundNumber`, `prdVersion`, `status`,
+`terminationReason`, `focusBrief`, frozen `prd/methodology/analysisMarkdown`, and
+(migration `0004`) the persisted advisory critic verdict `criticRecommendOpen` /
+`criticGaps` / `criticFocus`. `turns`: `roundId` + measurement metadata
+(`constructDimension`, `regenCount`, `guardRejections`, `leadingVerdict`,
+`isTriangulationProbe`, `deviceClass`, `viewport`). Routing now keys off
+`completedAt` (a finalized round → `/done`; a new pending turn → `/q`).
 
 ## Design system — Midnight Precision (shipped)
 
@@ -114,8 +121,7 @@ animations in `tailwind.config.ts`; shared instrument chrome in
 
 - `npm run typecheck` — clean. `npm run build` — passes (all routes incl. new
   `prd/[id]/analysis` compile).
-- `npm test` — **109 passing** (was 65; +44: anti-leading 10, dimensions 7,
-  analysis 8, critic 7, seed-quality 5, disclosure +7). Existing suites green.
+- `npm test` — **120 passing** (+11 coverage gate; was 109). Existing suites green.
 - **Not run live this session** (no `DATABASE_URL` / `ANTHROPIC_API_KEY` in the
   container): the dev server / multi-round end-to-end and the canary's actual
   model run. Logic verified by typecheck + unit tests only — **needs live QA**.
@@ -140,14 +146,19 @@ operator-side.
 - **Anonymous / durable link** — no contact stored. The invite token is the
   durable identity; revisiting the link resumes into the next round (pull-based).
   A `resumePhrase` is generated + stored as a backstop (no resolver route yet).
-- **Fully automated critic** — opens the next round itself at finalize; no
-  operator approval step. Fail-safe: never opens on a parse/transport error.
+- **~~Fully automated critic~~ → Operator-gated rounds (changed 2026-06-16).**
+  The critic no longer opens rounds. It runs at finalize as an *advisory* analyst
+  (verdict persisted on the round); the session goes `awaiting_review` and a human
+  opens (`openFollowupRound`) or closes (`completeSession`) rounds in admin. A
+  within-round **coverage gate** (`coverage.ts`, content validity) prevents the
+  model bailing after one question. Both strengthen AAPOR human-oversight + content
+  validity. _Auto-open rationale preserved in history.md._
 
 **Design notes worth remembering:**
-- Routing is driven by *pending-turn presence*, not `completedAt`: a pending turn
-  → `/q`; else `status==="complete"` → `/done`. `/done` is sticky after a round
-  (does not bounce into a queued next round); the respondent reaches round N+1 by
-  reopening their link.
+- Routing now keys off `completedAt`: a pending turn → `/q`; else `completedAt`
+  set (round finalized, `awaiting_review` or `complete`) → `/done`. `/done` is
+  sticky; the respondent reaches round N+1 only after the operator opens it (new
+  pending turn) and they reopen their link.
 - Invite is consumed only at **true** completion, so the durable link keeps
   resolving across rounds.
 - Each round freezes its own PRD/methodology/analysis at version `prdVersion`.
@@ -172,9 +183,11 @@ operator-side.
    routes, and the export JSON shape.
 
 2. **Re-baseline the canary suite.** Still a sentinel (`"model": null`,
-   `"seeds": {}`), AND the generation policy changed this session (anti-leading
-   reject added to `run-one.ts`, attempts 2→3), so the eventual baseline must be
-   captured against the new behavior. Run `npm run canary:rebaseline` once with
+   `"seeds": {}`), AND the generation policy has changed twice now: anti-leading
+   reject in `run-one.ts`, and (2026-06-16) the **coverage gate** is mirrored in
+   `run-one.ts` too — so the baseline MUST be captured against this behavior
+   (coverage-gated stops may raise turn counts vs. the old early-stop runs). Run
+   `npm run canary:rebaseline` once with
    `ANTHROPIC_API_KEY` + production `ANTHROPIC_MODEL`, eyeball the per-seed table,
    commit with a message explaining the baseline conditions. Confirm the repo has
    secret `ANTHROPIC_API_KEY` and var `ANTHROPIC_MODEL`.
@@ -217,16 +230,11 @@ already been refreshed in `c4bc1ef`, so nothing remained there.)_
   is "Verity". Cosmetic; renaming the cookie would log out current admins.
 - **Moderation fails open** by design — acceptable given the prefilter, but worth
   remembering if the threat model changes.
-- **Critic-trigger is model-judged + invisible (from a 2026-06-15 live test).** A
-  follow-up round opens only when the critic (`src/lib/critic.ts`) returns
-  `openNewRound: true` *and* a non-empty `focus`; it's instructed to do so only on
-  a material gap, fail-safes to "stop" on any malformed/errored output, and is
-  fully automated (no admin button by design). **Gap:** when the critic declines,
-  its verdict/reasoning is **not persisted** (`focusBrief` is saved only when a
-  round opens), so a one-round session has no record of *why* it stopped.
-  Candidate next-session work: (a) persist the critic verdict every finalize;
-  (b) optional manual "open another round" control in admin. A user test session
-  closing out after one round is expected behavior, not a bug.
+- **~~Critic-trigger is model-judged + invisible~~ — RESOLVED 2026-06-16.** Both
+  gaps from the 2026-06-15 live test are fixed: (a) the critic verdict is now
+  persisted on every round (`criticRecommendOpen`/`criticGaps`/`criticFocus`) and
+  shown in admin; (b) round-opening is a manual admin control (`openRound`). The
+  "one-question round" that prompted this is also addressed by the coverage gate.
 
 ## Conventions / gotchas
 

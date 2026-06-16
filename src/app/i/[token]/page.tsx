@@ -44,7 +44,10 @@ export default async function SeedPage({ params }: { params: { token: string } }
       .from(turns)
       .where(and(eq(turns.sessionId, existing.id), isNull(turns.answer)));
     if (pending) redirect(`/i/${token}/q`);
-    if (existing.status === "complete") redirect(`/i/${token}/done`);
+    // A finalized round (awaiting review or complete) has a compiled PRD →
+    // the respondent rests on /done until the operator opens another round,
+    // which creates a new pending turn and routes them back to /q above.
+    if (existing.completedAt) redirect(`/i/${token}/done`);
     redirect(`/i/${token}/q`);
   }
 
