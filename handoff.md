@@ -4,7 +4,7 @@ Lean, session-to-session working memory. Keep this under ~5k tokens. When an
 item goes stale or a to-do is done, move it to [history.md](history.md) and
 trim it from here.
 
-_Last updated: 2026-06-15 (multi-round + survey-methodology measurement layer shipped)_
+_Last updated: 2026-06-16 (retired NEXT-SESSION.md + puppy/lottie cleanup; to-dos 1–3 still need a live env)_
 
 ## What Verity is
 
@@ -54,8 +54,9 @@ Key files:
 
 Stack: Next.js 14 (App Router, server actions), React 18, TS. Postgres via
 Drizzle (`invites`, `sessions`, `rounds`, `turns` — see migration `0003`).
-iron-session admin auth, Resend email, Tailwind + Material 3 tokens, Framer
-Motion. Deployed on Vercel (`vercel-build` = `drizzle-kit migrate && next build`).
+iron-session admin auth, Resend email, Tailwind (Midnight Precision design
+system; `--md-*` token names retained), Framer Motion. Deployed on Vercel
+(`vercel-build` = `drizzle-kit migrate && next build`).
 
 **Data model (post-0003):** `sessions` is the durable respondent container
 (`status` active|complete, `resumePhrase`, `seedWarnings`, + latest-round mirror
@@ -186,17 +187,9 @@ operator-side.
    (`src/actions/admin.ts`); nothing is hard-coded. **Do not commit the secret to
    this repo.** User chose to defer rotation on 2026-06-14.
 
-4. **Retire `NEXT-SESSION.md`.** It described AAPOR iterations 2 & 3, both now
-   shipped, so it is fully stale and competes with this file as "the handoff."
-   Superseded by handoff.md — safe to delete. Note: `src/lib/canaries/compare.ts`
-   (line ~15) has a comment citing "the NEXT-SESSION.md handoff" for its
-   tolerances; update that reference if you delete the file.
-
-5. **Reskin loose ends (cleanup).** `public/puppy.json` is now orphaned and the
-   `lottie-react` dependency is unused — both can be removed (drop the dep with a
-   lockfile update so `npm ci` stays consistent). `README.md` "Stack" line still
-   says "Material 3 token layer" and the methodology copy/branding predates the
-   Midnight Precision identity — refresh when convenient.
+_(To-dos 4 & 5 — retire `NEXT-SESSION.md` and the puppy/lottie reskin cleanup —
+were completed 2026-06-16; see history.md. The README "Stack" line + branding had
+already been refreshed in `c4bc1ef`, so nothing remained there.)_
 
 ## Backlog / deferred ideas (not committed work)
 

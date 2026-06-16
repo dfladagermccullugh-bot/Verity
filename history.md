@@ -5,6 +5,27 @@ completed to-dos, they land here so the handoff stays lean. Newest first.
 
 ---
 
+## 2026-06-16 — Cleanup: retire NEXT-SESSION.md + drop puppy/lottie
+
+Cleared the two self-contained handoff to-dos that didn't need a live env (DB /
+API key were absent in the container, so to-dos 1–3 stayed blocked).
+
+- **Retired `NEXT-SESSION.md`** — fully stale (its AAPOR iterations 2 & 3 both
+  shipped long ago). Removed the file and the two references that cited it:
+  the tolerances comment in `src/lib/canaries/compare.ts` and the test name in
+  `src/tests/canary-compare.test.ts` ("matches the NEXT-SESSION.md tolerances" →
+  "matches the documented tolerances"). Behavior unchanged — only prose/labels.
+- **Reskin loose ends** — deleted the orphaned `public/puppy.json` and dropped
+  the unused `lottie-react` dependency (regenerated `package-lock.json`; both
+  `lottie-react` and `lottie-web` gone, −31 lockfile lines). The README "Stack"
+  line + branding were already current as of `c4bc1ef`, so nothing remained
+  there; also corrected the handoff's own stale "Material 3 tokens" stack line.
+- **Verification:** `npm ci` clean, `npm run typecheck` clean, `npm test`
+  109/109, `npm run build` passes (all routes compile, no missing-import fallout
+  from the dropped dep).
+
+---
+
 ## 2026-06-15 — Survey-methodology measurement layer + multi-round (shipped)
 
 Translated the applicable rules from *Survey Methodology* (Groves et al.) — the

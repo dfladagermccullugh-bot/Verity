@@ -152,7 +152,7 @@ describe("formatReport", () => {
 });
 
 describe("tolerances are the values documented in the handoff", () => {
-  it("matches the NEXT-SESSION.md tolerances", () => {
+  it("matches the documented tolerances", () => {
     expect(TOLERANCES.countAbs).toBe(1);
     expect(TOLERANCES.ratioAbs).toBe(0.05);
     expect(TOLERANCES.lengthFrac).toBe(0.2);
