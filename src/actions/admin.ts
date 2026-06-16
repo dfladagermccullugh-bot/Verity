@@ -1,12 +1,15 @@
 "use server";
 
 import { timingSafeEqual } from "node:crypto";
+import { eq } from "drizzle-orm";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
-import { invites } from "@/lib/db/schema";
+import { invites, sessions } from "@/lib/db/schema";
 import { createInviteToken } from "@/lib/tokens";
 import { getAdminSession, isAdmin } from "@/lib/session";
+import { openFollowupRound } from "@/lib/interview-engine";
 
 function safeEqual(a: string, b: string): boolean {
   const ab = Buffer.from(a);
@@ -65,4 +68,54 @@ export async function createInvite(
   });
 
   return { url: `${baseUrl()}/i/${token}` };
+}
+
+/**
+ * Operator decision to extend an interview. Opens a follow-up round on a session
+ * that is awaiting review; the respondent reaches it by reopening their existing
+ * durable link (a new pending question now resolves to the interview screen).
+ */
+export async function openRound(sessionId: string): Promise<{ error?: string }> {
+  if (!(await isAdmin())) return { error: "Not authorized." };
+
+  const session = await db.query.sessions.findFirst({
+    where: eq(sessions.id, sessionId),
+  });
+  if (!session) return { error: "Session not found." };
+  if (session.status !== "awaiting_review")
+    return { error: "This session is not awaiting review." };
+
+  const result = await openFollowupRound(session);
+  if (!result.ok)
+    return { error: result.reason ?? "Could not open another round." };
+
+  revalidatePath(`/admin/prds/${sessionId}`);
+  return {};
+}
+
+/**
+ * Operator decision to close out an interview: mark the session complete and
+ * consume the single-use invite so the durable link stops resolving.
+ */
+export async function completeSession(
+  sessionId: string
+): Promise<{ error?: string }> {
+  if (!(await isAdmin())) return { error: "Not authorized." };
+
+  const session = await db.query.sessions.findFirst({
+    where: eq(sessions.id, sessionId),
+  });
+  if (!session) return { error: "Session not found." };
+
+  await db
+    .update(sessions)
+    .set({ status: "complete" })
+    .where(eq(sessions.id, sessionId));
+  await db
+    .update(invites)
+    .set({ consumedAt: new Date() })
+    .where(eq(invites.id, session.inviteId));
+
+  revalidatePath(`/admin/prds/${sessionId}`);
+  return {};
 }

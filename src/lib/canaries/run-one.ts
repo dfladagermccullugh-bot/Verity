@@ -12,6 +12,12 @@
 import { callModel, type ChatMessage, getModelName } from "../anthropic";
 import { guardOutput, STOP_CONFIRM } from "../guard";
 import { detectLeading } from "../anti-leading";
+import { classifyDimension } from "../dimensions";
+import {
+  coverageMet,
+  uncoveredDimensionLabels,
+  type CoverageTurn,
+} from "../coverage";
 import { RUNAWAY_CEILING } from "../interview-engine";
 import type { SeedFixture, SeedMetrics } from "./types";
 
@@ -58,6 +64,27 @@ async function generateNextShape(
   return { kind: "stop_confirm" };
 }
 
+/** Mirror the engine's coverage gate: if the model tries to stop before the
+ *  round has covered enough construct dimensions, nudge once for a question. */
+async function enforceCoverage(
+  messages: ChatMessage[],
+  answered: CoverageTurn[],
+  counters: RunCounters,
+  stop: Shape,
+): Promise<Shape> {
+  if (coverageMet(answered)) return stop;
+  const remaining = uncoveredDimensionLabels(answered).join(", ");
+  const nudged: ChatMessage[] = [
+    ...messages,
+    {
+      role: "user",
+      content: `(Not enough has been covered to write the PRD yet. These areas are still unaddressed: ${remaining}. Ask the next single yes/no question about one of them — do not write the PRD.)`,
+    },
+  ];
+  const gen = await generateNextShape(nudged, counters);
+  return gen.kind === "question" ? gen : stop;
+}
+
 async function forcePrd(
   messages: ChatMessage[],
   counters: RunCounters,
@@ -94,12 +121,17 @@ async function forcePrd(
 export async function runOne(fixture: SeedFixture): Promise<SeedMetrics> {
   const messages: ChatMessage[] = [{ role: "user", content: fixture.seed }];
   const counters: RunCounters = { rejects: 0, accepts: 0, questionLengths: [] };
+  const answered: CoverageTurn[] = [];
   let prdMarkdown: string | null = null;
   let terminatedNaturally = true;
   let answersUsed = 0;
 
   for (let step = 0; step < RUNAWAY_CEILING; step++) {
-    const shape = await generateNextShape(messages, counters);
+    let shape = await generateNextShape(messages, counters);
+    // Mirror the engine's coverage gate before honouring an early stop.
+    if (shape.kind !== "question") {
+      shape = await enforceCoverage(messages, answered, counters, shape);
+    }
 
     if (shape.kind === "prd") {
       prdMarkdown = shape.markdown;
@@ -120,6 +152,7 @@ export async function runOne(fixture: SeedFixture): Promise<SeedMetrics> {
     const answer = fixture.answerScript[answersUsed++];
     messages.push({ role: "assistant", content: shape.text });
     messages.push({ role: "user", content: answer });
+    answered.push({ answer, constructDimension: classifyDimension(shape.text) });
 
     if (answer === "done") {
       terminatedNaturally = false;

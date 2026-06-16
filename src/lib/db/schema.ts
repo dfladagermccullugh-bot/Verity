@@ -52,6 +52,12 @@ export const rounds = pgTable("rounds", {
   prdMarkdown: text("prd_markdown"),
   methodologyMarkdown: text("methodology_markdown"),
   analysisMarkdown: text("analysis_markdown"),
+  // Gap-analysis critic verdict for THIS round, persisted every finalize so a
+  // declined round still records why it stopped (advisory; a human decides
+  // whether to act on it). `criticFocus` seeds the next round's `focusBrief`.
+  criticRecommendOpen: boolean("critic_recommend_open"),
+  criticGaps: text("critic_gaps"),
+  criticFocus: text("critic_focus"),
 });
 
 export const turns = pgTable("turns", {

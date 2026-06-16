@@ -81,7 +81,7 @@ export function buildMethodologyDocument(inputs: MethodologyInputs): string {
   const version = inputs.prdVersion ?? 1;
 
   const oversightLines = [
-    "Question-generation outputs are validated turn-by-turn by the deterministic guard described above (the rule-bounded conversation engine recommended in AAPOR §3.1.1). The completed PRD is reviewed by a human operator before any downstream action is taken. No subset audit of historical interview transcripts has been conducted as of this generation.",
+    "Question-generation outputs are validated turn-by-turn by the deterministic guard described above (the rule-bounded conversation engine recommended in AAPOR §3.1.1). The completed PRD is reviewed by a human operator before any downstream action is taken. Critically, the decision to extend an interview with a follow-up round is made by that human operator, not by the AI: the gap-analysis critic only produces an advisory recommendation, which the operator may accept or decline. No subset audit of historical interview transcripts has been conducted as of this generation.",
   ];
   if (inputs.constructBriefPresent) {
     oversightLines.push(
@@ -120,7 +120,7 @@ export function buildMethodologyDocument(inputs: MethodologyInputs): string {
     "",
     "Questions are *adaptively tailored* — each is generated from the prior answers rather than read from a fixed standardized script. This is a deliberate departure from standardized-measurement interviewing: it improves relevance but forgoes verbatim wording control, so each administered question is versioned and recorded per turn (with its construct dimension and any regeneration) to keep the wording auditable after the fact.",
     "",
-    "Interviews may run in multiple rounds. After each round's PRD is compiled, a separate model call (a gap-analysis critic) reviews the transcript and PRD and may open a follow-up round of questions, producing a new PRD version. This document accompanies one such version.",
+    "Interviews may run in multiple rounds. After each round's PRD is compiled, a separate model call (a gap-analysis critic) reviews the transcript and PRD and records whether it judges a follow-up round warranted, together with the specific gaps it identified. This assessment is *advisory only*: a human operator reviews it and decides whether to open another round, which would produce a new PRD version. This document accompanies one such version. Within a round, the interview will not conclude until a minimum number of construct dimensions have been covered (a content-validity floor), guarding against premature termination.",
     "",
     "## Human oversight and validation",
     "",

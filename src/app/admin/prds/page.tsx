@@ -76,7 +76,6 @@ export default async function PrdsPage() {
             )}
             {rows.map(({ session, invite }) => {
               const qCount = answeredBySession.get(session.id) ?? 0;
-              const isComplete = session.status === "complete";
               const hasBrief = !!session.prdMarkdown;
               const durationS = session.completedAt
                 ? Math.round(
@@ -99,14 +98,19 @@ export default async function PrdsPage() {
                   </td>
                   <td className="p-4 font-mono">{qCount}</td>
                   <td className="p-4">
-                    {isComplete ? (
+                    {session.status === "complete" ? (
                       <span className="inline-flex items-center gap-2 text-label-sm uppercase tracking-engrave text-primary">
                         <span className="inline-block h-1.5 w-1.5 bg-primary-container" />
                         Done{durationS != null ? ` · ${durationS}s` : ""}
                       </span>
+                    ) : session.status === "awaiting_review" ? (
+                      <span className="inline-flex items-center gap-2 text-label-sm uppercase tracking-engrave text-primary opacity-80">
+                        <span className="inline-block h-1.5 w-1.5 animate-pulse bg-primary" />
+                        Awaiting review
+                      </span>
                     ) : (
                       <span className="text-label-sm uppercase tracking-engrave text-on-surface-variant">
-                        {hasBrief ? "In progress · next round" : "In progress"}
+                        In progress
                       </span>
                     )}
                   </td>
