@@ -187,7 +187,7 @@ export default async function PrdsPage({
                       </span>
                     ) : session.status === "awaiting_review" ? (
                       <span
-                        className="inline-flex items-center gap-2 text-label-sm text-primary opacity-80"
+                        className="inline-flex items-center gap-2 text-label-sm text-primary"
                         title="Round finalized — open another round or mark complete"
                       >
                         <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
@@ -227,7 +227,7 @@ export default async function PrdsPage({
                       <input type="hidden" name="id" value={session.id} />
                       <button
                         type="submit"
-                        className="text-label-sm text-on-surface-variant opacity-60 transition-opacity hover:opacity-100"
+                        className="text-label-sm text-on-surface-variant underline-offset-2 transition-colors hover:text-on-surface hover:underline focus-visible:underline"
                       >
                         {showArchived ? "Restore" : "Archive"}
                       </button>

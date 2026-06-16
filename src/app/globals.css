@@ -158,12 +158,13 @@ button {
   Keyboard focus — a single, consistent ring across every interactive element
   (buttons, links, inputs, summary). 2px solid + 2px offset at >=3:1 contrast
   satisfies WCAG focus-appearance. Components must NOT suppress this with
-  `outline-none` unless they provide an equivalent visible focus cue.
+  `outline-none` unless they provide an equivalent visible focus cue. (Outline
+  follows each element's own border-radius in modern browsers — do not set
+  border-radius here or it would deform the element while focused.)
 */
 :focus-visible {
   outline: 2px solid rgb(var(--md-primary));
   outline-offset: 2px;
-  border-radius: 2px;
 }
 
 /* Selection reads as a faint blue wash — the accent, used sparingly. */
