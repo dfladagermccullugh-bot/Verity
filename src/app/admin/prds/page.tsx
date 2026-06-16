@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { invites, sessions, turns } from "@/lib/db/schema";
 import { logout, archiveSession, unarchiveSession } from "@/actions/admin";
@@ -57,15 +57,21 @@ export default async function PrdsPage({
     .limit(PAGE_SIZE)
     .offset(offset);
 
-  // Per-session answered counts as a grouped aggregate — never load every turn.
-  const counts = await db
-    .select({
-      sessionId: turns.sessionId,
-      n: sql<number>`count(*)::int`,
-    })
-    .from(turns)
-    .where(isNotNull(turns.answer))
-    .groupBy(turns.sessionId);
+  // Per-session answered counts as a grouped aggregate, scoped to the rows on
+  // this page — never load (or scan) every turn.
+  const pageSessionIds = rows.map((r) => r.session.id);
+  const counts = pageSessionIds.length
+    ? await db
+        .select({
+          sessionId: turns.sessionId,
+          n: sql<number>`count(*)::int`,
+        })
+        .from(turns)
+        .where(
+          and(isNotNull(turns.answer), inArray(turns.sessionId, pageSessionIds))
+        )
+        .groupBy(turns.sessionId)
+    : [];
   const answeredBySession = new Map<string, number>(
     counts.map((c) => [c.sessionId, c.n])
   );
