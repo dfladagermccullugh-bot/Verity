@@ -64,7 +64,7 @@ export default async function PrdView({ params }: { params: { id: string } }) {
             href={`/api/admin/prd/${session!.id}`}
             className="text-primary transition-colors hover:brightness-110"
           >
-            Download brief
+            Download PRD
           </a>
           {session!.methodologyMarkdown && (
             <a
@@ -110,7 +110,7 @@ export default async function PrdView({ params }: { params: { id: string } }) {
       )}
 
       <h2 className="mt-10 text-label-sm uppercase tracking-engrave text-on-surface-variant">
-        Brief — latest version (v
+        PRD — latest version (v
         {sessionRounds.length > 0
           ? sessionRounds[sessionRounds.length - 1].prdVersion
           : 1}
@@ -120,7 +120,32 @@ export default async function PrdView({ params }: { params: { id: string } }) {
         {session!.prdMarkdown}
       </pre>
 
-      {awaitingReview && <RoundActions sessionId={session!.id} />}
+      {awaitingReview ? (
+        <RoundActions sessionId={session!.id} />
+      ) : session!.status === "active" ? (
+        <div className="mt-10 border border-hairline bg-surface-container-low p-6">
+          <p className="text-label-sm uppercase tracking-engrave text-on-surface-variant">
+            Awaiting respondent
+          </p>
+          <p className="mt-3 text-body-md text-on-surface-variant">
+            Round {sessionRounds.length} is open and the respondent has a pending
+            question on their durable link. Operator controls (open another round
+            / mark complete) reappear here once they finish and the round
+            finalizes for review.
+          </p>
+        </div>
+      ) : (
+        <div className="mt-10 border border-hairline bg-surface-container-low p-6">
+          <p className="text-label-sm uppercase tracking-engrave text-primary">
+            Complete
+          </p>
+          <p className="mt-3 text-body-md text-on-surface-variant">
+            This session is closed and its single-use invite has been consumed —
+            the durable link no longer resolves. The PRD below is the final
+            version.
+          </p>
+        </div>
+      )}
 
       {/* Round / version history. */}
       {sessionRounds.map((r, i) => {

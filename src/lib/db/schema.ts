@@ -32,6 +32,9 @@ export const sessions = pgTable("sessions", {
   prdMarkdown: text("prd_markdown"),
   methodologyMarkdown: text("methodology_markdown"),
   constructBrief: text("construct_brief"),
+  // Operator-set archive flag: hides a session from the default registry view
+  // without deleting it (the row + all rounds/turns are retained). Null = active.
+  archivedAt: timestamp("archived_at", { withTimezone: true }),
 });
 
 export const rounds = pgTable("rounds", {

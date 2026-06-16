@@ -4,7 +4,7 @@ Lean, session-to-session working memory. Keep this under ~5k tokens. When an
 item goes stale or a to-do is done, move it to [history.md](history.md) and
 trim it from here.
 
-_Last updated: 2026-06-16 (operator-gated rounds + coverage gate shipped; critic now advisory)_
+_Last updated: 2026-06-16 (admin-UX pass from live walkthrough: PRD terminology unified, action-oriented status labels + detail-page state banner, seed tooltip, session archive via migration 0005)_
 
 ## What Verity is
 
@@ -58,13 +58,14 @@ Key files:
 - `src/lib/canaries/` + `scripts/canary.ts` — weekly drift suite (`run-one.ts` mirrors the anti-leading reject **and the coverage gate** so the canary tracks real engine behavior).
 
 Stack: Next.js 14 (App Router, server actions), React 18, TS. Postgres via
-Drizzle (`invites`, `sessions`, `rounds`, `turns` — migrations through `0004`).
+Drizzle (`invites`, `sessions`, `rounds`, `turns` — migrations through `0005`).
 iron-session admin auth, Resend email, Tailwind (Midnight Precision design
 system; `--md-*` token names retained), Framer Motion. Deployed on Vercel
 (`vercel-build` = `drizzle-kit migrate && next build`).
 
-**Data model (post-0004):** `sessions` is the durable respondent container
-(`status` **active | awaiting_review | complete**, `resumePhrase`, `seedWarnings`,
+**Data model (post-0005):** `sessions` is the durable respondent container
+(`status` **active | awaiting_review | complete**, `archivedAt` (migration `0005`,
+operator-set list-hide; row retained + still exported), `resumePhrase`, `seedWarnings`,
 + latest-round mirror of `prdMarkdown`/`methodologyMarkdown`/`completedAt`).
 `rounds` (canonical per version): `roundNumber`, `prdVersion`, `status`,
 `terminationReason`, `focusBrief`, frozen `prd/methodology/analysisMarkdown`, and

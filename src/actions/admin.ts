@@ -119,3 +119,31 @@ export async function completeSession(
   revalidatePath(`/admin/prds/${sessionId}`);
   return {};
 }
+
+/**
+ * Archive a session: hide it from the default registry without deleting it. The
+ * row and all of its rounds/turns are retained (and still exported); this only
+ * declutters the operator's list. Reversible via `unarchiveSession`.
+ */
+export async function archiveSession(formData: FormData): Promise<void> {
+  if (!(await isAdmin())) return;
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  await db
+    .update(sessions)
+    .set({ archivedAt: new Date() })
+    .where(eq(sessions.id, id));
+  revalidatePath("/admin/prds");
+}
+
+/** Restore an archived session to the default registry view. */
+export async function unarchiveSession(formData: FormData): Promise<void> {
+  if (!(await isAdmin())) return;
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  await db
+    .update(sessions)
+    .set({ archivedAt: null })
+    .where(eq(sessions.id, id));
+  revalidatePath("/admin/prds");
+}
