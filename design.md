@@ -248,6 +248,13 @@ components:
 
 ---
 
+> **Scope note.** This document is the *visual* source of truth — the Warm Paper
+> Calm token system (color, type, radius, elevation, components). The companion
+> [ux-source-of-truth.md](ux-source-of-truth.md) is the *interaction & accessibility*
+> source of truth (Laws of UX, target sizes, focus, motion, error handling,
+> ethics). New or changed UI is reviewed against both; the running gap analysis
+> lives in [ux-audit.md](ux-audit.md). Where visual polish and accessibility ever
+> conflict, the accessibility rules win.
 
 ## Overview
 
