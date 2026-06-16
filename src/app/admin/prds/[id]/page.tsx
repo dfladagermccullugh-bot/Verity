@@ -123,7 +123,7 @@ export default async function PrdView({ params }: { params: { id: string } }) {
       {awaitingReview ? (
         <RoundActions sessionId={session!.id} />
       ) : session!.status === "active" ? (
-        <div className="mt-10 rounded-xl border border-hairline bg-surface-container-low p-6">
+        <div className="mt-10 rounded-lg border border-hairline bg-surface-container-low p-6">
           <p className="text-label-sm text-on-surface-variant">
             Awaiting respondent
           </p>
@@ -135,7 +135,7 @@ export default async function PrdView({ params }: { params: { id: string } }) {
           </p>
         </div>
       ) : (
-        <div className="mt-10 rounded-xl border border-hairline bg-surface-container-low p-6">
+        <div className="mt-10 rounded-lg border border-hairline bg-surface-container-low p-6">
           <p className="text-label-sm text-primary">
             Complete
           </p>

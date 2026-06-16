@@ -14,10 +14,10 @@
 */
 
 :root {
-  /* Accent — a single calm blue. */
-  --md-primary: 35 131 226;
+  /* Accent — a single calm blue (design.md primary / pressed). */
+  --md-primary: 0 117 222; /* #0075de */
   --md-on-primary: 255 255 255;
-  --md-primary-container: 35 131 226;
+  --md-primary-container: 0 91 171; /* #005bab — pressed/active */
   --md-on-primary-container: 255 255 255;
 
   /* Warm neutral secondary. */
@@ -26,24 +26,24 @@
   --md-secondary-container: 241 241 239;
   --md-on-secondary-container: 55 53 47;
 
-  /* Paper surfaces — white page, warm fills for sunken/secondary regions. */
-  --md-surface: 255 255 255;
+  /* Paper surfaces — warm off-white page canvas, white cards float above it. */
+  --md-surface: 246 245 244; /* #f6f5f4 — warm paper page canvas */
   --md-on-surface: 25 23 17;
-  --md-surface-variant: 241 241 239;
-  --md-on-surface-variant: 120 119 116;
+  --md-surface-variant: 240 239 237;
+  --md-on-surface-variant: 97 93 89; /* #615d59 — muted ink (legible on paper) */
 
-  /* Elevation fills. In light mode, higher level = slightly warmer/greyer. */
-  --md-surface-container-lowest: 255 255 255;
-  --md-surface-container-low: 251 251 250;
-  --md-surface-container: 247 246 243;
-  --md-surface-container-high: 241 241 239;
-  --md-surface-container-highest: 235 234 231;
+  /* Raised fills: lowest = white card, low = white input; the rest warm greys. */
+  --md-surface-container-lowest: 255 255 255; /* white cards / raised panels */
+  --md-surface-container-low: 255 255 255; /* white inputs (hairline-bordered) */
+  --md-surface-container: 240 239 237;
+  --md-surface-container-high: 233 232 230;
+  --md-surface-container-highest: 228 227 224;
 
   --md-outline: 211 209 204;
   --md-outline-variant: 233 233 231;
 
-  /* Hairline — the structural 1px stroke (#e9e9e7). */
-  --md-hairline: 233 233 231;
+  /* Hairline — the structural 1px stroke (#e6e6e6). */
+  --md-hairline: 230 230 230;
 
   --md-error: 224 62 62;
   --md-on-error: 255 255 255;
@@ -69,13 +69,13 @@
   --md-secondary-container: 47 47 47;
   --md-on-secondary-container: 220 220 220;
 
-  --md-surface: 25 25 25;
+  --md-surface: 25 25 25; /* #191919 page canvas */
   --md-on-surface: 235 235 235;
   --md-surface-variant: 47 47 47;
   --md-on-surface-variant: 155 155 155;
 
-  --md-surface-container-lowest: 20 20 20;
-  --md-surface-container-low: 32 32 32;
+  --md-surface-container-lowest: 47 47 47; /* #2f2f2f cards / raised panels */
+  --md-surface-container-low: 37 37 37; /* #252525 inputs */
   --md-surface-container: 37 37 37;
   --md-surface-container-high: 47 47 47;
   --md-surface-container-highest: 55 55 55;

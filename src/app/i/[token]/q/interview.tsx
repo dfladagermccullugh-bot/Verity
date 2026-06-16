@@ -144,7 +144,7 @@ export default function Interview({
             <button
               onClick={() => send("no")}
               disabled={pending}
-              className="group flex w-full items-center justify-between rounded-full border border-hairline bg-surface px-8 py-4 transition-colors duration-200 hover:border-on-surface-variant hover:bg-surface-container disabled:opacity-40 md:w-64"
+              className="group flex w-full items-center justify-between rounded-full border border-hairline bg-surface-container-lowest px-8 py-4 transition-colors duration-200 hover:border-on-surface-variant hover:bg-surface-container disabled:opacity-40 md:w-64"
             >
               <span className="text-label-sm font-semibold text-on-surface-variant transition-colors group-hover:text-on-surface">
                 No

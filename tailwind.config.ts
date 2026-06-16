@@ -52,21 +52,22 @@ const config: Config = {
         display: ["var(--font-inter)", "Inter", "ui-sans-serif", "sans-serif"],
       },
       fontSize: {
+        // Headlines lean heavy (700) with tight negative tracking (design.md).
         "display-xl": [
           "72px",
-          { lineHeight: "1.1", letterSpacing: "-0.04em", fontWeight: "600" },
+          { lineHeight: "1.1", letterSpacing: "-0.04em", fontWeight: "700" },
         ],
         "display-lg": [
           "48px",
-          { lineHeight: "1.05", letterSpacing: "-0.02em", fontWeight: "600" },
+          { lineHeight: "1.05", letterSpacing: "-0.02em", fontWeight: "700" },
         ],
         "display-lg-mobile": [
           "32px",
-          { lineHeight: "1.2", letterSpacing: "-0.02em", fontWeight: "600" },
+          { lineHeight: "1.2", letterSpacing: "-0.02em", fontWeight: "700" },
         ],
         "headline-md": [
           "24px",
-          { lineHeight: "1.4", letterSpacing: "-0.01em", fontWeight: "600" },
+          { lineHeight: "1.4", letterSpacing: "-0.01em", fontWeight: "700" },
         ],
         "body-lg": ["18px", { lineHeight: "1.6", fontWeight: "400" }],
         "body-md": ["16px", { lineHeight: "1.6", fontWeight: "400" }],
@@ -85,17 +86,18 @@ const config: Config = {
         frame: "1440px",
       },
       borderRadius: {
-        // Soft, friendly radii. Controls round at 6px, cards at 8–12px,
-        // pills/avatars fully round.
+        // Spec scale (design.md): inputs 4px, utility buttons 8px, cards 12px,
+        // large containers 16px, pills/avatars fully round.
         none: "0px",
-        sm: "4px",
-        DEFAULT: "6px",
+        xs: "4px",
+        sm: "5px",
+        DEFAULT: "8px",
         md: "8px",
         lg: "12px",
         xl: "16px",
         "2xl": "20px",
         full: "9999px",
-        // Legacy aliases remapped onto the soft scale.
+        // Legacy aliases remapped onto the spec scale.
         md3: "8px",
         "md3-lg": "12px",
         "md3-xl": "16px",

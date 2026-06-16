@@ -9,7 +9,7 @@ function SubmitButton() {
     <button
       type="submit"
       disabled={pending}
-      className="mt-8 w-full rounded-full bg-primary py-3.5 text-label-sm font-semibold text-on-primary shadow-elevation-1 transition-colors hover:brightness-95 disabled:opacity-40"
+      className="mt-8 w-full rounded-md bg-primary py-3.5 text-label-sm font-semibold text-on-primary shadow-elevation-1 transition-colors hover:brightness-95 disabled:opacity-40"
     >
       {pending ? "Logging in…" : "Login"}
     </button>
@@ -33,7 +33,7 @@ export default function LoginForm() {
         name="password"
         autoComplete="current-password"
         placeholder="Password"
-        className="mt-10 w-full rounded-lg border border-hairline bg-surface-container-low px-4 py-3 text-body-md text-on-surface outline-none transition-colors placeholder:text-on-surface-variant/50 focus:border-primary"
+        className="mt-10 w-full rounded-xs border border-hairline bg-surface-container-low px-4 py-3 text-body-md text-on-surface outline-none transition-colors placeholder:text-on-surface-variant/50 focus:border-primary"
       />
       {state?.error && (
         <p className="mt-4 text-label-sm text-error">{state.error}</p>

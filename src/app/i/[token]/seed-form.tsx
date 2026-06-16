@@ -67,7 +67,7 @@ export default function SeedForm({
               disabled={pending}
               autoFocus
               placeholder="A reusable water bottle that nudges you to drink throughout the day."
-              className="w-full resize-none rounded-xl border border-hairline bg-surface-container-low p-5 text-headline-md text-on-surface outline-none transition-colors placeholder:text-on-surface-variant/50 focus:border-primary disabled:opacity-50"
+              className="w-full resize-none rounded-xs border border-hairline bg-surface-container-low p-5 text-headline-md text-on-surface outline-none transition-colors placeholder:text-on-surface-variant/50 focus:border-primary disabled:opacity-50"
             />
             <div className="mt-2 text-right text-label-sm text-on-surface-variant">
               {count} / {SEED_MAX}

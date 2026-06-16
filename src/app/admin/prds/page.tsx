@@ -202,7 +202,7 @@ export default async function PrdsPage({
       <div className="mt-8 flex justify-end">
         <a
           href="/api/admin/export"
-          className="rounded-full border border-hairline px-5 py-2.5 text-label-sm text-on-surface-variant transition-colors hover:border-on-surface-variant hover:text-on-surface"
+          className="rounded-md border border-hairline px-5 py-2.5 text-label-sm text-on-surface-variant transition-colors hover:border-on-surface-variant hover:text-on-surface"
         >
           Export training data
         </a>
