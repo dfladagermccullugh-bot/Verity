@@ -160,6 +160,60 @@ open._
 
 ---
 
+## Deeper pass (round 2, 2026-06-16) — subtle/edge findings
+
+### D-1 · Thrown/rejected server action left the UI silent — `done`
+- **Law:** Peak-End (no ambiguity after an action); §5 (optimistic UI MUST
+  include retry + visible failure recovery).
+- **Where:** `interview.tsx` `send()` and `seed-form.tsx` `begin()` only handled
+  the structured `{ ok: false }` path; a transport/server *throw* set no error and
+  left the optimistic step applied.
+- **Fix:** `try/catch` around the action — roll back the optimistic step and show
+  "That didn't go through — please try again." (buttons re-enable for retry).
+
+### D-2 · New question not reliably announced to assistive tech — `done`
+- **Law:** §5 Status messages (programmatically determinable); Doherty.
+- **Where:** the question `<h2>` is keyed per turn inside `AnimatePresence`, so it
+  remounts rather than updates — an `aria-live` on it announces unreliably.
+- **Fix:** a persistent visually-hidden `role="status"`/`aria-live="polite"` region
+  that always holds the current question; the animated heading is now visual-only.
+
+### D-3 · Focus lost when the "Mark complete" confirm opens — `done`
+- **Law:** §3 Modal/confirm focus management; Fitts.
+- **Where:** `round-actions.tsx` — clicking "Mark complete…" removed the trigger
+  and dropped focus to `<body>`.
+- **Fix:** move focus to the safe **Cancel** action when the confirm appears; wrap
+  the prompt in a labeled `role="group"`.
+
+### D-4 · Dark-mode borders were invisible — `done`
+- **Law:** §5 Non-text contrast (UI component boundaries ≥3:1); Aesthetic-Usability
+  (clarity in dark mode).
+- **Where:** `globals.css` dark `--md-hairline` (#2f2f2f) was *identical* to the
+  card fill `--md-surface-container-lowest` (#2f2f2f), so 1px card/input borders did
+  not render at all in dark mode.
+- **Fix:** raised the dark hairline to #444 so borders read against both card
+  (#2f2f2f) and input (#252525) fills. (Note: strict ≥3:1 against the near-black
+  canvas would require a heavy border; inputs are additionally identified by label +
+  placeholder + focus ring, so this is a legibility fix, not a claim of full ≥3:1 —
+  see L-2.)
+
+## Known limitations / accepted (documented, not bugs)
+
+- **L-1 · Admin link tap targets are dense.** Inline 12.5px links ("View", ".md",
+  "Sign out", pagination) sit below the 44–48px mobile target guidance. Accepted:
+  the admin registry is a desktop operator tool; the *respondent* controls (the ones
+  that matter) are all large. Revisit if admin goes mobile-first.
+- **L-2 · Dark-mode 1px borders are legible but not strictly ≥3:1** against the
+  near-black canvas (that would demand a heavy ~#6f6f6f border, against the calm
+  aesthetic). Mitigated by label + placeholder + a high-contrast focus ring, which
+  keeps controls identifiable. Revisit if a formal dark-mode a11y audit requires it.
+- **L-3 · Keyboard shortcuts (Y/N/D) are global single-letter.** Mirrors visible
+  controls with a visible hint; there is no text input on the interview screen, and
+  modifier combos are ignored. Accepted enhancement; AT browse-mode quick-nav
+  generally consumes these before the page sees them.
+
+---
+
 ## What already conforms (keep)
 
 - **Hick's Law:** the respondent ever sees exactly three choices (yes / no / done),

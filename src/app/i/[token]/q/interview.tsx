@@ -86,17 +86,24 @@ export default function Interview({
           : null,
     };
     startTransition(async () => {
-      const res = await submitAnswer(token, value, paradata);
-      if (!res.ok) {
-        setError(res.error);
+      try {
+        const res = await submitAnswer(token, value, paradata);
+        if (!res.ok) {
+          setError(res.error);
+          if (value !== "done") setAnswered((a) => Math.max(0, a - 1));
+          return;
+        }
+        if (res.kind === "done") {
+          router.replace(`/i/${token}/done`);
+          return;
+        }
+        setQuestion(res.text);
+      } catch {
+        // Transport/server failure — never leave the action ambiguous. Roll
+        // back the optimistic step and invite a retry (buttons re-enable).
+        setError("That didn't go through — please try again.");
         if (value !== "done") setAnswered((a) => Math.max(0, a - 1));
-        return;
       }
-      if (res.kind === "done") {
-        router.replace(`/i/${token}/done`);
-        return;
-      }
-      setQuestion(res.text);
     });
   }
 
@@ -143,6 +150,12 @@ export default function Interview({
         aria-busy={pending}
       >
         <div className="z-10 w-full max-w-4xl">
+          {/* Persistent live region: reliably announces each new question to
+              assistive tech (the visually-animated heading remounts per turn
+              and would not announce dependably). */}
+          <p className="sr-only" role="status" aria-live="polite">
+            {pending ? "" : question}
+          </p>
           <ContextTag label={`Question // ${pad(answered + 1)}`} />
 
           <div className="relative mt-10">
@@ -161,10 +174,7 @@ export default function Interview({
                   {pending ? (
                     <LoadingLine word={loadingWord} />
                   ) : (
-                    <h2
-                      aria-live="polite"
-                      className="text-display-lg-mobile tracking-tight text-on-surface md:text-display-lg"
-                    >
+                    <h2 className="text-display-lg-mobile tracking-tight text-on-surface md:text-display-lg">
                       {question}
                     </h2>
                   )}

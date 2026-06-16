@@ -83,7 +83,10 @@
   --md-outline: 90 90 90;
   --md-outline-variant: 60 60 60;
 
-  --md-hairline: 47 47 47;
+  /* Distinct from both card fill (#2f2f2f) and input fill (#252525) so 1px
+     borders actually read in dark mode (they were previously == the card fill
+     and thus invisible). */
+  --md-hairline: 68 68 68;
 
   --md-error: 255 115 105;
   --md-on-error: 92 26 22;
@@ -123,7 +126,8 @@
     --md-outline: 90 90 90;
     --md-outline-variant: 60 60 60;
 
-    --md-hairline: 47 47 47;
+    /* See note above — borders must differ from the card fill to be visible. */
+    --md-hairline: 68 68 68;
 
     --md-error: 255 115 105;
     --md-on-error: 92 26 22;

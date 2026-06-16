@@ -27,13 +27,17 @@ export default function SeedForm({
     setError(null);
     setLoadingWord(randomLoadingWord());
     startTransition(async () => {
-      const res = await startSession(token, seed);
-      if (!res.ok) {
-        setError(res.error);
-        return;
+      try {
+        const res = await startSession(token, seed);
+        if (!res.ok) {
+          setError(res.error);
+          return;
+        }
+        if (res.kind === "done") router.replace(`/i/${token}/done`);
+        else router.replace(`/i/${token}/q`);
+      } catch {
+        setError("That didn't go through — please try again.");
       }
-      if (res.kind === "done") router.replace(`/i/${token}/done`);
-      else router.replace(`/i/${token}/q`);
     });
   }
 
