@@ -48,7 +48,7 @@ const config: Config = {
           "sans-serif",
         ],
         // Display uses the same neutral Inter face — hierarchy comes from
-        // scale, not font variety (Technical Minimalism).
+        // scale and weight, not font variety (one calm family).
         display: ["var(--font-inter)", "Inter", "ui-sans-serif", "sans-serif"],
       },
       fontSize: {

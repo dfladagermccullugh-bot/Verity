@@ -5,6 +5,61 @@ completed to-dos, they land here so the handoff stays lean. Newest first.
 
 ---
 
+## 2026-06-16 — UI re-skin: Midnight Precision → Warm Paper Calm
+
+Full experiential refashion from the dark gold "instrument" theme to **Warm Paper
+Calm**, the Notion-inspired light/dark language captured in [design.md](design.md)
+(the canonical spec; the implementation now conforms to it). Driven by the user;
+decisions: drop the instrument metaphor entirely, support **both light and dark**,
+leave the sticker palette defined-but-unused for the future, strip branding to a
+plain "Verity". The respondent surface is still exactly **yes / no / done** — this
+was a pure presentation change, **no logic touched**.
+
+**Why it was cheap:** the earlier reskin kept components **token-driven** against
+stable `--md-*` names, so re-coloring the whole app happened centrally in
+`globals.css`. The real work was reversing the *idioms* (dark→light, engraved
+UPPERCASE→sentence case, sharp→soft, flat→layered shadow, gold→blue).
+
+**What changed:**
+- **Tokens (`globals.css`):** remapped every `--md-*` value to the Warm Paper
+  palette — warm paper page canvas `#f6f5f4`, **white cards** above it, near-black
+  warm ink, muted ink `#615d59`, single blue `primary #0075de` / pressed `#005bab`,
+  hairline `#e6e6e6`. Added a full **dark** token set (`#191919` page / `#2f2f2f`
+  cards / brighter blue) under `[data-theme="dark"]` **and** `prefers-color-scheme`.
+  `color-scheme` + `::selection` flipped; light is default.
+- **Config (`tailwind.config.ts`):** spec radius scale (xs 4 / sm 5 / md 8 /
+  lg 12 / xl 16 / full), 3-level soft `shadow-elevation-*` stack (replacing the
+  no-shadow system), headline weights → **700**, calmed the `label-sm` token
+  (normal tracking, weight 500). Removed the dead `engrave` letter-spacing and
+  `scanline` keyframe/animation. Added Inter weight 500.
+- **Chrome (`src/components/chrome.tsx`):** deleted `Scanline` + `GridUnderlay`;
+  kept `BrandHeader` / `StatusDot` / `ContextTag` / `TelemetryFooter`, all quiet
+  and sentence-case, footer de-branded (footer `Protocol` still = real skill
+  fingerprint).
+- **Component sweep (all 14 surfaces):** stripped `uppercase`/engraved tracking
+  everywhere; CTAs became blue/white/secondary **pills** for the respondent hero
+  actions and **8px utility buttons** for admin; rounded cards/inputs/tables with
+  soft shadows; status dots rounded; sentence-cased the loading words
+  (`loading-words.ts`). Shell (`layout.tsx`) defaults to light, per-scheme
+  `themeColor`.
+- **design.md conformance pass:** after the first sweep, audited against the spec
+  and fixed three deviations — pure-white pages → warm canvas + white cards;
+  oversized input radii → 4px; admin pills → 8px utility — plus exact spec colors
+  (`#0075de`/`#005bab`/`#615d59`/`#e6e6e6`) and 700 headlines.
+
+**Decisions / deferrals:**
+- Dark mode **has no in-app toggle** yet — OS preference + `[data-theme]` work;
+  a user-facing switch (client component + persistence) is a small follow-up.
+- **Sticker palette** stays in design.md but unused; Verity has no illustrations,
+  so the multicolor accents have nothing to decorate yet.
+
+**Verification:** `npm run typecheck` clean, `npm run build` passes (all routes),
+`npm test` **120/120**. **No live screenshots** — no headless browser in the
+container (network-gated), so verified by build + tests, not pixels; visual QA
+(`npm run dev`) is a standing to-do alongside the existing live-QA item.
+
+---
+
 ## 2026-06-16 — Operator-gated rounds + content-validity coverage gate
 
 Reworked the multi-round loop after a live test showed a round finalizing after a

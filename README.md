@@ -12,7 +12,7 @@ The interesting question is not "how do we get better answers from the user?" It
 
 ## Approach
 
-Reduce the user's surface area to three buttons. Require the model to ask exactly one yes/no question per turn. Reject any output that isn't a single, jargon-free, non-leading question and force a regeneration. When the model decides it has enough signal, it emits a PRD. A separate reviewer then decides whether one more round of questions is worth it — but the person on the other end still only ever taps yes, no, or done.
+Reduce the user's surface area to three buttons. Require the model to ask exactly one yes/no question per turn. Reject any output that isn't a single, jargon-free, non-leading question and force a regeneration. When the model decides it has enough signal — and a content-validity coverage gate agrees enough topics have been explored — it emits a PRD. A reviewer model then flags any gaps it sees, and a human operator decides whether one more round of questions is worth it — but the person on the other end still only ever taps yes, no, or done.
 
 Two design bets sit underneath that:
 
@@ -36,26 +36,28 @@ seed (one sentence)
 │       ▲ reject ───┴──────────────┘           └───────────┘  │
 │       └── regenerate                                         │
 │                                                              │
-│  on done / 40-turn ceiling / model-stop:                     │
+│  on done / 40-turn ceiling / (model-stop AND coverage met):  │
 │     force PRD → freeze PRD + methodology + analysis (v1)      │
-│     → email → critic reviews the round                       │
+│     → email → critic records an advisory verdict             │
+│     → session → "awaiting review"                            │
 └───────────────────────────┬──────────────────────────────────┘
-            no gaps │        │ gaps found
+              operator decides in admin
                     ▼        ▼
-            session done   open another round (v2, v3, …)
+            mark complete   open another round (v2, v3, …)
           (link → "done")  (person resumes it by reopening their link)
 ```
 
-An admin issues a single-use invite. The invitee writes one seed sentence, then answers yes/no questions until the model has enough or the invitee taps *I'm done*. A PRD and two companion documents are generated, stored, and emailed. A reviewer model then checks the transcript for gaps; if it finds important ones, it opens a **follow-up round**. The invitee meets that next round simply by reopening their link — there is nothing to remember and nothing new to learn.
+An admin issues a single-use invite. The invitee writes one seed sentence, then answers yes/no questions until the model has enough or the invitee taps *I'm done*. A PRD and two companion documents are generated, stored, and emailed. A reviewer model then checks the transcript for gaps and records an **advisory verdict**; the session moves to *awaiting review*, and the operator decides in the admin whether to open a **follow-up round** or mark the session complete. The invitee meets any next round simply by reopening their link — there is nothing to remember and nothing new to learn.
 
 Key files:
 
-- [src/lib/interview-engine.ts](src/lib/interview-engine.ts) — the round-aware turn loop, retry policy, 40-turn runaway ceiling, PRD-forcing fallback, and `finalizeRound` (freezes each round's documents and runs the reviewer)
+- [src/lib/interview-engine.ts](src/lib/interview-engine.ts) — the round-aware turn loop, retry policy, 40-turn runaway ceiling, PRD-forcing fallback, `finalizeRound` (freezes each round's documents and records the advisory verdict), and `openFollowupRound` (operator-initiated next round)
 - [src/lib/guard.ts](src/lib/guard.ts) — output classifier; the form check between the model and the user
 - [src/lib/anti-leading.ts](src/lib/anti-leading.ts) — rejects leading/loaded question phrasing
+- [src/lib/coverage.ts](src/lib/coverage.ts) — content-validity gate; blocks a model-initiated stop until enough topics are covered
 - [src/lib/dimensions.ts](src/lib/dimensions.ts) — tags each question with the topic it covers
 - [src/lib/analysis.ts](src/lib/analysis.ts) — computes the per-round quality report
-- [src/lib/critic.ts](src/lib/critic.ts) — the between-round reviewer that decides whether to ask more
+- [src/lib/critic.ts](src/lib/critic.ts) — the between-round reviewer; advisory only (records a verdict, the operator opens/closes rounds)
 - [src/lib/seed-quality.ts](src/lib/seed-quality.ts) — flags a weak starting sentence for the operator
 - [src/lib/skill/idea-seeding-agent.md](src/lib/skill/idea-seeding-agent.md) — system prompt, bundled at build time
 - [src/app/i/[token]/q/interview.tsx](src/app/i/[token]/q/interview.tsx) — client card; masks model latency with a cycling word
@@ -65,7 +67,7 @@ Failure handling:
 - *Bad or leading format.* The guard or anti-leading check rejects, the engine regenerates the question, and after repeated failures it forces the stop-confirm path. No dead-ends.
 - *No termination.* A 40-turn ceiling short-circuits to PRD generation.
 - *PRD refusal.* The forcer appends an increasingly explicit instruction and accepts a best-effort markdown blob on the last attempt. The operator always gets something to read.
-- *Reviewer failure.* If the between-round reviewer errors or returns anything malformed, it fails safe — the session simply ends rather than trapping the person in more rounds.
+- *Reviewer failure.* If the between-round reviewer errors or returns anything malformed, it fails safe — it simply records no recommendation rather than guessing, and the operator still decides.
 - *Latency feel.* Optimistic card transitions and a cycling loading word turn the wait into motion.
 
 ## Result
@@ -104,7 +106,7 @@ A yes/no interview is easy to get wrong in ways that quietly corrupt the result.
   - **Answer speed.** Very fast taps can mean the person isn't really reading; these are counted.
   - **Asking the same thing twice (triangulation).** When two questions land on the same topic, their answers are compared; agreement is a small reliability signal, disagreement is flagged.
   - **Coverage and leading-rate** roll up from the per-question tags above.
-- **A second opinion between rounds.** After each round, a reviewer model reads the whole transcript and the PRD and decides whether anything important is still missing or ambiguous — a content-adequacy check — and, if so, opens a focused follow-up round. See [src/lib/critic.ts](src/lib/critic.ts).
+- **A second opinion between rounds.** After each round, a reviewer model reads the whole transcript and the PRD and records whether anything important is still missing or ambiguous — a content-adequacy check, kept advisory; the human operator uses it to decide whether to open a focused follow-up round. See [src/lib/critic.ts](src/lib/critic.ts).
 - **Paradata.** Behavioral side-data captured without asking anything extra: how long each answer took, the device class, where a session broke off. Useful for judging answer quality after the fact.
 - **A weak starting sentence is flagged.** A vague, two-ideas-in-one, or loaded seed is caught up front and noted for the operator — without blocking the person. See [src/lib/seed-quality.ts](src/lib/seed-quality.ts).
 
@@ -120,7 +122,7 @@ Verity is invite-only by design — single-use tokens, no public signup. The tok
 
 ## Stack
 
-Next.js 14 (App Router) with server actions, React 18, TypeScript. Postgres via Drizzle ORM ([schema](src/lib/db/schema.ts): `invites`, `sessions`, `rounds`, `turns`). Anthropic SDK for model calls (model id from `ANTHROPIC_MODEL`, default `claude-sonnet-4-6`). iron-session for admin auth, Resend for transactional email. Tailwind styled with the **Midnight Precision** design system — a dark-only, technical-minimalist theme (obsidian surfaces, a single signal-gold accent, the Inter typeface, sharp corners, hairline rules, no shadows), with Framer Motion for the interview card. Deployed on Vercel.
+Next.js 14 (App Router) with server actions, React 18, TypeScript. Postgres via Drizzle ORM ([schema](src/lib/db/schema.ts): `invites`, `sessions`, `rounds`, `turns`). Anthropic SDK for model calls (model id from `ANTHROPIC_MODEL`, default `claude-sonnet-4-6`). iron-session for admin auth, Resend for transactional email. Tailwind styled in the **Warm Paper Calm** design language ([design.md](design.md)) — a warm off-white paper canvas, near-black Inter type with tight negative tracking, a single confident blue accent reserved for actions, soft rounded surfaces and barely-there layered shadows, with light and dark themes. Framer Motion drives the interview card. Deployed on Vercel.
 
 ## Running locally
 
