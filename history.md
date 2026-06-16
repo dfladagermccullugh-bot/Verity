@@ -5,6 +5,17 @@ completed to-dos, they land here so the handoff stays lean. Newest first.
 
 ---
 
+## 2026-06-16 — Admin login restored (password rotated)
+
+The admin lockout (open since 2026-06-14) is resolved. User rotated
+`ADMIN_PASSWORD` in Vercel — set as a **non-sensitive** var this time so it stays
+viewable and can't become unrecoverable again — and redeployed; `/admin/*` is
+reachable. No code change (the value is read from `process.env.ADMIN_PASSWORD`);
+the secret is deliberately never committed. This unblocks issuing invites, which
+in turn unblocks the to-do #1 live QA.
+
+---
+
 ## 2026-06-16 — Cleanup: retire NEXT-SESSION.md + drop puppy/lottie
 
 Cleared the two self-contained handoff to-dos that didn't need a live env (DB /
