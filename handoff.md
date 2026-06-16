@@ -147,7 +147,8 @@ copy is sentence-case. Full before/after in history.md.
 
 - `npm run typecheck` — clean. `npm run build` — passes (all routes incl. new
   `prd/[id]/analysis` compile).
-- `npm test` — **120 passing** (+11 coverage gate; was 109). Existing suites green.
+- `npm test` — **136 passing** (+16 markdown-parser suite for the new operator
+  doc renderer; +11 coverage gate before that). Existing suites green.
 - **Never run live** (no `DATABASE_URL` / `ANTHROPIC_API_KEY` in the container):
   the dev server, the multi-round + operator flow, and the canary's model run.
   Logic verified by typecheck + unit tests only — **the standing to-do is live QA.**

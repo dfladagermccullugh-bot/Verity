@@ -94,7 +94,7 @@ export default async function PrdView({ params }: { params: { id: string } }) {
       </p>
 
       {warnings.length > 0 && (
-        <p className="mt-3 text-label-sm text-error opacity-80">
+        <p className="mt-3 text-label-sm text-error">
           Seed warnings: {warnings.join(", ")}
         </p>
       )}
@@ -159,7 +159,7 @@ export default async function PrdView({ params }: { params: { id: string } }) {
             : null;
         return (
           <details key={r.id} className="mt-6 overflow-hidden rounded-xl border border-hairline">
-            <summary className="cursor-pointer p-4 text-label-sm text-on-surface-variant">
+            <summary className="cursor-pointer p-4 text-label-sm text-on-surface-variant transition-colors hover:text-on-surface">
               Round {r.roundNumber} · PRD v{r.prdVersion} ·{" "}
               {r.terminationReason ?? r.status}
             </summary>

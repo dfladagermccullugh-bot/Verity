@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useFormState, useFormStatus } from "react-dom";
 import { openRound, completeSession } from "@/actions/admin";
 
@@ -40,6 +40,12 @@ function Submit({
  */
 export default function RoundActions({ sessionId }: { sessionId: string }) {
   const [confirming, setConfirming] = useState(false);
+  const cancelRef = useRef<HTMLButtonElement>(null);
+  // Move focus to the safe (Cancel) action when the confirm appears, so the
+  // keyboard/SR user lands inside the prompt rather than on a removed button.
+  useEffect(() => {
+    if (confirming) cancelRef.current?.focus();
+  }, [confirming]);
   const [openState, openAction] = useFormState(
     async () => openRound(sessionId),
     {} as { error?: string }
@@ -73,7 +79,11 @@ export default function RoundActions({ sessionId }: { sessionId: string }) {
           </button>
         </div>
       ) : (
-        <div className="mt-5 rounded-md border border-error/40 bg-surface p-4">
+        <div
+          className="mt-5 rounded-md border border-error/40 bg-surface p-4"
+          role="group"
+          aria-label="Confirm completion"
+        >
           <p className="text-label-sm font-semibold text-on-surface">
             Complete and close this session?
           </p>
@@ -84,6 +94,7 @@ export default function RoundActions({ sessionId }: { sessionId: string }) {
           </p>
           <div className="mt-4 flex flex-wrap gap-4">
             <button
+              ref={cancelRef}
               type="button"
               onClick={() => setConfirming(false)}
               className="rounded-md border border-hairline px-6 py-2.5 text-label-sm font-semibold text-on-surface transition-colors hover:border-on-surface-variant"
