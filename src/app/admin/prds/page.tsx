@@ -1,8 +1,8 @@
 import Link from "next/link";
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, isNotNull, isNull } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { invites, sessions, turns } from "@/lib/db/schema";
-import { logout } from "@/actions/admin";
+import { logout, archiveSession, unarchiveSession } from "@/actions/admin";
 import NewInvite from "./new-invite";
 
 export const dynamic = "force-dynamic";
@@ -11,7 +11,13 @@ function fmtDate(d: Date | null): string {
   return d ? new Date(d).toLocaleString() : "—";
 }
 
-export default async function PrdsPage() {
+export default async function PrdsPage({
+  searchParams,
+}: {
+  searchParams?: { archived?: string };
+}) {
+  const showArchived = searchParams?.archived === "1";
+
   const rows = await db
     .select({
       session: sessions,
@@ -19,6 +25,11 @@ export default async function PrdsPage() {
     })
     .from(sessions)
     .innerJoin(invites, eq(sessions.inviteId, invites.id))
+    .where(
+      showArchived
+        ? isNotNull(sessions.archivedAt)
+        : isNull(sessions.archivedAt)
+    )
     .orderBy(desc(sessions.startedAt));
 
   const allTurns = await db.select().from(turns);
@@ -37,14 +48,22 @@ export default async function PrdsPage() {
         <div className="flex items-center gap-3">
           <span className="inline-block h-1.5 w-1.5 bg-primary-container" />
           <h1 className="text-label-sm uppercase tracking-engrave text-on-surface-variant">
-            Verity // Brief Registry
+            Verity // PRD Registry{showArchived ? " · Archived" : ""}
           </h1>
         </div>
-        <form action={logout}>
-          <button className="text-label-sm uppercase tracking-engrave text-on-surface-variant transition-colors hover:text-on-surface">
-            Sign out
-          </button>
-        </form>
+        <div className="flex items-center gap-5">
+          <Link
+            href={showArchived ? "/admin/prds" : "/admin/prds?archived=1"}
+            className="text-label-sm uppercase tracking-engrave text-on-surface-variant transition-colors hover:text-on-surface"
+          >
+            {showArchived ? "← Active" : "Archived"}
+          </Link>
+          <form action={logout}>
+            <button className="text-label-sm uppercase tracking-engrave text-on-surface-variant transition-colors hover:text-on-surface">
+              Sign out
+            </button>
+          </form>
+        </div>
       </div>
 
       <div className="mt-10">
@@ -58,19 +77,22 @@ export default async function PrdsPage() {
               <th className="p-4 font-semibold">Invitee</th>
               <th className="p-4 font-semibold">Seed</th>
               <th className="p-4 font-semibold">Started</th>
-              <th className="p-4 font-semibold">Turns</th>
+              <th className="p-4 font-semibold" title="Cumulative answered questions across all rounds">
+                Turns · all rounds
+              </th>
               <th className="p-4 font-semibold">Status</th>
-              <th className="p-4 font-semibold">Brief</th>
+              <th className="p-4 font-semibold">PRD</th>
+              <th className="p-4 font-semibold" />
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 && (
               <tr>
                 <td
-                  colSpan={6}
+                  colSpan={7}
                   className="p-8 text-center text-label-sm uppercase tracking-engrave text-on-surface-variant opacity-60"
                 >
-                  No sessions on record
+                  {showArchived ? "No archived sessions" : "No sessions on record"}
                 </td>
               </tr>
             )}
@@ -90,7 +112,10 @@ export default async function PrdsPage() {
                   className="border-t border-hairline text-on-surface"
                 >
                   <td className="p-4">{invite.inviteeName}</td>
-                  <td className="max-w-[18rem] truncate p-4 text-on-surface-variant">
+                  <td
+                    className="max-w-[18rem] truncate p-4 text-on-surface-variant"
+                    title={session.seed}
+                  >
                     {session.seed}
                   </td>
                   <td className="p-4 text-on-surface-variant">
@@ -101,16 +126,22 @@ export default async function PrdsPage() {
                     {session.status === "complete" ? (
                       <span className="inline-flex items-center gap-2 text-label-sm uppercase tracking-engrave text-primary">
                         <span className="inline-block h-1.5 w-1.5 bg-primary-container" />
-                        Done{durationS != null ? ` · ${durationS}s` : ""}
+                        Complete{durationS != null ? ` · ${durationS}s` : ""}
                       </span>
                     ) : session.status === "awaiting_review" ? (
-                      <span className="inline-flex items-center gap-2 text-label-sm uppercase tracking-engrave text-primary opacity-80">
+                      <span
+                        className="inline-flex items-center gap-2 text-label-sm uppercase tracking-engrave text-primary opacity-80"
+                        title="Round finalized — open another round or mark complete"
+                      >
                         <span className="inline-block h-1.5 w-1.5 animate-pulse bg-primary" />
-                        Awaiting review
+                        Awaiting your review
                       </span>
                     ) : (
-                      <span className="text-label-sm uppercase tracking-engrave text-on-surface-variant">
-                        In progress
+                      <span
+                        className="text-label-sm uppercase tracking-engrave text-on-surface-variant"
+                        title="Respondent has an open question — no operator action yet"
+                      >
+                        Awaiting respondent
                       </span>
                     )}
                   </td>
@@ -133,6 +164,17 @@ export default async function PrdsPage() {
                     ) : (
                       "—"
                     )}
+                  </td>
+                  <td className="p-4 text-right">
+                    <form action={showArchived ? unarchiveSession : archiveSession}>
+                      <input type="hidden" name="id" value={session.id} />
+                      <button
+                        type="submit"
+                        className="text-label-sm uppercase tracking-engrave text-on-surface-variant opacity-60 transition-opacity hover:opacity-100"
+                      >
+                        {showArchived ? "Restore" : "Archive"}
+                      </button>
+                    </form>
                   </td>
                 </tr>
               );
