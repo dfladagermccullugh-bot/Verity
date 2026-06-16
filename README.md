@@ -122,7 +122,10 @@ Verity is invite-only by design — single-use tokens, no public signup. The tok
 
 ## Stack
 
-Next.js 14 (App Router) with server actions, React 18, TypeScript. Postgres via Drizzle ORM ([schema](src/lib/db/schema.ts): `invites`, `sessions`, `rounds`, `turns`). Anthropic SDK for model calls (model id from `ANTHROPIC_MODEL`, default `claude-sonnet-4-6`). iron-session for admin auth, Resend for transactional email. Tailwind styled in the **Warm Paper Calm** design language ([design.md](design.md)) — a warm off-white paper canvas, near-black Inter type with tight negative tracking, a single confident blue accent reserved for actions, soft rounded surfaces and barely-there layered shadows, with light and dark themes. Framer Motion drives the interview card. Deployed on Vercel.
+Next.js 14 (App Router) with server actions, React 18, TypeScript. Postgres via Drizzle ORM ([schema](src/lib/db/schema.ts): `invites`, `sessions`, `rounds`, `turns`). Anthropic SDK for model calls (model id from `ANTHROPIC_MODEL`, default `claude-sonnet-4-6`). iron-session for admin auth, Resend for transactional email. Tailwind styled in the **Warm Paper Calm** design language ([design.md](design.md)) — a warm off-white paper canvas, near-black Inter type with tight negative tracking, a single confident blue accent reserved for actions, soft rounded surfaces and barely-there layered shadows, with light and dark themes. Framer Motion drives the interview card. Deployed on Vercel. Interaction and
+accessibility are governed by a companion [UX/UI source of truth](ux-source-of-truth.md)
+(the Laws of UX — target sizes, focus, motion, error handling, ethics), with the
+running gap analysis in [ux-audit.md](ux-audit.md).
 
 ## Running locally
 
