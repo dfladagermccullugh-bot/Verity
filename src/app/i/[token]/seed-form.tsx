@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { startSession } from "@/actions/interview";
 import { randomLoadingWord } from "@/lib/loading-words";
 import { BrandHeader, ContextTag, TelemetryFooter } from "@/components/chrome";
@@ -17,6 +17,7 @@ export default function SeedForm({
   inviteeName: string;
 }) {
   const router = useRouter();
+  const reduce = useReducedMotion();
   const [seed, setSeed] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loadingWord, setLoadingWord] = useState("Initializing…");
@@ -43,9 +44,9 @@ export default function SeedForm({
       <BrandHeader />
       <main className="relative flex min-h-screen items-center justify-center px-margin-mobile md:px-margin-desktop">
         <motion.div
-          initial={{ opacity: 0, y: 12 }}
+          initial={reduce ? false : { opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
+          transition={{ duration: reduce ? 0 : 0.3 }}
           className="z-10 w-full max-w-3xl"
         >
           <ContextTag label="Intake // Premise" />
@@ -59,27 +60,44 @@ export default function SeedForm({
           </p>
 
           <div className="mt-12">
+            <label htmlFor="seed" className="sr-only">
+              Your premise — one or two sentences
+            </label>
             <textarea
+              id="seed"
               value={seed}
               onChange={(e) => setSeed(e.target.value.slice(0, SEED_MAX))}
               maxLength={SEED_MAX}
               rows={3}
               disabled={pending}
               autoFocus
+              aria-describedby="seed-count"
               placeholder="A reusable water bottle that nudges you to drink throughout the day."
-              className="w-full resize-none rounded-xs border border-hairline bg-surface-container-low p-5 text-headline-md text-on-surface outline-none transition-colors placeholder:text-on-surface-variant/50 focus:border-primary disabled:opacity-50"
+              className="w-full resize-none rounded-xs border border-hairline bg-surface-container-low p-5 text-headline-md text-on-surface transition-colors placeholder:text-on-surface-variant/50 focus:border-primary disabled:opacity-50"
             />
-            <div className="mt-2 text-right text-label-sm text-on-surface-variant">
+            <div
+              id="seed-count"
+              className="mt-2 text-right text-label-sm text-on-surface-variant"
+            >
               {count} / {SEED_MAX}
             </div>
           </div>
 
-          {error && <p className="mt-6 text-label-sm text-error">{error}</p>}
+          {error && (
+            <p role="alert" className="mt-6 text-label-sm text-error">
+              {error}
+            </p>
+          )}
 
           <div className="mt-10">
             <button
               onClick={begin}
               disabled={pending || seed.trim().length === 0}
+              title={
+                seed.trim().length === 0
+                  ? "Enter a premise above to begin"
+                  : undefined
+              }
               className="group flex w-full items-center justify-center gap-3 rounded-full bg-primary px-10 py-4 text-on-primary shadow-elevation-1 transition-colors hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-40 md:w-auto"
             >
               <span className="text-label-sm font-semibold">

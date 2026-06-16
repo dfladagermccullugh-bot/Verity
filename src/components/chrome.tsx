@@ -5,6 +5,7 @@
  * Warm Paper Calm: quiet sentence-case wordmark, soft neutral telemetry, a
  * single blue dot for status. No atmospheric grid or scanline.
  */
+import ThemeToggle from "@/components/theme-toggle";
 
 /** Quiet wordmark, centered at the top of the viewport. */
 export function BrandHeader() {
@@ -52,17 +53,20 @@ export function TelemetryFooter({
     <footer className="pointer-events-none fixed bottom-0 z-50 flex h-14 w-full items-center justify-between px-margin-mobile text-xs text-on-surface-variant md:px-margin-desktop">
       <div className="flex items-center gap-6">
         <span className="flex items-center gap-2">
-          <span className="opacity-60">Status</span>
+          <span className="text-on-surface-variant">Status</span>
           <span className="text-on-surface">{status}</span>
         </span>
         {protocol && (
           <span className="hidden items-center gap-2 sm:flex">
-            <span className="opacity-60">Protocol</span>
+            <span className="text-on-surface-variant">Protocol</span>
             <span className="font-mono text-on-surface">V-{protocol}</span>
           </span>
         )}
       </div>
-      <div className="opacity-60">Verity</div>
+      <div className="flex items-center gap-4">
+        <ThemeToggle />
+        <span className="text-on-surface-variant">Verity</span>
+      </div>
     </footer>
   );
 }

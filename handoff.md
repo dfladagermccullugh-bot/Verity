@@ -81,9 +81,9 @@ Two governing docs: [design.md](design.md) is the **visual** source of truth
 (Warm Paper Calm tokens — color/type/radius/elevation); [ux-source-of-truth.md](ux-source-of-truth.md)
 is the **interaction & accessibility** source of truth (Laws of UX, target sizes,
 focus, motion, error handling, ethics). All UI work is reviewed against both. The
-running gap analysis lives in [ux-audit.md](ux-audit.md) — **as of 2026-06-16 it
-has open P0 items (zoom disabled, irreversible "Mark complete" w/o confirm,
-unlabeled inputs, no focus ring, color-only links); see that file before UI work.**
+running gap analysis lives in [ux-audit.md](ux-audit.md) — **as of 2026-06-16 all
+P0/P1/P2 items are implemented (verified by typecheck + tests + build; live a11y
+verification still pending). P2-4 closed as wontfix.** Keep that file current.
 
 Notion-inspired calm, the canonical visual spec is [design.md](design.md) and the
 code now conforms to it. Warm off-white **paper page canvas** (`#f6f5f4`) with **white

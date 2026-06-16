@@ -154,8 +154,37 @@ button {
   -webkit-tap-highlight-color: transparent;
 }
 
+/*
+  Keyboard focus — a single, consistent ring across every interactive element
+  (buttons, links, inputs, summary). 2px solid + 2px offset at >=3:1 contrast
+  satisfies WCAG focus-appearance. Components must NOT suppress this with
+  `outline-none` unless they provide an equivalent visible focus cue.
+*/
+:focus-visible {
+  outline: 2px solid rgb(var(--md-primary));
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
 /* Selection reads as a faint blue wash — the accent, used sparingly. */
 ::selection {
   background: rgb(var(--md-primary) / 0.18);
   color: rgb(var(--md-on-surface));
+}
+
+/*
+  Reduced motion — honor the OS preference (WCAG 2.3.3 / animation from
+  interactions). Near-instant transitions and a single, non-looping animation
+  pass neutralize the infinite pulse and entrance/slide motion. Framer Motion
+  is JS-driven and is additionally gated via useReducedMotion() in components.
+*/
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
 }
