@@ -9,7 +9,7 @@ function SubmitButton() {
     <button
       type="submit"
       disabled={pending}
-      className="mt-8 w-full rounded bg-primary py-4 text-label-sm font-bold uppercase tracking-engrave text-surface-container-lowest transition-all hover:brightness-110 disabled:opacity-30"
+      className="mt-8 w-full rounded-md bg-primary py-3.5 text-label-sm font-semibold text-on-primary shadow-elevation-1 transition-colors hover:brightness-95 disabled:opacity-40"
     >
       {pending ? "Logging in…" : "Login"}
     </button>
@@ -22,12 +22,10 @@ export default function LoginForm() {
   return (
     <form action={formAction} className="w-full max-w-sm">
       <div className="text-center">
-        <h1 className="text-display-lg-mobile uppercase tracking-engrave text-on-surface">
+        <h1 className="text-display-lg-mobile tracking-tight text-on-surface">
           Verity
         </h1>
-        <p className="mt-3 text-label-sm uppercase tracking-engrave text-on-surface-variant opacity-70">
-          Admin
-        </p>
+        <p className="mt-3 text-label-sm text-on-surface-variant">Admin</p>
       </div>
 
       <input
@@ -35,12 +33,10 @@ export default function LoginForm() {
         name="password"
         autoComplete="current-password"
         placeholder="Password"
-        className="mt-10 w-full border-b border-hairline bg-transparent pb-3 text-body-lg text-on-surface outline-none transition-colors placeholder:text-on-surface-variant/40 focus:border-primary"
+        className="mt-10 w-full rounded-xs border border-hairline bg-surface-container-low px-4 py-3 text-body-md text-on-surface outline-none transition-colors placeholder:text-on-surface-variant/50 focus:border-primary"
       />
       {state?.error && (
-        <p className="mt-4 text-label-sm uppercase tracking-engrave text-error">
-          {state.error}
-        </p>
+        <p className="mt-4 text-label-sm text-error">{state.error}</p>
       )}
       <SubmitButton />
     </form>

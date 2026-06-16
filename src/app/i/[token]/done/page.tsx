@@ -3,13 +3,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { invites, sessions } from "@/lib/db/schema";
 import { verifyInviteToken } from "@/lib/tokens";
-import {
-  BrandHeader,
-  Scanline,
-  GridUnderlay,
-  ContextTag,
-  TelemetryFooter,
-} from "@/components/chrome";
+import { BrandHeader, ContextTag, TelemetryFooter } from "@/components/chrome";
 
 export const dynamic = "force-dynamic";
 
@@ -37,18 +31,16 @@ export default async function DonePage({
 
   return (
     <>
-      <Scanline />
       <BrandHeader />
       <main className="relative flex min-h-screen items-center justify-center px-margin-mobile md:px-margin-desktop">
-        <GridUnderlay />
         <div className="z-10 w-full max-w-3xl">
-          <ContextTag label="Sequence Complete" />
-          <h1 className="mt-10 text-display-lg-mobile text-on-surface md:text-display-lg">
+          <ContextTag label="Sequence complete" />
+          <h1 className="mt-10 text-display-lg-mobile tracking-tight text-on-surface md:text-display-lg">
             Brief compiled.
           </h1>
-          <p className="mt-5 max-w-2xl border-l border-hairline pl-6 text-body-lg text-on-surface-variant opacity-80">
+          <p className="mt-5 max-w-2xl border-l-2 border-hairline pl-6 text-body-lg text-on-surface-variant">
             The structured brief and its methodology record have been
-            transmitted. This session is closed. You may disconnect.
+            transmitted. This session is closed — you can close this tab.
           </p>
         </div>
       </main>

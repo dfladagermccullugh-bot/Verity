@@ -3,51 +3,139 @@
 @tailwind utilities;
 
 /*
-  Midnight Precision token palette.
-  Technical Minimalism: nocturnal obsidian surfaces, Signal Gold as the sole
-  functional accent, flat tonal layering (no gradients, no shadows). Values are
+  Verity token palette — Warm Paper Calm.
+  Calm, daylight surfaces with a single blue accent. Depth comes from soft
+  elevation shadows and warm neutral fills rather than heavy chrome. Values are
   stored as "R G B" so Tailwind can apply alpha via rgb(var() / <alpha>).
-  Dark-only by design — the brand is nocturnal; there is no light scheme.
+
+  Light is the default scheme. Dark is a refined nocturnal variant that activates
+  via [data-theme="dark"] or, absent an explicit choice, the OS preference.
+  Token names are stable across both themes so components stay theme-agnostic.
 */
 
 :root {
-  --md-primary: 242 202 80;
-  --md-on-primary: 60 47 0;
-  --md-primary-container: 212 175 55;
-  --md-on-primary-container: 85 67 0;
+  /* Accent — a single calm blue (design.md primary / pressed). */
+  --md-primary: 0 117 222; /* #0075de */
+  --md-on-primary: 255 255 255;
+  --md-primary-container: 0 91 171; /* #005bab — pressed/active */
+  --md-on-primary-container: 255 255 255;
 
-  --md-secondary: 198 198 199;
-  --md-on-secondary: 47 49 49;
-  --md-secondary-container: 69 71 71;
-  --md-on-secondary-container: 180 181 181;
+  /* Warm neutral secondary. */
+  --md-secondary: 95 92 88;
+  --md-on-secondary: 255 255 255;
+  --md-secondary-container: 241 241 239;
+  --md-on-secondary-container: 55 53 47;
 
-  --md-surface: 19 19 19;
-  --md-on-surface: 229 226 225;
-  --md-surface-variant: 53 53 52;
-  --md-on-surface-variant: 208 197 175;
+  /* Paper surfaces — warm off-white page canvas, white cards float above it. */
+  --md-surface: 246 245 244; /* #f6f5f4 — warm paper page canvas */
+  --md-on-surface: 25 23 17;
+  --md-surface-variant: 240 239 237;
+  --md-on-surface-variant: 97 93 89; /* #615d59 — muted ink (legible on paper) */
 
-  --md-surface-container-lowest: 14 14 14;
-  --md-surface-container-low: 28 27 27;
-  --md-surface-container: 32 31 31;
-  --md-surface-container-high: 42 42 42;
-  --md-surface-container-highest: 53 53 52;
+  /* Raised fills: lowest = white card, low = white input; the rest warm greys. */
+  --md-surface-container-lowest: 255 255 255; /* white cards / raised panels */
+  --md-surface-container-low: 255 255 255; /* white inputs (hairline-bordered) */
+  --md-surface-container: 240 239 237;
+  --md-surface-container-high: 233 232 230;
+  --md-surface-container-highest: 228 227 224;
 
-  --md-outline: 153 144 124;
-  --md-outline-variant: 77 70 53;
+  --md-outline: 211 209 204;
+  --md-outline-variant: 233 233 231;
 
-  /* Neutral charcoal structural stroke (#2a2a2a). */
-  --md-hairline: 42 42 42;
+  /* Hairline — the structural 1px stroke (#e6e6e6). */
+  --md-hairline: 230 230 230;
 
-  --md-error: 255 180 171;
-  --md-on-error: 105 0 5;
-  --md-error-container: 147 0 10;
+  --md-error: 224 62 62;
+  --md-on-error: 255 255 255;
+  --md-error-container: 250 226 226;
+  --md-on-error-container: 139 26 26;
+
+  --md-inverse-surface: 25 23 17;
+  --md-inverse-on-surface: 255 255 255;
+  --md-inverse-primary: 150 196 245;
+
+  color-scheme: light;
+}
+
+/* Dark token set — shared by explicit opt-in and OS preference. */
+[data-theme="dark"] {
+  --md-primary: 41 152 255;
+  --md-on-primary: 255 255 255;
+  --md-primary-container: 41 152 255;
+  --md-on-primary-container: 255 255 255;
+
+  --md-secondary: 160 160 160;
+  --md-on-secondary: 25 25 25;
+  --md-secondary-container: 47 47 47;
+  --md-on-secondary-container: 220 220 220;
+
+  --md-surface: 25 25 25; /* #191919 page canvas */
+  --md-on-surface: 235 235 235;
+  --md-surface-variant: 47 47 47;
+  --md-on-surface-variant: 155 155 155;
+
+  --md-surface-container-lowest: 47 47 47; /* #2f2f2f cards / raised panels */
+  --md-surface-container-low: 37 37 37; /* #252525 inputs */
+  --md-surface-container: 37 37 37;
+  --md-surface-container-high: 47 47 47;
+  --md-surface-container-highest: 55 55 55;
+
+  --md-outline: 90 90 90;
+  --md-outline-variant: 60 60 60;
+
+  --md-hairline: 47 47 47;
+
+  --md-error: 255 115 105;
+  --md-on-error: 92 26 22;
+  --md-error-container: 92 26 22;
   --md-on-error-container: 255 218 214;
 
-  --md-inverse-surface: 229 226 225;
-  --md-inverse-on-surface: 49 48 48;
-  --md-inverse-primary: 115 92 0;
+  --md-inverse-surface: 235 235 235;
+  --md-inverse-on-surface: 25 25 25;
+  --md-inverse-primary: 35 131 226;
 
   color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --md-primary: 41 152 255;
+    --md-on-primary: 255 255 255;
+    --md-primary-container: 41 152 255;
+    --md-on-primary-container: 255 255 255;
+
+    --md-secondary: 160 160 160;
+    --md-on-secondary: 25 25 25;
+    --md-secondary-container: 47 47 47;
+    --md-on-secondary-container: 220 220 220;
+
+    --md-surface: 25 25 25;
+    --md-on-surface: 235 235 235;
+    --md-surface-variant: 47 47 47;
+    --md-on-surface-variant: 155 155 155;
+
+    --md-surface-container-lowest: 20 20 20;
+    --md-surface-container-low: 32 32 32;
+    --md-surface-container: 37 37 37;
+    --md-surface-container-high: 47 47 47;
+    --md-surface-container-highest: 55 55 55;
+
+    --md-outline: 90 90 90;
+    --md-outline-variant: 60 60 60;
+
+    --md-hairline: 47 47 47;
+
+    --md-error: 255 115 105;
+    --md-on-error: 92 26 22;
+    --md-error-container: 92 26 22;
+    --md-on-error-container: 255 218 214;
+
+    --md-inverse-surface: 235 235 235;
+    --md-inverse-on-surface: 25 25 25;
+    --md-inverse-primary: 35 131 226;
+
+    color-scheme: dark;
+  }
 }
 
 html,
@@ -66,8 +154,8 @@ button {
   -webkit-tap-highlight-color: transparent;
 }
 
-/* Selection reads as a faint gold wash — the signal accent, used sparingly. */
+/* Selection reads as a faint blue wash — the accent, used sparingly. */
 ::selection {
-  background: rgb(var(--md-primary-container) / 0.35);
+  background: rgb(var(--md-primary) / 0.18);
   color: rgb(var(--md-on-surface));
 }

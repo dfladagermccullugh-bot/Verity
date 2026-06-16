@@ -27,8 +27,7 @@ const config: Config = {
         "surface-container-highest": token("surface-container-highest"),
         outline: token("outline"),
         "outline-variant": token("outline-variant"),
-        // Neutral charcoal hairline — the structural 1px stroke from the
-        // Midnight Precision system. Flat, no gradient.
+        // Hairline — the structural 1px stroke (#e9e9e7 in light).
         hairline: token("hairline"),
         error: token("error"),
         "on-error": token("on-error"),
@@ -49,35 +48,34 @@ const config: Config = {
           "sans-serif",
         ],
         // Display uses the same neutral Inter face — hierarchy comes from
-        // scale, not font variety (Technical Minimalism).
+        // scale and weight, not font variety (one calm family).
         display: ["var(--font-inter)", "Inter", "ui-sans-serif", "sans-serif"],
       },
       fontSize: {
+        // Headlines lean heavy (700) with tight negative tracking (design.md).
         "display-xl": [
           "72px",
-          { lineHeight: "1.1", letterSpacing: "-0.04em", fontWeight: "600" },
+          { lineHeight: "1.1", letterSpacing: "-0.04em", fontWeight: "700" },
         ],
         "display-lg": [
           "48px",
-          { lineHeight: "1.05", letterSpacing: "-0.02em", fontWeight: "600" },
+          { lineHeight: "1.05", letterSpacing: "-0.02em", fontWeight: "700" },
         ],
         "display-lg-mobile": [
           "32px",
-          { lineHeight: "1.2", letterSpacing: "-0.02em", fontWeight: "600" },
+          { lineHeight: "1.2", letterSpacing: "-0.02em", fontWeight: "700" },
         ],
         "headline-md": [
           "24px",
-          { lineHeight: "1.4", letterSpacing: "-0.01em", fontWeight: "600" },
+          { lineHeight: "1.4", letterSpacing: "-0.01em", fontWeight: "700" },
         ],
         "body-lg": ["18px", { lineHeight: "1.6", fontWeight: "400" }],
         "body-md": ["16px", { lineHeight: "1.6", fontWeight: "400" }],
+        // Calm small label — normal tracking, medium weight (no engraved caps).
         "label-sm": [
-          "12px",
-          { lineHeight: "1.0", letterSpacing: "0.2em", fontWeight: "600" },
+          "12.5px",
+          { lineHeight: "1.4", letterSpacing: "0", fontWeight: "500" },
         ],
-      },
-      letterSpacing: {
-        engrave: "0.25em",
       },
       spacing: {
         gutter: "24px",
@@ -88,37 +86,43 @@ const config: Config = {
         frame: "1440px",
       },
       borderRadius: {
-        // Architectural & sharp: 0px grounds large surfaces, 4px is the only
-        // tactile hint, reserved for interactive elements.
+        // Spec scale (design.md): inputs 4px, utility buttons 8px, cards 12px,
+        // large containers 16px, pills/avatars fully round.
         none: "0px",
-        sm: "2px",
-        DEFAULT: "4px",
-        md: "4px",
-        lg: "4px",
-        xl: "4px",
+        xs: "4px",
+        sm: "5px",
+        DEFAULT: "8px",
+        md: "8px",
+        lg: "12px",
+        xl: "16px",
+        "2xl": "20px",
         full: "9999px",
-        // Legacy aliases kept sharp so any missed usage stays on-system.
-        md3: "4px",
-        "md3-lg": "4px",
-        "md3-xl": "0px",
+        // Legacy aliases remapped onto the spec scale.
+        md3: "8px",
+        "md3-lg": "12px",
+        "md3-xl": "16px",
       },
       boxShadow: {
-        // No shadows in Midnight Precision — depth comes from tonal layering.
-        "md3-1": "none",
-        "md3-2": "none",
+        // Soft, layered elevation — calm depth, never heavy.
+        "elevation-1":
+          "0 1px 2px rgb(15 15 15 / 0.06), 0 1px 3px rgb(15 15 15 / 0.04)",
+        "elevation-2":
+          "0 2px 4px rgb(15 15 15 / 0.06), 0 4px 12px rgb(15 15 15 / 0.08)",
+        "elevation-3":
+          "0 8px 24px rgb(15 15 15 / 0.12), 0 2px 8px rgb(15 15 15 / 0.06)",
+        // Legacy aliases mapped onto the new elevation stack.
+        "md3-1":
+          "0 1px 2px rgb(15 15 15 / 0.06), 0 1px 3px rgb(15 15 15 / 0.04)",
+        "md3-2":
+          "0 2px 4px rgb(15 15 15 / 0.06), 0 4px 12px rgb(15 15 15 / 0.08)",
       },
       keyframes: {
-        scanline: {
-          "0%": { transform: "translateY(-100%)" },
-          "100%": { transform: "translateY(100vh)" },
-        },
         pulseDot: {
           "0%, 100%": { opacity: "0.3" },
           "50%": { opacity: "1" },
         },
       },
       animation: {
-        scanline: "scanline 8s linear infinite",
         "pulse-dot": "pulseDot 1.1s ease-in-out infinite",
       },
     },

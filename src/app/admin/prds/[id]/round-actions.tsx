@@ -15,8 +15,8 @@ function Submit({
   const { pending } = useFormStatus();
   const className =
     variant === "primary"
-      ? "rounded bg-primary px-6 py-3 text-label-sm font-bold uppercase tracking-engrave text-surface-container-lowest transition-all hover:brightness-110 disabled:opacity-30"
-      : "rounded border border-hairline px-6 py-3 text-label-sm uppercase tracking-engrave text-on-surface-variant transition-colors hover:border-on-surface-variant hover:text-on-surface disabled:opacity-30";
+      ? "rounded-md bg-primary px-6 py-2.5 text-label-sm font-semibold text-on-primary shadow-elevation-1 transition-colors hover:brightness-95 disabled:opacity-40"
+      : "rounded-md border border-hairline px-6 py-2.5 text-label-sm text-on-surface-variant transition-colors hover:border-on-surface-variant hover:text-on-surface disabled:opacity-40";
   return (
     <button type="submit" disabled={pending} className={className}>
       {pending ? busy : idle}
@@ -40,10 +40,8 @@ export default function RoundActions({ sessionId }: { sessionId: string }) {
   const error = openState?.error || doneState?.error;
 
   return (
-    <div className="mt-10 border border-primary/40 bg-surface-container-low p-6">
-      <p className="text-label-sm uppercase tracking-engrave text-primary">
-        Awaiting review
-      </p>
+    <div className="mt-10 rounded-lg border border-primary/30 bg-surface-container-low p-6 shadow-elevation-1">
+      <p className="text-label-sm font-semibold text-primary">Awaiting review</p>
       <p className="mt-3 text-body-md text-on-surface-variant">
         Read the brief above, then either probe further or close the session.
         Opening another round lets the respondent continue from their existing
@@ -57,11 +55,7 @@ export default function RoundActions({ sessionId }: { sessionId: string }) {
           <Submit idle="Mark complete" busy="Completing…" variant="ghost" />
         </form>
       </div>
-      {error && (
-        <p className="mt-4 text-label-sm uppercase tracking-engrave text-error">
-          {error}
-        </p>
-      )}
+      {error && <p className="mt-4 text-label-sm text-error">{error}</p>}
     </div>
   );
 }

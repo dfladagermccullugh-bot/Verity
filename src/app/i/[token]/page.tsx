@@ -11,10 +11,8 @@ function InvalidLink({ message }: { message: string }) {
   return (
     <main className="flex min-h-screen items-center justify-center px-margin-mobile md:px-margin-desktop">
       <div className="max-w-md text-center">
-        <p className="text-label-sm uppercase tracking-engrave text-error">
-          Access denied
-        </p>
-        <p className="mt-4 text-body-lg text-on-surface-variant opacity-80">
+        <p className="text-label-sm font-medium text-error">Access denied</p>
+        <p className="mt-4 text-body-lg text-on-surface-variant">
           {message}
         </p>
       </div>

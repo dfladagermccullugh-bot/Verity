@@ -4,7 +4,7 @@ Lean, session-to-session working memory. Keep this under ~5k tokens. When an
 item goes stale or a to-do is done, move it to [history.md](history.md) and
 trim it from here.
 
-_Last updated: 2026-06-16 (admin-UX pass from live walkthrough: PRD terminology unified, action-oriented status labels + detail-page state banner, seed tooltip, session archive via migration 0005)_
+_Last updated: 2026-06-16 (UI re-skin: Midnight Precision → **Warm Paper Calm**, the Notion-inspired light/dark theme in design.md — token-driven, no logic touched)_
 
 ## What Verity is
 
@@ -59,7 +59,7 @@ Key files:
 
 Stack: Next.js 14 (App Router, server actions), React 18, TS. Postgres via
 Drizzle (`invites`, `sessions`, `rounds`, `turns` — migrations through `0005`).
-iron-session admin auth, Resend email, Tailwind (Midnight Precision design
+iron-session admin auth, Resend email, Tailwind (Warm Paper Calm design
 system; `--md-*` token names retained), Framer Motion. Deployed on Vercel
 (`vercel-build` = `drizzle-kit migrate && next build`).
 
@@ -75,24 +75,41 @@ operator-set list-hide; row retained + still exported), `resumePhrase`, `seedWar
 `isTriangulationProbe`, `deviceClass`, `viewport`). Routing now keys off
 `completedAt` (a finalized round → `/done`; a new pending turn → `/q`).
 
-## Design system — Midnight Precision (shipped)
+## Design system — Warm Paper Calm (shipped)
 
-Dark-only Technical Minimalism: obsidian surfaces, **Signal Gold** (`primary
-#f2ca50` / `#d4af37`) as the sole accent, **Inter**, sharp corners (0px
-containers / 4px interactive), no shadows, flat tonal layering + 1px charcoal
-hairlines. Palette = `--md-*` vars in `globals.css` (token *names* unchanged, so
-components stayed token-driven; added `hairline #2a2a2a`). Type scale / radii /
-animations in `tailwind.config.ts`; shared instrument chrome in
-`src/components/chrome.tsx` (footer `PROTOCOL` = real skill fingerprint). Tone is
-"precision" (puppy + gardening words retired). Full detail in history.md.
+Notion-inspired calm, the canonical spec is [design.md](design.md) and the code
+now conforms to it. Warm off-white **paper page canvas** (`#f6f5f4`) with **white
+cards** floating above it; near-black warm **Inter** type with tight negative
+tracking and **weight-700 headlines**; a single confident **blue** (`primary
+#0075de`, pressed `#005bab`) reserved for actions and links — no second
+structural accent. Soft radii (inputs 4px, utility buttons 8px, cards 12px, large
+containers 16px, hero CTAs full pills), barely-there layered shadows
+(`shadow-elevation-1/2/3`), 1px hairlines (`#e6e6e6`). **Light + dark** both ship:
+light is default, dark activates via `[data-theme="dark"]` or OS preference
+(token sets in `globals.css`).
 
-- **Deliberate calls:** design.md prose contradicted its own tokens/screenshot —
-  followed tokens+screenshot (gold primary not white; `#131313` not pure black).
-  Screenshot's DECLINE/CONFIRM was a mock; kept the real yes/no/done contract
-  (YES=gold, NO=hairline).
-- **Per-page:** landing (`/`) + admin login (`/admin/login`) are stripped of
-  chrome (no scanline/header/footer) — just grid + centered `Verity` wordmark;
-  login language plain. The invitee flow (seed/interview/done) keeps full chrome.
+The re-skin was **token-driven** and touched **no logic** — `--md-*` token
+*names* were retained, so re-coloring happened centrally in `globals.css` while
+`tailwind.config.ts` carries the radius/shadow/type scale. The old instrument
+chrome (scanline, 12-col grid, engraved-uppercase telemetry) was removed; all
+copy is sentence-case. Full before/after in history.md.
+
+- **Decisions (this re-skin):** dropped the Midnight Precision instrument
+  metaphor entirely; branding stripped to a quiet "Verity" wordmark (no style
+  descriptors in chrome). Respondent **hero CTAs are pills** (YES=blue,
+  NO=white utility, Done=secondary pill); **admin actions are 8px utility
+  buttons** per spec. Sticker palette left defined in design.md but unused
+  (Verity has no illustrations) — kept open for future use.
+- **Chrome (`src/components/chrome.tsx`):** `BrandHeader`, `StatusDot`,
+  `ContextTag`, `TelemetryFooter` only — quiet, sentence-case; footer `Protocol`
+  still = real skill fingerprint. `Scanline`/`GridUnderlay` deleted.
+- **Per-page:** landing (`/`) + admin login (`/admin/login`) are minimal
+  (centered `Verity` wordmark, no chrome). Invitee flow (seed/interview/done)
+  keeps header + footer.
+- **No live screenshots:** no headless browser in-container (network-gated);
+  verified via `tsc` + `next build` + tests, not pixels. Eyeball with
+  `npm run dev`. A user-facing dark-mode **toggle** is not built yet (infra is
+  there; OS preference works) — small follow-up if wanted.
 
 ## Rest of the surface (reviewed, for orientation)
 
