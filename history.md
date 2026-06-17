@@ -5,6 +5,62 @@ completed to-dos, they land here so the handoff stays lean. Newest first.
 
 ---
 
+## 2026-06-16 (later) — UX/UI source of truth adopted + full a11y/UX audit implemented
+
+Added a second governing doc, **[ux-source-of-truth.md](ux-source-of-truth.md)** —
+the Laws of UX (Jakob, Fitts, Miller, Hick, Postel, Peak-End, Aesthetic-Usability,
+Von Restorff, Tesler, Doherty) plus global component heuristics, cognitive-load /
+navigation limits, and a WCAG-grounded accessibility section. It is the
+**interaction & accessibility** companion to design.md's **visual** tokens; when
+the two conflict, a11y wins. Wired references into design.md, handoff.md, README.md.
+The running gap analysis lives in **[ux-audit.md](ux-audit.md)**.
+
+Then audited the shipped UI against it and **implemented every finding** — all
+verified by `typecheck` + **136 tests** + production build. **Live a11y verification
+is still pending** (no browser / assistive tech in-container).
+
+**P0 (blockers):**
+- Re-enabled pinch/text zoom (dropped viewport `maximumScale:1`; WCAG 1.4.4).
+- Gated the irreversible **Mark complete** behind an inline confirm that names the
+  consequence — Cancel-first, destructive-styled, separated from Open-round.
+- Programmatic `<label>`s on the seed / login / invite inputs.
+- One global `:focus-visible` ring in `globals.css` (stopped `outline-none` on
+  inputs). **Gotcha: do NOT put `border-radius` in that rule** — it deforms pill
+  controls while focused (caught + fixed same session).
+- Links no longer color-only (underline on accent links; hover/focus underline on
+  neutral chrome links).
+
+**P1:** `prefers-reduced-motion` honored (CSS reset + Framer `useReducedMotion`);
+status/errors announced (`role=alert`, `role=status`/`aria-live`,
+`aria-describedby`); admin registry **paginated** (25/page) with a grouped SQL
+turn-count aggregate **scoped to the page** (previously loaded every `turns` row
+into memory); Yes/No separation widened + **Y/N/D keyboard shortcuts** with a
+visible hint; operator markdown **rendered** (new zero-dep renderer) instead of raw
+`<pre>`; opacity-on-muted text removed for predictable contrast.
+
+**P2:** disabled-state hints + `aria-busy`; >10s "still working" escalation;
+`scope=col` + sr-only table caption; refreshed page metadata; **dark-mode toggle**
+shipped (`ThemeToggle` in admin header + invitee footer, no-flash pre-paint script,
+`localStorage`). P2-4 (archive) closed **wontfix** — reversible via Restore.
+
+**Round 2 (subtle/edge):** `try/catch` around the interview/seed server-action
+calls so a thrown/rejected action shows a retry message and rolls back the
+optimistic step (was silent — Peak-End); a **persistent SR live region** announces
+each new question (the keyed `<h2>` remounts and didn't announce reliably); focus
+moves to Cancel when the confirm opens; **fixed invisible dark-mode borders** — dark
+`--md-hairline` was identical to the card fill (#2f2f2f), raised to #444.
+
+**New files:** `ux-source-of-truth.md`, `ux-audit.md`, `src/lib/markdown.ts` (pure
+parser + 16 tests), `src/components/markdown.tsx`, `src/components/theme-toggle.tsx`.
+
+**Accepted limitations (documented in ux-audit.md, L-1..L-3):** admin inline-link
+tap-target density (desktop operator tool); dark 1px borders are legible but not
+strictly ≥3:1 vs the near-black canvas (mitigated by label + placeholder + focus
+ring); global single-letter Y/N/D shortcuts. Server-action error wording was
+reviewed and passes (polite / specific / actionable, no blame).
+
+---
+
 ## 2026-06-16 — UI re-skin: Midnight Precision → Warm Paper Calm
 
 Full experiential refashion from the dark gold "instrument" theme to **Warm Paper
