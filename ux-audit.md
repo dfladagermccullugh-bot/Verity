@@ -228,3 +228,34 @@ open._
   confirmation. (could add no next action by design — anonymous)
 - **Jakob (admin):** standard table + native form controls + `<button>`/`<a>`
   semantics throughout.
+
+---
+
+## Live verification checklist (the one open caveat)
+
+Everything above is verified by typecheck + tests + build — **not** by a real
+browser, assistive tech, or zoom test (no headless browser in-container). Run this
+once live (`npm run dev` with a `DATABASE_URL` + `ANTHROPIC_API_KEY`) to close it,
+then record results inline next to each finding.
+
+- [ ] **Keyboard-only** walk of the invitee flow: Tab reaches seed → Begin →
+  Yes/No/Done in a sensible order; **Y / N / D shortcuts** fire; every control shows
+  the **focus ring** (and the ring does NOT square off the pill buttons — regression
+  guard for the P0-4 border-radius gotcha).
+- [ ] **Screen reader** (VoiceOver/NVDA): each new question is **announced** (the
+  persistent `role=status` region, D-2); form errors announce (`role=alert`);
+  inputs read their labels; the "Mark complete" confirm moves focus to Cancel (D-3).
+- [ ] **Dark mode:** toggle in admin header + invitee footer flips the theme; reload
+  shows **no light/dark flash** (no-flash script); **card/input borders are visible**
+  in dark (D-4 regression guard); text contrast holds.
+- [ ] **Zoom / resize:** pinch-zoom works on mobile; browser zoom to **200%** reflows
+  without clipping or overlap (P0-1).
+- [ ] **Rendered operator docs:** PRD / methodology / analysis read as formatted
+  prose (headings, lists, bold), not raw markdown; `<!-- -->` headers are stripped
+  (P1-5). Confirm the raw `.md` download is still byte-for-byte the source.
+- [ ] **Reduced motion:** with the OS "reduce motion" setting on, the interview
+  transitions/pulse/progress are stilled (P1-1).
+- [ ] **Failure recovery:** kill the network mid-answer → a retry message appears and
+  the optimistic step rolls back (D-1).
+- [ ] **Admin pagination:** with >25 sessions, prev/next + counts work and the page
+  loads without scanning the whole `turns` table (P1-3).

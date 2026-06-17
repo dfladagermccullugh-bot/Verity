@@ -4,7 +4,7 @@ Lean, session-to-session working memory. Keep this under ~5k tokens. When an
 item goes stale or a to-do is done, move it to [history.md](history.md) and
 trim it from here.
 
-_Last updated: 2026-06-16 (UI re-skin: Midnight Precision → **Warm Paper Calm**, the Notion-inspired light/dark theme in design.md — token-driven, no logic touched)_
+_Last updated: 2026-06-16 (adopted **[ux-source-of-truth.md](ux-source-of-truth.md)** — the Laws of UX / a11y governing doc — and implemented every finding from the [ux-audit.md](ux-audit.md) gap analysis: P0/P1/P2 + a subtle round 2. Verified by typecheck + 136 tests + build; **live a11y verification still pending**. Full detail in history.md.)_
 
 ## What Verity is
 
@@ -115,9 +115,12 @@ copy is sentence-case. Full before/after in history.md.
   (centered `Verity` wordmark, no chrome). Invitee flow (seed/interview/done)
   keeps header + footer.
 - **No live screenshots:** no headless browser in-container (network-gated);
-  verified via `tsc` + `next build` + tests, not pixels. Eyeball with
-  `npm run dev`. A user-facing dark-mode **toggle** is not built yet (infra is
-  there; OS preference works) — small follow-up if wanted.
+  verified via `tsc` + `next build` + tests, not pixels. Eyeball with `npm run dev`.
+- **Dark-mode toggle shipped** (`src/components/theme-toggle.tsx`, in the admin
+  header + invitee footer): sets an explicit `[data-theme]` override + persists to
+  `localStorage`; a no-flash script in `layout.tsx` applies it before paint. OS
+  preference still applies absent a choice. (Dark `--md-hairline` was raised to #444
+  this session — it had equalled the card fill, making borders invisible in dark.)
 
 ## Rest of the surface (reviewed, for orientation)
 
@@ -149,11 +152,22 @@ copy is sentence-case. Full before/after in history.md.
   `prd/[id]/analysis` compile).
 - `npm test` — **136 passing** (+16 markdown-parser suite for the new operator
   doc renderer; +11 coverage gate before that). Existing suites green.
+- **UX/a11y layer (this session):** the UI now conforms to
+  [ux-source-of-truth.md](ux-source-of-truth.md); every audit finding is implemented
+  (see [ux-audit.md](ux-audit.md) for status + L-1..L-3 accepted limitations). New
+  UI files: `src/lib/markdown.ts` + `src/components/markdown.tsx` (operator-doc
+  renderer), `src/components/theme-toggle.tsx`. **Still static-only verified — the
+  live a11y/keyboard/dark-mode pass is the open UX to-do (checklist in ux-audit.md).**
 - **Never run live** (no `DATABASE_URL` / `ANTHROPIC_API_KEY` in the container):
   the dev server, the multi-round + operator flow, and the canary's model run.
   Logic verified by typecheck + unit tests only — **the standing to-do is live QA.**
-- Note: a fresh clone needs `npm ci`. The canary under `tsx` also needs the
-  `server-only` shim/package (pre-existing; not installed here).
+- **Bootstrap:** a `SessionStart` hook (`.claude/hooks/session-start.sh`, registered
+  in `.claude/settings.json`) runs `npm install` automatically in Claude-on-web
+  sessions, so typecheck/lint/tests work immediately — **once this branch is merged
+  to the default branch.** Local clones still `npm install` manually. The canary
+  under `tsx` also needs the `server-only` shim/package (pre-existing; not installed
+  here). Note: the repo has **no ESLint config** (`next lint` is unconfigured) — the
+  static gate is `npm run typecheck`, not `npm run lint`.
 - All three original AAPOR iterations remain shipped (PRs #5–#12); the
   survey-methodology measurement layer (15 features) and the multi-round loop are
   shipped on top — see history.md.
@@ -208,6 +222,12 @@ operator-side. Full build history in history.md.
    complete** consumes the invite. Check admin detail (version history + diff +
    analysis + critic verdict), the three download routes, and the export JSON.
 
+   **While live, also run the UX/a11y verification checklist** at the bottom of
+   [ux-audit.md](ux-audit.md) (keyboard-only walk incl. Y/N/D + visible focus ring;
+   screen-reader announce of each new question; dark-mode toggle round-trip with no
+   flash on reload; rendered-PRD readability; zoom to 200%). This closes the one
+   caveat carried by the whole audit. Log results in ux-audit.md.
+
 2. **Re-baseline the canary suite.** Still a sentinel (`"model": null`,
    `"seeds": {}`), AND the generation policy has changed twice now: anti-leading
    reject in `run-one.ts`, and (2026-06-16) the **coverage gate** is mirrored in
@@ -218,8 +238,9 @@ operator-side. Full build history in history.md.
    commit with a message explaining the baseline conditions. Confirm the repo has
    secret `ANTHROPIC_API_KEY` and var `ANTHROPIC_MODEL`.
 
-_Recently closed (full detail in history.md): admin login restored (password
-rotated, 2026-06-16); `NEXT-SESSION.md` retired + puppy/lottie removed; operator-
+_Recently closed (full detail in history.md): **UX/UI source of truth adopted +
+full a11y/UX audit implemented (P0/P1/P2 + round 2; dark-mode toggle + border fix;
+operator-doc markdown renderer)**; admin login restored (password rotated); operator-
 gated rounds + coverage gate shipped._
 
 ## Backlog / deferred ideas (not committed work)
@@ -241,6 +262,13 @@ gated rounds + coverage gate shipped._
   conducted; a periodic human spot-check would let that line claim more.
 
 ## Minor observations (low priority, not blocking)
+
+- **⚠️ SECURITY — leaked DB credential in git history.** `.claude/settings.local.json`
+  was committed since the initial build and contains a live Neon `DATABASE_URL`
+  (with password). This session **untracked it + added it to `.gitignore`**, but the
+  credential is still in history. **Action for the operator: rotate the Neon
+  password** (and consider a history scrub). The local file is kept on disk so admin
+  tooling/permissions still work in-session.
 
 - **Rate limiter is in-memory and per-instance** (`middleware.ts` `Map`), so on
   Vercel it isn't shared across serverless instances and resets on cold start.
