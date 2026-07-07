@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { invites, sessions } from "@/lib/db/schema";
 import { verifyInviteToken } from "@/lib/tokens";
-import { BrandHeader, ContextTag, TelemetryFooter } from "@/components/chrome";
+import { BrandHeader, ContextTag, SiteFooter } from "@/components/chrome";
 
 export const dynamic = "force-dynamic";
 
@@ -44,7 +44,7 @@ export default async function DonePage({
           </p>
         </div>
       </main>
-      <TelemetryFooter status="Closed" />
+      <SiteFooter />
     </>
   );
 }

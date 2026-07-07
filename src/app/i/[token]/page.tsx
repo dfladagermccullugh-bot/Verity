@@ -3,33 +3,34 @@ import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { invites, sessions, turns } from "@/lib/db/schema";
 import { verifyInviteToken } from "@/lib/tokens";
+import NoticeScreen from "@/components/notice-screen";
 import SeedForm from "./seed-form";
 
 export const dynamic = "force-dynamic";
 
 function InvalidLink({ message }: { message: string }) {
   return (
-    <main className="flex min-h-screen items-center justify-center px-margin-mobile md:px-margin-desktop">
-      <div className="max-w-md text-center">
-        <p className="text-label-sm font-medium text-error">Access denied</p>
-        <p className="mt-4 text-body-lg text-on-surface-variant">
-          {message}
-        </p>
-      </div>
-    </main>
+    <NoticeScreen
+      eyebrow="Invalid link"
+      title="Invalid or expired link"
+      body={message}
+      tone="error"
+    />
   );
 }
 
 export default async function SeedPage({ params }: { params: { token: string } }) {
   const token = params.token;
+  const invalidMessage =
+    "The invitation link you used is no longer valid. It may have expired, been revoked, or already been used. Please contact the operator who issued it.";
   if (!verifyInviteToken(token)) {
-    return <InvalidLink message="This link is not valid." />;
+    return <InvalidLink message={invalidMessage} />;
   }
 
   const invite = await db.query.invites.findFirst({
     where: eq(invites.token, token),
   });
-  if (!invite) return <InvalidLink message="This link is not valid." />;
+  if (!invite) return <InvalidLink message={invalidMessage} />;
 
   // An existing session takes precedence over invite expiry/consumption — the
   // durable link must keep resolving across rounds. Route to whatever is next.
@@ -50,9 +51,13 @@ export default async function SeedPage({ params }: { params: { token: string } }
   }
 
   if (invite.consumedAt)
-    return <InvalidLink message="This link has already been used. Thank you!" />;
+    return (
+      <InvalidLink message="This invitation has already been completed. Thank you — you can close this tab." />
+    );
   if (invite.expiresAt.getTime() < Date.now())
-    return <InvalidLink message="This link has expired." />;
+    return (
+      <InvalidLink message="This invitation link has expired. Please contact the operator who issued it for a new one." />
+    );
 
   return <SeedForm token={token} inviteeName={invite.inviteeName} />;
 }

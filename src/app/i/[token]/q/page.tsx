@@ -3,7 +3,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { invites, sessions, turns } from "@/lib/db/schema";
 import { verifyInviteToken } from "@/lib/tokens";
-import { getSkillVersion } from "@/lib/skill/version";
+import ThinkingScreen from "@/components/thinking-screen";
 import Interview from "./interview";
 
 export const dynamic = "force-dynamic";
@@ -35,13 +35,7 @@ export default async function InterviewPage({
   // on /done; otherwise the next round's question is still being prepared.
   if (!pending) {
     if (session!.completedAt) redirect(`/i/${token}/done`);
-    return (
-      <main className="flex min-h-screen items-center justify-center p-6">
-        <p className="text-label-sm text-on-surface-variant">
-          Standby — refresh to resume
-        </p>
-      </main>
-    );
+    return <ThinkingScreen label="Preparing your next question…" />;
   }
 
   // Progress reflects the current round only.
@@ -58,7 +52,6 @@ export default async function InterviewPage({
       token={token}
       initialQuestion={pending.questionText}
       initialAnswered={answeredCount}
-      protocol={getSkillVersion()}
     />
   );
 }
