@@ -50,6 +50,11 @@
   --md-error-container: 250 226 226;
   --md-on-error-container: 139 26 26;
 
+  /* Status accents — used for small dots/labels only (paired with text, never
+     color-alone). Success = green, warning = amber. */
+  --md-success: 26 155 66;
+  --md-warning: 191 110 0;
+
   --md-inverse-surface: 25 23 17;
   --md-inverse-on-surface: 255 255 255;
   --md-inverse-primary: 150 196 245;
@@ -93,6 +98,9 @@
   --md-error-container: 92 26 22;
   --md-on-error-container: 255 218 214;
 
+  --md-success: 52 200 100;
+  --md-warning: 240 170 70;
+
   --md-inverse-surface: 235 235 235;
   --md-inverse-on-surface: 25 25 25;
   --md-inverse-primary: 35 131 226;
@@ -133,6 +141,9 @@
     --md-on-error: 92 26 22;
     --md-error-container: 92 26 22;
     --md-on-error-container: 255 218 214;
+
+    --md-success: 52 200 100;
+    --md-warning: 240 170 70;
 
     --md-inverse-surface: 235 235 235;
     --md-inverse-on-surface: 25 25 25;

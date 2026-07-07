@@ -4,7 +4,7 @@ Lean, session-to-session working memory. Keep this under ~5k tokens. When an
 item goes stale or a to-do is done, move it to [history.md](history.md) and
 trim it from here.
 
-_Last updated: 2026-06-16 (adopted **[ux-source-of-truth.md](ux-source-of-truth.md)** — the Laws of UX / a11y governing doc — and implemented every finding from the [ux-audit.md](ux-audit.md) gap analysis: P0/P1/P2 + a subtle round 2. Verified by typecheck + 136 tests + build; **live a11y verification still pending**. Full detail in history.md.)_
+_Last updated: 2026-07-07 (implemented the **Verity Figma** (`wT0j9u7OC51IT79IscTeXs`) across both contracts, mobile + desktop, light + dark — plain-language chrome with the **uppercase telemetry motif scrapped** per the user; new landing/invalid-token/error/loading screens; **responsive admin** (registry mobile cards + desktop table); added `success`/`warning` status tokens. On **PR #37**. Verified by typecheck + 136 tests + build; **live eyeballing still pending**. Full detail in history.md.)_
 
 ## What Verity is
 
@@ -207,6 +207,18 @@ operator-side. Full build history in history.md.
   coverage) — meaningless for an n=1 tool.
 
 ## Open to-dos (priority order)
+
+0. **Figma reskin follow-ups (PR #37).** The Figma is implemented (plain-language,
+   no telemetry) but three items were deferred pending a decision — see the
+   2026-07-07 history entry:
+   - **Confidence score** on the methodology record (Figma detail) has no source
+     in `analysis.ts`. Define it or drop the placeholder — do NOT fabricate.
+   - Figma's invite **email** / **pre-seed** fields aren't in the `invites`
+     schema; kept name + note. Add columns + wire `createInvite`/email only if wanted.
+   - Figma's per-round **"Focus for next round" textarea** (operator override of
+     the critic focus) not added; `openRound` uses the stored critic focus.
+   - **Live-eyeball** every screen (light + dark, mobile + desktop) via `npm run
+     dev` — static verification only so far.
 
 1. **Live-QA the full multi-round + operator flow.** No DB/API key in the
    container, so this has never run live. Migrations `0003`+`0004` are additive

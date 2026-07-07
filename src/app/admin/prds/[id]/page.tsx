@@ -5,8 +5,24 @@ import { db } from "@/lib/db";
 import { sessions, invites, rounds } from "@/lib/db/schema";
 import RoundActions from "./round-actions";
 import Markdown from "@/components/markdown";
+import ThemeToggle from "@/components/theme-toggle";
 
 export const dynamic = "force-dynamic";
+
+/** The PRD's first H1 — used as the human-readable page title. */
+function firstH1(md: string): string | null {
+  for (const line of md.split("\n")) {
+    const m = line.match(/^#\s+(.+)$/);
+    if (m) return m[1].trim();
+  }
+  return null;
+}
+
+const STATUS_LABEL: Record<string, string> = {
+  active: "Awaiting respondent",
+  awaiting_review: "Awaiting review",
+  complete: "Complete",
+};
 
 /** Naive line-level diff between two PRD versions — enough to show what the
  *  follow-up round changed. */
@@ -50,9 +66,27 @@ export default async function PrdView({ params }: { params: { id: string } }) {
     .orderBy(asc(rounds.roundNumber));
   const warnings = parseStringArray(session!.seedWarnings);
   const awaitingReview = session!.status === "awaiting_review";
+  const latestVersion =
+    sessionRounds.length > 0
+      ? sessionRounds[sessionRounds.length - 1].prdVersion
+      : 1;
+  const title = firstH1(session!.prdMarkdown) ?? "Structured brief";
 
   return (
-    <main className="mx-auto max-w-3xl px-margin-mobile py-16 md:px-margin-desktop">
+    <>
+      <header className="flex h-16 items-center justify-between px-margin-mobile md:px-margin-desktop">
+        <div className="flex items-center gap-3">
+          <span className="inline-block h-1.5 w-1.5 rounded-full bg-primary" />
+          <span className="text-sm font-semibold tracking-tight text-on-surface">
+            Verity
+          </span>
+          <span className="text-label-sm text-on-surface-variant">
+            Operator console
+          </span>
+        </div>
+        <ThemeToggle />
+      </header>
+      <main className="mx-auto max-w-3xl px-margin-mobile py-10 md:px-margin-desktop">
       <div className="flex items-center justify-between">
         <Link
           href="/admin/prds"
@@ -84,12 +118,21 @@ export default async function PrdView({ params }: { params: { id: string } }) {
         </div>
       </div>
 
-      <p className="mt-10 text-body-md text-on-surface-variant">
-        {invite?.inviteeName} · seed: {session!.seed}
+      <div className="mt-10 flex items-center gap-2.5">
+        <span className="inline-block h-1.5 w-1.5 rounded-full bg-primary" />
+        <span className="text-label-sm font-medium text-on-surface-variant">
+          {invite?.inviteeName} · {STATUS_LABEL[session!.status] ?? session!.status}
+        </span>
+      </div>
+      <h1 className="mt-4 text-headline-md tracking-tight text-on-surface md:text-display-lg-mobile">
+        {title}
+      </h1>
+      <p className="mt-3 text-body-md text-on-surface-variant">
+        {session!.seed}
       </p>
-      <p className="mt-1 font-mono text-label-sm text-on-surface-variant">
-        session: {session!.id} · status: {session!.status} · rounds:{" "}
-        {sessionRounds.length}
+      <p className="mt-2 font-mono text-label-sm text-on-surface-variant">
+        session {session!.id} · {sessionRounds.length} round
+        {sessionRounds.length === 1 ? "" : "s"} · latest v{latestVersion}
         {session!.resumePhrase ? ` · resume: ${session!.resumePhrase}` : ""}
       </p>
 
@@ -111,18 +154,17 @@ export default async function PrdView({ params }: { params: { id: string } }) {
         </details>
       )}
 
-      <h2 className="mt-10 text-label-sm text-on-surface-variant">
-        PRD — latest version (v
-        {sessionRounds.length > 0
-          ? sessionRounds[sessionRounds.length - 1].prdVersion
-          : 1}
-        )
+      <h2 className="mt-10 text-label-sm font-semibold text-on-surface">
+        PRD — latest version (v{latestVersion})
       </h2>
       <Markdown
         content={session!.prdMarkdown}
         className="mt-3 rounded-xl border border-hairline bg-surface-container-low p-8 text-body-md"
       />
 
+      <h2 className="mt-12 text-label-sm font-semibold text-on-surface">
+        Operator review
+      </h2>
       {awaitingReview ? (
         <RoundActions sessionId={session!.id} />
       ) : session!.status === "active" ? (
@@ -151,6 +193,11 @@ export default async function PrdView({ params }: { params: { id: string } }) {
       )}
 
       {/* Round / version history. */}
+      {sessionRounds.length > 0 && (
+        <h2 className="mt-12 text-label-sm font-semibold text-on-surface">
+          History &amp; feedback rounds
+        </h2>
+      )}
       {sessionRounds.map((r, i) => {
         const prev = i > 0 ? sessionRounds[i - 1] : null;
         const diff =
@@ -215,6 +262,7 @@ export default async function PrdView({ params }: { params: { id: string } }) {
           />
         </details>
       )}
-    </main>
+      </main>
+    </>
   );
 }

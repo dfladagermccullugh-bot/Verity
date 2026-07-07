@@ -33,6 +33,8 @@ const config: Config = {
         "on-error": token("on-error"),
         "error-container": token("error-container"),
         "on-error-container": token("on-error-container"),
+        success: token("success"),
+        warning: token("warning"),
         "inverse-surface": token("inverse-surface"),
         "inverse-on-surface": token("inverse-on-surface"),
         "inverse-primary": token("inverse-primary"),

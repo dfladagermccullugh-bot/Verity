@@ -5,6 +5,54 @@ completed to-dos, they land here so the handoff stays lean. Newest first.
 
 ---
 
+## 2026-07-07 — Figma reskin: plain-language chrome + full screen set (PR #37)
+
+Implemented the Verity Figma file (`wT0j9u7OC51IT79IscTeXs`, 40 frames = 20
+screens × light/dark) across both the invitee and operator contracts, mobile
+and desktop. **Decision (user):** follow the Figma, but **scrap the uppercase
+telemetry chrome** — keep everything sentence-case and plain; show the
+respondent's name only when the admin supplied one (already the case); keep the
+shipped dark theme.
+
+**What changed:**
+- **Chrome (`chrome.tsx`):** `TelemetryFooter` (STATUS // … · PROTOCOL // V-xxx)
+  → `SiteFooter` (wordmark + theme toggle only). Header gets a hairline. Eyebrows
+  are plain (`Premise`, `Question 4`) via `ContextTag`. Dropped the skill-version
+  (`protocol`) plumbing from the interview path (was only shown as telemetry).
+- **New shared layouts:** `NoticeScreen` (centered eyebrow + heading + ruled body
+  + optional action) and `ThinkingScreen` (pulsing blue "eye" + label).
+- **New/edge screens:** landing (`/`), invalid/expired link (richer plain copy),
+  global `error.tsx` (Try again → reset), route `loading.tsx` + interview standby
+  (ThinkingScreen).
+- **Admin login:** left-aligned "Sign in" card (card-framed desktop / full-bleed
+  mobile), "Passphrase" label, pill submit, brand header + theme-toggle footer.
+- **Admin registry:** plain header; **new mobile card layout** (`md:hidden`)
+  beside the desktop table (`hidden md:block`); shared `StatusBadge` +
+  `statusMeta` (Complete/Awaiting review/Awaiting user) using new `success`/
+  `warning` dot tokens; "Seed premise" column; invite form relabeled "Respondent
+  name".
+- **Admin detail:** brand header + theme toggle; eyebrow (name · status) + big
+  product title (first PRD H1); section headings (Operator review, History &
+  feedback rounds). `round-actions.tsx` left as-is (already accessible, with the
+  irreversible-complete confirm the Figma lacks).
+- **Tokens:** added `--md-success` / `--md-warning` (light + dark + OS-dark) and
+  the Tailwind `success` / `warning` colors.
+
+**Verified:** typecheck clean, `next build` passes (all routes), `npm test`
+136/136. **Not run live** (no DB/API key/browser in-container) — static
+verification only; live eyeballing via `npm run dev` is still the standing to-do.
+
+**Deferred / flagged to the user (not built):**
+- **"Confidence score 92%"** on the methodology record (Figma mobile detail) has
+  no source in `analysis.ts` — not fabricated; needs a definition or a labeled
+  placeholder.
+- Figma's invite **email address** / **pre-seed** fields aren't in the schema
+  (`invites` = name + note); kept name + note rather than add columns unasked.
+- Figma's per-round "Focus for next round" textarea (operator override of the
+  critic focus) not added — `openRound` still uses the stored critic focus.
+
+---
+
 ## 2026-06-16 (later) — UX/UI source of truth adopted + full a11y/UX audit implemented
 
 Added a second governing doc, **[ux-source-of-truth.md](ux-source-of-truth.md)** —

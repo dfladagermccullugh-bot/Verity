@@ -23,6 +23,48 @@ function fmtDate(d: Date | null): string {
   });
 }
 
+type StatusMeta = { label: string; dot: string; pulse: boolean; title: string };
+
+function statusMeta(status: string, durationS: number | null): StatusMeta {
+  if (status === "complete")
+    return {
+      label: `Complete${durationS != null ? ` · ${durationS}s` : ""}`,
+      dot: "bg-success",
+      pulse: false,
+      title: "Session complete — invite consumed",
+    };
+  if (status === "awaiting_review")
+    return {
+      label: "Awaiting review",
+      dot: "bg-primary",
+      pulse: true,
+      title: "Round finalized — open another round or mark complete",
+    };
+  return {
+    label: "Awaiting user",
+    dot: "bg-warning",
+    pulse: false,
+    title: "Respondent has an open question — no operator action yet",
+  };
+}
+
+/** Dot + text status — color is never the sole cue (label always present). */
+function StatusBadge({ meta }: { meta: StatusMeta }) {
+  return (
+    <span
+      className="inline-flex items-center gap-2 text-label-sm text-on-surface"
+      title={meta.title}
+    >
+      <span
+        className={`inline-block h-1.5 w-1.5 rounded-full ${meta.dot} ${
+          meta.pulse ? "animate-pulse" : ""
+        }`}
+      />
+      {meta.label}
+    </span>
+  );
+}
+
 export default async function PrdsPage({
   searchParams,
 }: {
@@ -86,8 +128,12 @@ export default async function PrdsPage({
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <span className="inline-block h-1.5 w-1.5 rounded-full bg-primary" />
-          <h1 className="text-label-sm text-on-surface-variant">
-            Verity // PRD Registry{showArchived ? " · Archived" : ""}
+          <h1 className="text-label-sm text-on-surface">
+            <span className="font-semibold">Verity</span>
+            <span className="text-on-surface-variant">
+              {" · "}
+              {showArchived ? "Archived sessions" : "PRD registry"}
+            </span>
           </h1>
         </div>
         <div className="flex items-center gap-5">
@@ -110,7 +156,62 @@ export default async function PrdsPage({
         <NewInvite />
       </div>
 
-      <div className="mt-12 overflow-x-auto rounded-xl border border-hairline shadow-elevation-1">
+      {/* Mobile: card list (the table would overflow a phone width). */}
+      <div className="mt-10 space-y-4 md:hidden">
+        {rows.length === 0 && (
+          <p className="rounded-lg border border-hairline bg-surface-container-lowest p-6 text-center text-label-sm text-on-surface-variant">
+            {showArchived ? "No archived sessions" : "No sessions on record"}
+          </p>
+        )}
+        {rows.map(({ session, invite }) => {
+          const qCount = answeredBySession.get(session.id) ?? 0;
+          const hasBrief = !!session.prdMarkdown;
+          const durationS = session.completedAt
+            ? Math.round(
+                (new Date(session.completedAt).getTime() -
+                  new Date(session.startedAt).getTime()) /
+                  1000
+              )
+            : null;
+          const meta = statusMeta(session.status, durationS);
+          return (
+            <div
+              key={session.id}
+              className="rounded-lg border border-hairline bg-surface-container-lowest p-5 shadow-elevation-1"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <span className="font-semibold text-on-surface">
+                  {invite.inviteeName}
+                </span>
+                <StatusBadge meta={meta} />
+              </div>
+              <p className="mt-3 line-clamp-2 text-body-md text-on-surface-variant">
+                {session.seed}
+              </p>
+              <div className="mt-4 flex items-center justify-between gap-3">
+                <span className="text-label-sm text-on-surface-variant">
+                  {qCount} turns · {fmtDate(session.startedAt)}
+                </span>
+                {hasBrief ? (
+                  <Link
+                    href={`/admin/prds/${session.id}`}
+                    className="text-label-sm font-medium text-primary underline underline-offset-2"
+                  >
+                    View brief →
+                  </Link>
+                ) : (
+                  <span className="text-label-sm text-on-surface-variant">
+                    In progress
+                  </span>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Desktop: full table. */}
+      <div className="mt-12 hidden overflow-x-auto rounded-xl border border-hairline shadow-elevation-1 md:block">
         <table className="w-full text-left align-top text-body-md">
           <caption className="sr-only">
             {showArchived ? "Archived" : "Active"} interview sessions — page {page}{" "}
@@ -122,7 +223,7 @@ export default async function PrdsPage({
                 Invitee
               </th>
               <th scope="col" className="p-3 font-semibold">
-                Seed
+                Seed premise
               </th>
               <th scope="col" className="whitespace-nowrap p-3 font-semibold">
                 Started
@@ -186,27 +287,7 @@ export default async function PrdsPage({
                   </td>
                   <td className="p-3 font-mono">{qCount}</td>
                   <td className="whitespace-nowrap p-3">
-                    {session.status === "complete" ? (
-                      <span className="inline-flex items-center gap-2 text-label-sm text-primary">
-                        <span className="inline-block h-1.5 w-1.5 rounded-full bg-primary" />
-                        Complete{durationS != null ? ` · ${durationS}s` : ""}
-                      </span>
-                    ) : session.status === "awaiting_review" ? (
-                      <span
-                        className="inline-flex items-center gap-2 text-label-sm text-primary"
-                        title="Round finalized — open another round or mark complete"
-                      >
-                        <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
-                        Awaiting your review
-                      </span>
-                    ) : (
-                      <span
-                        className="text-label-sm text-on-surface-variant"
-                        title="Respondent has an open question — no operator action yet"
-                      >
-                        Awaiting respondent
-                      </span>
-                    )}
+                    <StatusBadge meta={statusMeta(session.status, durationS)} />
                   </td>
                   <td className="whitespace-nowrap p-3">
                     {hasBrief ? (

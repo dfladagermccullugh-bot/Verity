@@ -14,6 +14,15 @@ closed as wontfix (reversible by design)._
 120 tests + production build; live a11y verification still pending). P1/P2 remain
 open._
 
+_Update 2026-07-07 (PR #37): implemented the Verity Figma across both contracts,
+mobile + desktop, light + dark — plain-language chrome (uppercase telemetry motif
+scrapped per the user). New screens: landing, invalid/expired link, global error
+(Try again), loading/"thinking". **Admin is now responsive** — the registry adds
+a mobile card list beside the desktop table (closes the implicit gap behind L-1's
+"if admin goes mobile-first"). Added `success`/`warning` status **dot** tokens
+(paired with text labels — not color-alone). Static-verified (typecheck + build +
+136 tests); the live checklist below still applies to the new screens too._
+
 ## How to read severity
 
 - **P0** — accessibility blocker or a consequential/irreversible action without a

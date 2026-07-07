@@ -256,6 +256,16 @@ components:
 > lives in [ux-audit.md](ux-audit.md). Where visual polish and accessibility ever
 > conflict, the accessibility rules win.
 
+> **Plain-language chrome (2026-07-07).** The implemented UI follows the Verity
+> Figma file (`wT0j9u7OC51IT79IscTeXs`) in both light and dark. One deliberate
+> deviation from that file: the uppercase "telemetry" instrument motif it shows
+> (uppercase `//` eyebrows like `QUESTION // 04`, and `STATUS // … · PROTOCOL //
+> V-xxx` footers) is **not** used. Chrome is quiet sentence-case plain language:
+> a blue status dot + short label for eyebrows, and a minimal footer (wordmark +
+> theme toggle). Two status accents were added for the admin registry —
+> `success` (green) and `warning` (amber) — used for status **dots** only,
+> always paired with a text label so color is never the sole cue.
+
 ## Overview
 
 Notion looks like a well-organized desk in good daylight. The dominant surface is not pure white but a warm, paper-soft off-white — `{colors.canvas-soft}` (#f6f5f4) — that takes the clinical edge off the screen and makes long pages feel like a document rather than an app. Type is set in `NotionInter` (a tuned Inter) in near-black `{colors.ink}` at large, tightly-tracked weights, so headlines read as confident statements with very little letter-spacing slack at display sizes (`{typography.display-1}` pulls −2.125px of tracking at 64px). The whole system whispers in greys and blacks, then says exactly one thing in colour: a single, dependable blue, `{colors.primary}` (#0075de), reserved almost entirely for the primary call-to-action and inline links.

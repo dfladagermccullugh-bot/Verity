@@ -31,15 +31,25 @@ export default function NewInvite() {
       <form action={formAction} className="flex flex-wrap items-end gap-6">
         <div>
           <label htmlFor="invitee-name" className={labelClass}>
-            Invitee name
+            Respondent name
           </label>
-          <input id="invitee-name" name="name" className={fieldClass} />
+          <input
+            id="invitee-name"
+            name="name"
+            placeholder="e.g. John Doe"
+            className={fieldClass}
+          />
         </div>
         <div className="flex-1">
           <label htmlFor="invite-note" className={labelClass}>
             Note (optional)
           </label>
-          <input id="invite-note" name="note" className={fieldClass} />
+          <input
+            id="invite-note"
+            name="note"
+            placeholder="Internal note — not shown to the respondent"
+            className={fieldClass}
+          />
         </div>
         <Submit />
       </form>

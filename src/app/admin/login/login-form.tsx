@@ -1,6 +1,7 @@
 "use client";
 
 import { useFormState, useFormStatus } from "react-dom";
+import { ContextTag } from "@/components/chrome";
 import { login } from "@/actions/admin";
 
 function SubmitButton() {
@@ -9,9 +10,12 @@ function SubmitButton() {
     <button
       type="submit"
       disabled={pending}
-      className="mt-8 w-full rounded-md bg-primary py-3.5 text-label-sm font-semibold text-on-primary shadow-elevation-1 transition-colors hover:brightness-95 disabled:opacity-40"
+      className="mt-8 flex w-full items-center justify-center gap-2 rounded-full bg-primary px-8 py-3 text-label-sm font-semibold text-on-primary shadow-elevation-1 transition-colors hover:brightness-95 disabled:opacity-40 sm:w-auto"
     >
-      {pending ? "Logging in…" : "Login"}
+      <span>{pending ? "Signing in…" : "Sign in"}</span>
+      <span aria-hidden className="text-base leading-none">
+        →
+      </span>
     </button>
   );
 }
@@ -20,24 +24,27 @@ export default function LoginForm() {
   const [state, formAction] = useFormState(login, {});
 
   return (
-    <form action={formAction} className="w-full max-w-sm">
-      <div className="text-center">
-        <h1 className="text-display-lg-mobile tracking-tight text-on-surface">
-          Verity
-        </h1>
-        <p className="mt-3 text-label-sm text-on-surface-variant">Admin</p>
-      </div>
+    <form
+      action={formAction}
+      className="w-full sm:rounded-xl sm:border sm:border-hairline sm:bg-surface-container-lowest sm:p-8 sm:shadow-elevation-1"
+    >
+      <ContextTag label="Operator" />
+      <h1 className="mt-6 text-headline-md tracking-tight text-on-surface">
+        Sign in
+      </h1>
 
-      <label htmlFor="password" className="sr-only">
-        Admin password
+      <label
+        htmlFor="password"
+        className="mt-8 block text-label-sm font-medium text-on-surface-variant"
+      >
+        Passphrase
       </label>
       <input
         id="password"
         type="password"
         name="password"
         autoComplete="current-password"
-        placeholder="Password"
-        className="mt-10 w-full rounded-xs border border-hairline bg-surface-container-low px-4 py-3 text-body-md text-on-surface transition-colors placeholder:text-on-surface-variant/50 focus:border-primary"
+        className="mt-2 w-full rounded-xs border border-hairline bg-surface-container-low px-4 py-3 text-body-md text-on-surface transition-colors focus:border-primary"
       />
       {state?.error && (
         <p role="alert" className="mt-4 text-label-sm text-error">
