@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { motion, useReducedMotion } from "framer-motion";
 import { startSession } from "@/actions/interview";
 import { randomLoadingWord } from "@/lib/loading-words";
-import { BrandHeader, ContextTag, TelemetryFooter } from "@/components/chrome";
+import { BrandHeader, ContextTag, SiteFooter } from "@/components/chrome";
 
 const SEED_MAX = 1000;
 
@@ -53,7 +53,7 @@ export default function SeedForm({
           transition={{ duration: reduce ? 0 : 0.3 }}
           className="z-10 w-full max-w-3xl"
         >
-          <ContextTag label="Intake // Premise" />
+          <ContextTag label="Premise" />
 
           <h1 className="mt-10 text-display-lg-mobile tracking-tight text-on-surface md:text-display-lg">
             Hello, {inviteeName}.
@@ -114,7 +114,7 @@ export default function SeedForm({
           </div>
         </motion.div>
       </main>
-      <TelemetryFooter status="Intake" />
+      <SiteFooter />
     </>
   );
 }

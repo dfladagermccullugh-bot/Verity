@@ -5,15 +5,11 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { answer as submitAnswer } from "@/actions/interview";
 import { LOADING_WORDS, randomLoadingWord } from "@/lib/loading-words";
-import { BrandHeader, ContextTag, TelemetryFooter } from "@/components/chrome";
+import { BrandHeader, ContextTag, SiteFooter } from "@/components/chrome";
 
 function progressWidth(answered: number): string {
   const pct = Math.min(0.8, 0.08 + answered * 0.06) * 100;
   return `${pct}%`;
-}
-
-function pad(n: number): string {
-  return String(n).padStart(2, "0");
 }
 
 /** Coarse device class from viewport width — backend paradata only. */
@@ -29,12 +25,10 @@ export default function Interview({
   token,
   initialQuestion,
   initialAnswered,
-  protocol,
 }: {
   token: string;
   initialQuestion: string;
   initialAnswered: number;
-  protocol?: string;
 }) {
   const router = useRouter();
   const reduce = useReducedMotion();
@@ -156,7 +150,7 @@ export default function Interview({
           <p className="sr-only" role="status" aria-live="polite">
             {pending ? "" : question}
           </p>
-          <ContextTag label={`Question // ${pad(answered + 1)}`} />
+          <ContextTag label={`Question ${answered + 1}`} />
 
           <div className="relative mt-10">
             <div className="absolute -left-6 bottom-0 top-0 hidden w-0.5 rounded-full bg-primary/30 md:block" />
@@ -247,7 +241,7 @@ export default function Interview({
         </div>
       </main>
 
-      <TelemetryFooter protocol={protocol} status="Active" />
+      <SiteFooter />
     </>
   );
 }
