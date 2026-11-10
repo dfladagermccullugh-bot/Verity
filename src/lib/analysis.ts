@@ -14,7 +14,7 @@
  *  - triangulation reliability (consistency of repeated-dimension answers).
  */
 
-import { DIMENSIONS, type DimensionId } from "./dimensions";
+import { DIMENSIONS, MIRROR_DIMENSION, type DimensionId } from "./dimensions";
 
 /** Minimal turn shape the analysis needs — a structural subset of the DB row,
  *  so callers and tests can pass plain objects. */
@@ -68,7 +68,9 @@ function median(xs: number[]): number | null {
     : sorted[mid];
 }
 
-export function computeAnalysis(turns: AnalyzableTurn[]): RoundAnalysis {
+export function computeAnalysis(allTurns: AnalyzableTurn[]): RoundAnalysis {
+  // The skill's opening mirror turn ("… Ready?") is protocol, not measurement.
+  const turns = allTurns.filter((t) => t.constructDimension !== MIRROR_DIMENSION);
   // Only binary answers count toward measurement signal; "done" and pending
   // turns are excluded.
   const binary = turns.filter((t) => t.answer === "yes" || t.answer === "no");

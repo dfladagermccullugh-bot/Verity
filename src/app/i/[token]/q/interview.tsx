@@ -1,9 +1,21 @@
 "use client";
 
-import { useState, useRef, useTransition, useEffect } from "react";
+import { useState, useRef, useEffect, useReducer } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
-import { answer as submitAnswer } from "@/actions/interview";
+import {
+  answer as submitAnswer,
+  resume as resumeSession,
+  type AnswerInput,
+  type StepResponse,
+} from "@/actions/interview";
+import type { Answer } from "@/lib/lifecycle";
+import {
+  canAnswer,
+  initialInterviewState,
+  interviewReducer,
+  timeToAnswer,
+} from "@/lib/interview-state";
 import { LOADING_WORDS, randomLoadingWord } from "@/lib/loading-words";
 import { BrandHeader, ContextTag, SiteFooter } from "@/components/chrome";
 
@@ -21,25 +33,48 @@ function deviceClass(): string | null {
   return "desktop";
 }
 
+export interface InterviewActions {
+  answer: (
+    token: string,
+    turnId: string,
+    value: Answer,
+    paradata: AnswerInput
+  ) => Promise<StepResponse>;
+  resume: (token: string) => Promise<StepResponse>;
+}
+
+const serverActions: InterviewActions = { answer: submitAnswer, resume: resumeSession };
+
+const RETRY_MESSAGE = "That didn't go through — please try again.";
+
 export default function Interview({
   token,
+  initialTurnId,
   initialQuestion,
   initialAnswered,
+  actions = serverActions,
+  onDone,
 }: {
   token: string;
+  initialTurnId: string;
   initialQuestion: string;
   initialAnswered: number;
+  /** Injectable for the client harness; defaults to the server actions. */
+  actions?: InterviewActions;
+  onDone?: () => void;
 }) {
   const router = useRouter();
   const reduce = useReducedMotion();
-  const [question, setQuestion] = useState(initialQuestion);
-  const [answered, setAnswered] = useState(initialAnswered);
-  const [error, setError] = useState<string | null>(null);
+  const [state, dispatch] = useReducer(
+    interviewReducer,
+    // The answer is bound to the turn that was displayed, never "whatever is
+    // pending now" — a stale tab cannot answer a question it never showed.
+    { turnId: initialTurnId, question: initialQuestion, answered: initialAnswered },
+    initialInterviewState
+  );
   const [loadingWord, setLoadingWord] = useState(LOADING_WORDS[0]);
-  const [pending, startTransition] = useTransition();
-  const shownAt = useRef<number>(Date.now());
-  const [qKey, setQKey] = useState(0);
-  const [exitDir, setExitDir] = useState(1);
+  const busy = state.phase === "submitting" || state.phase === "leaving";
+  const exitDir = state.inFlight === "yes" ? 1 : state.inFlight === "no" ? -1 : 0;
 
   // Honor reduced-motion: no horizontal slide, opacity-only crossfade.
   const dist = reduce ? 0 : 40;
@@ -49,56 +84,63 @@ export default function Interview({
     exit: (dir: number) => ({ opacity: 0, x: dir * dist }),
   };
 
+  // Paradata: time-to-answer runs from when THIS turn's question became
+  // visible (after the model returned), keyed on the turn id — not from when
+  // the previous answer was sent, which would include model latency.
+  const shown = useRef<{ turnId: string; at: number } | null>(null);
   useEffect(() => {
-    shownAt.current = Date.now();
-  }, [qKey]);
+    if (state.phase === "asking") shown.current = { turnId: state.turnId, at: performance.now() };
+  }, [state.phase, state.turnId]);
 
   // Cycle the status word every ~700ms while waiting on the model so the
   // screen reads as active rather than stalled.
   useEffect(() => {
-    if (!pending) return;
+    if (!busy) return;
     const id = setInterval(() => setLoadingWord(randomLoadingWord()), 700);
     return () => clearInterval(id);
-  }, [pending]);
+  }, [busy]);
 
-  function send(value: "yes" | "no" | "done") {
-    if (pending) return;
-    setError(null);
-    setLoadingWord(randomLoadingWord());
-    // Yes slides the block right, No slides it left, Done fades straight through.
-    setExitDir(value === "yes" ? 1 : value === "no" ? -1 : 0);
-    // Advance progress optimistically (real count syncs on success).
-    if (value !== "done") setAnswered((a) => a + 1);
-    setQKey((k) => k + 1);
-    const ms = Date.now() - shownAt.current;
-    const paradata = {
-      timeToAnswerMs: ms,
+  useEffect(() => {
+    if (state.phase !== "leaving") return;
+    if (onDone) onDone();
+    else router.replace(`/i/${token}/done`);
+  }, [state.phase, onDone, router, token]);
+
+  function apply(res: StepResponse) {
+    if (!res.ok) dispatch({ type: "fail", error: res.error });
+    else if (res.kind === "done") dispatch({ type: "done" });
+    else dispatch({ type: "question", turnId: res.turnId, text: res.text, answered: res.answered });
+  }
+
+  async function send(value: Answer) {
+    if (!canAnswer(state)) return;
+    const turnId = state.turnId;
+    const paradata: AnswerInput = {
+      timeToAnswerMs: timeToAnswer(shown.current, turnId, performance.now()),
       deviceClass: deviceClass(),
       viewport:
-        typeof window !== "undefined"
-          ? `${window.innerWidth}x${window.innerHeight}`
-          : null,
+        typeof window !== "undefined" ? `${window.innerWidth}x${window.innerHeight}` : null,
     };
-    startTransition(async () => {
-      try {
-        const res = await submitAnswer(token, value, paradata);
-        if (!res.ok) {
-          setError(res.error);
-          if (value !== "done") setAnswered((a) => Math.max(0, a - 1));
-          return;
-        }
-        if (res.kind === "done") {
-          router.replace(`/i/${token}/done`);
-          return;
-        }
-        setQuestion(res.text);
-      } catch {
-        // Transport/server failure — never leave the action ambiguous. Roll
-        // back the optimistic step and invite a retry (buttons re-enable).
-        setError("That didn't go through — please try again.");
-        if (value !== "done") setAnswered((a) => Math.max(0, a - 1));
-      }
-    });
+    setLoadingWord(randomLoadingWord());
+    dispatch({ type: "submit", value });
+    try {
+      apply(await actions.answer(token, turnId, value, paradata));
+    } catch {
+      // Transport/server failure — never leave the action ambiguous.
+      dispatch({ type: "fail", error: RETRY_MESSAGE });
+    }
+  }
+
+  /** "Try again": the answer may or may not have been saved, so resync from
+   *  the server (same question if not, the next one if it was). */
+  async function retry() {
+    if (state.phase !== "failed") return;
+    dispatch({ type: "retry" });
+    try {
+      apply(await actions.resume(token));
+    } catch {
+      dispatch({ type: "fail", error: RETRY_MESSAGE });
+    }
   }
 
   // Keep a ref to the latest send so the global key handler stays current
@@ -109,10 +151,11 @@ export default function Interview({
   });
 
   // Keyboard shortcuts: Y / N / D mirror the three buttons (hint shown below
-  // the actions). send() itself no-ops while a turn is in flight.
+  // the actions). A held key's auto-repeat is ignored, so it cannot answer
+  // each new question as it arrives; send() no-ops unless a question shows.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
       const k = e.key.toLowerCase();
       if (k === "y") sendRef.current("yes");
       else if (k === "n") sendRef.current("no");
@@ -121,6 +164,12 @@ export default function Interview({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
+
+  const pending = busy;
+  const answered = state.answered;
+  const question = state.question;
+  const error = state.error;
+  const disabled = !canAnswer(state);
 
   return (
     <>
@@ -156,7 +205,7 @@ export default function Interview({
             <div className="absolute -left-6 bottom-0 top-0 hidden w-0.5 rounded-full bg-primary/30 md:block" />
             <AnimatePresence mode="wait" custom={exitDir} initial={false}>
               <motion.div
-                key={qKey}
+                key={state.key}
                 custom={exitDir}
                 variants={blockVariants}
                 initial="enter"
@@ -182,7 +231,7 @@ export default function Interview({
           <div className="mt-16 flex flex-col gap-6 md:flex-row md:gap-8">
             <button
               onClick={() => send("no")}
-              disabled={pending}
+              disabled={disabled}
               aria-keyshortcuts="n"
               className="group flex w-full items-center justify-between rounded-full border border-hairline bg-surface-container-lowest px-8 py-4 transition-colors duration-200 hover:border-on-surface-variant hover:bg-surface-container disabled:opacity-40 md:w-64"
             >
@@ -198,7 +247,7 @@ export default function Interview({
             </button>
             <button
               onClick={() => send("yes")}
-              disabled={pending}
+              disabled={disabled}
               aria-keyshortcuts="y"
               className="group flex w-full items-center justify-between rounded-full bg-primary px-10 py-4 text-on-primary shadow-elevation-1 transition-colors duration-200 hover:brightness-95 disabled:opacity-40 md:w-80"
             >
@@ -211,7 +260,7 @@ export default function Interview({
 
           <button
             onClick={() => send("done")}
-            disabled={pending}
+            disabled={disabled}
             aria-keyshortcuts="d"
             className="mt-8 rounded-full border border-hairline px-6 py-2.5 text-label-sm text-on-surface-variant transition-colors hover:border-on-surface-variant hover:text-on-surface disabled:opacity-40"
           >
@@ -234,9 +283,20 @@ export default function Interview({
           </p>
 
           {error && (
-            <p role="alert" className="mt-6 text-label-sm text-error">
-              {error}
-            </p>
+            <div className="mt-6 flex flex-wrap items-center gap-4">
+              <p role="alert" className="text-label-sm text-error">
+                {error}
+              </p>
+              {state.phase === "failed" && (
+                <button
+                  type="button"
+                  onClick={retry}
+                  className="rounded-full border border-hairline px-5 py-2 text-label-sm font-semibold text-on-surface transition-colors hover:border-on-surface-variant"
+                >
+                  Try again
+                </button>
+              )}
+            </div>
           )}
         </div>
       </main>

@@ -23,6 +23,19 @@ export type DimensionId =
   | "success_signal"
   | "unclassified";
 
+/**
+ * Tag for the skill's opening "mirror the seed … Ready?" turn (skill Step 1).
+ * It is protocol, not a construct question, so coverage and the response-
+ * quality analysis exclude it. Not a DimensionId on purpose.
+ */
+export const MIRROR_DIMENSION = "mirror";
+
+/** True for the skill's mirror turn: a question ending in "Ready?". Only
+ *  applied to the session's first question by the engine. */
+export function isMirrorQuestion(questionText: string): boolean {
+  return /\bready\s*\?\s*$/i.test(questionText.trim());
+}
+
 /** Canonical order + human label for each tracked dimension. */
 export const DIMENSIONS: { id: DimensionId; label: string }[] = [
   { id: "problem", label: "Problem" },

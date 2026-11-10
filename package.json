@@ -15,7 +15,8 @@
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "canary": "tsx scripts/canary.ts",
-    "canary:rebaseline": "tsx scripts/canary.ts --rebaseline"
+    "canary:rebaseline": "tsx scripts/canary.ts --rebaseline",
+    "e2e:interview": "node scripts/e2e/interview-client.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.32.1",
@@ -29,6 +30,7 @@
     "resend": "^4.0.1"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.16",
     "@types/node": "^22.9.1",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",

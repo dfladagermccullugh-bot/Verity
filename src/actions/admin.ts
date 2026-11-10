@@ -9,7 +9,13 @@ import { db } from "@/lib/db";
 import { invites, sessions } from "@/lib/db/schema";
 import { createInviteToken } from "@/lib/tokens";
 import { getAdminSession, isAdmin } from "@/lib/session";
-import { openFollowupRound } from "@/lib/interview-engine";
+import {
+  advance,
+  closeStalledSession,
+  completeReviewedSession,
+  openFollowupRound,
+  revokeUnusedInvite,
+} from "@/lib/interview-engine";
 
 function safeEqual(a: string, b: string): boolean {
   const ab = Buffer.from(a);
@@ -78,14 +84,9 @@ export async function createInvite(
 export async function openRound(sessionId: string): Promise<{ error?: string }> {
   if (!(await isAdmin())) return { error: "Not authorized." };
 
-  const session = await db.query.sessions.findFirst({
-    where: eq(sessions.id, sessionId),
-  });
-  if (!session) return { error: "Session not found." };
-  if (session.status !== "awaiting_review")
-    return { error: "This session is not awaiting review." };
-
-  const result = await openFollowupRound(session);
+  // Conditional inside the engine: only an `awaiting_review` session opens a
+  // round, and two concurrent clicks open one round between them.
+  const result = await openFollowupRound(sessionId);
   if (!result.ok)
     return { error: result.reason ?? "Could not open another round." };
 
@@ -102,19 +103,10 @@ export async function completeSession(
 ): Promise<{ error?: string }> {
   if (!(await isAdmin())) return { error: "Not authorized." };
 
-  const session = await db.query.sessions.findFirst({
-    where: eq(sessions.id, sessionId),
-  });
-  if (!session) return { error: "Session not found." };
-
-  await db
-    .update(sessions)
-    .set({ status: "complete" })
-    .where(eq(sessions.id, sessionId));
-  await db
-    .update(invites)
-    .set({ consumedAt: new Date() })
-    .where(eq(invites.id, session.inviteId));
+  // Conditional on `awaiting_review` (refused while a round is open); the
+  // status change and the invite consumption commit together.
+  const result = await completeReviewedSession(sessionId);
+  if (!result.ok) return { error: result.reason ?? "Could not complete the session." };
 
   revalidatePath(`/admin/prds/${sessionId}`);
   return {};
@@ -145,5 +137,42 @@ export async function unarchiveSession(formData: FormData): Promise<void> {
     .update(sessions)
     .set({ archivedAt: null })
     .where(eq(sessions.id, id));
+  revalidatePath("/admin/prds");
+}
+
+/**
+ * Resume a stalled session (active, no question waiting) from admin: the
+ * same idempotent `advance` the respondent's link runs. Produces the next
+ * question, or finalizes the round if the interview was already concluding.
+ */
+export async function resumeStalled(sessionId: string): Promise<{ error?: string }> {
+  if (!(await isAdmin())) return { error: "Not authorized." };
+  try {
+    await advance(sessionId);
+  } catch {
+    return { error: "Could not resume — the model call failed. Try again." };
+  }
+  revalidatePath(`/admin/prds/${sessionId}`);
+  return {};
+}
+
+/**
+ * Close a stalled session: its open round ends as `abandoned`, the session
+ * completes and the invite is consumed. Refused once a question exists.
+ */
+export async function closeStalled(sessionId: string): Promise<{ error?: string }> {
+  if (!(await isAdmin())) return { error: "Not authorized." };
+  const result = await closeStalledSession(sessionId);
+  if (!result.ok) return { error: result.reason ?? "Could not close the session." };
+  revalidatePath(`/admin/prds/${sessionId}`);
+  return {};
+}
+
+/** Revoke an invite that has not been used (it expires now). */
+export async function revokeInvite(formData: FormData): Promise<void> {
+  if (!(await isAdmin())) return;
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  await revokeUnusedInvite(id);
   revalidatePath("/admin/prds");
 }

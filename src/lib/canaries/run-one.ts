@@ -1,32 +1,28 @@
 /**
  * Drive a single fixture through the interview model loop without touching
- * the database. Mirrors the shape-generation + retry policy of
- * `interview-engine.ts` so the canary measures the same behavior the
- * invitee experiences, minus persistence.
+ * the database. Uses the same generation policy module as
+ * `interview-engine.ts` (`interview-policy.ts`), so the canary measures the
+ * behaviour the invitee experiences, minus persistence.
  *
- * Kept separate from the engine on purpose: the engine is DB-coupled and
- * pulling DB-free helpers out would complicate the production path for a
- * test-only callsite. The duplication is small (~30 lines) and audited.
+ * No `server-only`, no `.md` import: the caller injects the model (bound to
+ * the skill prompt it read from disk), so this runs under plain `tsx`.
  */
 
-import { callModel, type ChatMessage, getModelName } from "../anthropic";
-import { guardOutput, STOP_CONFIRM } from "../guard";
-import { detectLeading } from "../anti-leading";
-import { classifyDimension } from "../dimensions";
+import { getModelName, type ChatMessage } from "../model-client";
+import { MIRROR_DIMENSION, classifyDimension, isMirrorQuestion } from "../dimensions";
+import type { CoverageTurn } from "../coverage";
 import {
-  coverageMet,
-  uncoveredDimensionLabels,
-  type CoverageTurn,
-} from "../coverage";
-import { RUNAWAY_CEILING } from "../interview-engine";
+  RUNAWAY_CEILING,
+  enforceCoverage,
+  forcePrd,
+  generateNextShape,
+  type GenResult,
+  type ModelFn,
+  type NextShape,
+} from "../interview-policy";
 import type { SeedFixture, SeedMetrics } from "./types";
 
 const REQUIRED_HEADING_PATTERNS = ["^# ", "^## "] as const;
-
-type Shape =
-  | { kind: "question"; text: string }
-  | { kind: "stop_confirm" }
-  | { kind: "prd"; markdown: string };
 
 interface RunCounters {
   rejects: number;
@@ -34,83 +30,24 @@ interface RunCounters {
   questionLengths: number[];
 }
 
-async function generateNextShape(
-  messages: ChatMessage[],
-  counters: RunCounters,
-): Promise<Shape> {
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const raw = await callModel(messages);
-    const g = guardOutput(raw);
-    if (g.kind === "question") {
-      // Mirror production: a leading question is rejected and regenerated.
-      if (detectLeading(g.text).leading) {
-        counters.rejects += 1;
-        continue;
-      }
-      counters.accepts += 1;
-      counters.questionLengths.push(g.text.length);
-      return { kind: "question", text: g.text };
-    }
-    if (g.kind === "stop_confirm") {
-      counters.accepts += 1;
-      return { kind: "stop_confirm" };
-    }
-    if (g.kind === "prd") {
-      counters.accepts += 1;
-      return { kind: "prd", markdown: g.markdown };
-    }
-    counters.rejects += 1;
-  }
-  return { kind: "stop_confirm" };
+/** Fold one policy generation into the canary counters. */
+function count(gen: GenResult, counters: RunCounters): NextShape {
+  counters.rejects += gen.regenCount;
+  if (gen.shape.kind !== "exhausted") counters.accepts += 1;
+  if (gen.shape.kind === "question") counters.questionLengths.push(gen.shape.text.length);
+  return gen.shape;
 }
 
-/** Mirror the engine's coverage gate: if the model tries to stop before the
- *  round has covered enough construct dimensions, nudge once for a question. */
-async function enforceCoverage(
-  messages: ChatMessage[],
-  answered: CoverageTurn[],
-  counters: RunCounters,
-  stop: Shape,
-): Promise<Shape> {
-  if (coverageMet(answered)) return stop;
-  const remaining = uncoveredDimensionLabels(answered).join(", ");
-  const nudged: ChatMessage[] = [
-    ...messages,
-    {
-      role: "user",
-      content: `(Not enough has been covered to write the PRD yet. These areas are still unaddressed: ${remaining}. Ask the next single yes/no question about one of them — do not write the PRD.)`,
-    },
-  ];
-  const gen = await generateNextShape(nudged, counters);
-  return gen.kind === "question" ? gen : stop;
-}
-
-async function forcePrd(
+async function prd(
+  model: ModelFn,
   messages: ChatMessage[],
   counters: RunCounters,
 ): Promise<string> {
-  const convo: ChatMessage[] = [
-    ...messages,
-    { role: "assistant", content: STOP_CONFIRM },
-    { role: "user", content: "yes" },
-  ];
-  for (let attempt = 0; attempt < 2; attempt++) {
-    const raw = await callModel(convo);
-    const g = guardOutput(raw);
-    if (g.kind === "prd") {
-      counters.accepts += 1;
-      return g.markdown;
-    }
-    counters.rejects += 1;
-    convo.push({ role: "assistant", content: raw });
-    convo.push({
-      role: "user",
-      content:
-        "Write the PRD now. Begin your reply with the line ===PRD=== and include every required section.",
-    });
-  }
-  const fallback = await callModel(convo);
-  return fallback.replace(/^===PRD===\s*/, "");
+  const r = await forcePrd(model, messages);
+  counters.rejects += r.rejects;
+  if (r.ok && r.via === "marker") counters.accepts += 1;
+  // A failed PRD yields no headings, which the comparator reports as drift.
+  return r.ok ? r.markdown : "";
 }
 
 /**
@@ -118,7 +55,7 @@ async function forcePrd(
  * Throws if the answer script is exhausted before the model terminates —
  * the caller should treat that as a fixture bug, not drift.
  */
-export async function runOne(fixture: SeedFixture): Promise<SeedMetrics> {
+export async function runOne(fixture: SeedFixture, model: ModelFn): Promise<SeedMetrics> {
   const messages: ChatMessage[] = [{ role: "user", content: fixture.seed }];
   const counters: RunCounters = { rejects: 0, accepts: 0, questionLengths: [] };
   const answered: CoverageTurn[] = [];
@@ -127,19 +64,22 @@ export async function runOne(fixture: SeedFixture): Promise<SeedMetrics> {
   let answersUsed = 0;
 
   for (let step = 0; step < RUNAWAY_CEILING; step++) {
-    let shape = await generateNextShape(messages, counters);
-    // Mirror the engine's coverage gate before honouring an early stop.
+    const gen = await generateNextShape(model, messages);
+    let shape = count(gen, counters);
+    // The engine's coverage gate, before honouring an early stop.
     if (shape.kind !== "question") {
-      shape = await enforceCoverage(messages, answered, counters, shape);
+      const cov = await enforceCoverage(model, messages, answered, gen);
+      if (cov.nudge) count(cov.nudge, counters);
+      shape = cov.gen.shape;
     }
 
     if (shape.kind === "prd") {
       prdMarkdown = shape.markdown;
       break;
     }
-    if (shape.kind === "stop_confirm") {
+    if (shape.kind === "stop_confirm" || shape.kind === "exhausted") {
       // Mirror the engine: silently force the PRD.
-      prdMarkdown = await forcePrd(messages, counters);
+      prdMarkdown = await prd(model, messages, counters);
       break;
     }
 
@@ -152,11 +92,14 @@ export async function runOne(fixture: SeedFixture): Promise<SeedMetrics> {
     const answer = fixture.answerScript[answersUsed++];
     messages.push({ role: "assistant", content: shape.text });
     messages.push({ role: "user", content: answer });
-    answered.push({ answer, constructDimension: classifyDimension(shape.text) });
+    // Same tagging as the engine: the opening mirror turn is not coverage.
+    const constructDimension =
+      step === 0 && isMirrorQuestion(shape.text) ? MIRROR_DIMENSION : classifyDimension(shape.text);
+    answered.push({ answer, constructDimension });
 
     if (answer === "done") {
       terminatedNaturally = false;
-      prdMarkdown = await forcePrd(messages, counters);
+      prdMarkdown = await prd(model, messages, counters);
       break;
     }
   }
@@ -164,7 +107,7 @@ export async function runOne(fixture: SeedFixture): Promise<SeedMetrics> {
   if (prdMarkdown === null) {
     // Hit RUNAWAY_CEILING without a PRD — mirror the engine.
     terminatedNaturally = false;
-    prdMarkdown = await forcePrd(messages, counters);
+    prdMarkdown = await prd(model, messages, counters);
   }
 
   const totalCalls = counters.accepts + counters.rejects;

@@ -176,3 +176,37 @@ describe("buildAnalysisDocument — companion analysis file", () => {
     expect(doc).toMatch(/# Response-Quality Analysis/);
   });
 });
+
+describe("buildMethodologyDocument — round termination diagnostics", () => {
+  it("omits the section when no termination is supplied", () => {
+    const d = buildMethodologyDocument({ sessionId: SESSION_ID, date: DATE });
+    expect(d).not.toContain("## Round termination");
+  });
+
+  it("records the reason, the PRD path and the rejected attempts", () => {
+    const d = buildMethodologyDocument({
+      sessionId: SESSION_ID,
+      date: DATE,
+      termination: {
+        reason: "guard_exhausted",
+        guardRejections: ["jargon:api", "multiline"],
+        prdRejections: ["prd:no_marker"],
+        prdVia: "marker",
+      },
+    });
+    expect(d).toContain("## Round termination");
+    expect(d).toContain("`guard_exhausted`");
+    expect(d).toContain("`jargon:api`, `multiline`");
+    expect(d).toContain("`prd:no_marker`");
+    expect(d).toContain("**PRD obtained via:** marker");
+  });
+
+  it("states plainly when a round has no PRD", () => {
+    const d = buildMethodologyDocument({
+      sessionId: SESSION_ID,
+      termination: { reason: "prd_failed", guardRejections: [], prdRejections: [], prdVia: null },
+    });
+    expect(d).toMatch(/no valid PRD could be obtained/);
+    expect(d).toContain("**PRD obtained via:** none");
+  });
+});

@@ -1,12 +1,16 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq, isNull } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { sessions, invites, rounds } from "@/lib/db/schema";
+import { sessions, invites, rounds, turns } from "@/lib/db/schema";
+import { deriveOperatorState, latestPrdRound } from "@/lib/lifecycle";
 import RoundActions from "./round-actions";
+import StalledActions from "./stalled-actions";
 import Markdown from "@/components/markdown";
 
 export const dynamic = "force-dynamic";
+// Hosts the open-round / resume actions, which call the model.
+export const maxDuration = 60;
 
 /** Naive line-level diff between two PRD versions — enough to show what the
  *  follow-up round changed. */
@@ -37,7 +41,9 @@ export default async function PrdView({ params }: { params: { id: string } }) {
   const session = await db.query.sessions.findFirst({
     where: eq(sessions.id, params.id),
   });
-  if (!session || !session.prdMarkdown) notFound();
+  // Renders without a PRD too: a stalled or failed first round must still
+  // be visible to the operator, with its recovery controls.
+  if (!session) notFound();
 
   const invite = await db.query.invites.findFirst({
     where: eq(invites.id, session!.inviteId),
@@ -49,7 +55,19 @@ export default async function PrdView({ params }: { params: { id: string } }) {
     .where(eq(rounds.sessionId, session!.id))
     .orderBy(asc(rounds.roundNumber));
   const warnings = parseStringArray(session!.seedWarnings);
-  const awaitingReview = session!.status === "awaiting_review";
+  const [pending] = await db
+    .select({ id: turns.id })
+    .from(turns)
+    .where(and(eq(turns.sessionId, session!.id), isNull(turns.answer)))
+    .limit(1);
+  const operatorState = deriveOperatorState({
+    status: session!.status,
+    hasPendingTurn: !!pending,
+  });
+  // Label the PRD with the version of the round that produced it, not the
+  // latest round (which may have failed or still be open).
+  const prdRound = latestPrdRound(sessionRounds);
+  const hasAnalysis = sessionRounds.some((r) => r.analysisMarkdown && r.prdMarkdown);
 
   return (
     <main className="mx-auto max-w-3xl px-margin-mobile py-16 md:px-margin-desktop">
@@ -61,12 +79,14 @@ export default async function PrdView({ params }: { params: { id: string } }) {
           ← Registry
         </Link>
         <div className="flex gap-5 text-label-sm">
-          <a
-            href={`/api/admin/prd/${session!.id}`}
-            className="text-primary underline underline-offset-2 transition-colors hover:brightness-110"
-          >
-            Download PRD
-          </a>
+          {session!.prdMarkdown && (
+            <a
+              href={`/api/admin/prd/${session!.id}`}
+              className="text-primary underline underline-offset-2 transition-colors hover:brightness-110"
+            >
+              Download PRD
+            </a>
+          )}
           {session!.methodologyMarkdown && (
             <a
               href={`/api/admin/prd/${session!.id}/methodology`}
@@ -75,12 +95,14 @@ export default async function PrdView({ params }: { params: { id: string } }) {
               Methodology
             </a>
           )}
-          <a
-            href={`/api/admin/prd/${session!.id}/analysis`}
-            className="text-on-surface-variant underline-offset-2 transition-colors hover:text-on-surface hover:underline focus-visible:underline"
-          >
-            Analysis
-          </a>
+          {hasAnalysis && (
+            <a
+              href={`/api/admin/prd/${session!.id}/analysis`}
+              className="text-on-surface-variant underline-offset-2 transition-colors hover:text-on-surface hover:underline focus-visible:underline"
+            >
+              Analysis
+            </a>
+          )}
         </div>
       </div>
 
@@ -111,41 +133,64 @@ export default async function PrdView({ params }: { params: { id: string } }) {
         </details>
       )}
 
-      <h2 className="mt-10 text-label-sm text-on-surface-variant">
-        PRD — latest version (v
-        {sessionRounds.length > 0
-          ? sessionRounds[sessionRounds.length - 1].prdVersion
-          : 1}
-        )
-      </h2>
-      <Markdown
-        content={session!.prdMarkdown}
-        className="mt-3 rounded-xl border border-hairline bg-surface-container-low p-8 text-body-md"
-      />
+      {session!.prdMarkdown ? (
+        <>
+          <h2 className="mt-10 text-label-sm text-on-surface-variant">
+            PRD — latest version (v{prdRound?.prdVersion ?? 1})
+          </h2>
+          <Markdown
+            content={session!.prdMarkdown}
+            className="mt-3 rounded-xl border border-hairline bg-surface-container-low p-8 text-body-md"
+          />
+        </>
+      ) : (
+        <div className="mt-10 rounded-xl border border-hairline bg-surface-container-low p-8">
+          <p className="text-label-sm text-on-surface-variant">No PRD yet</p>
+          <p className="mt-3 text-body-md text-on-surface-variant">
+            No round of this session has produced a PRD so far.
+          </p>
+        </div>
+      )}
 
-      {awaitingReview ? (
+      {operatorState === "awaiting_review" ? (
         <RoundActions sessionId={session!.id} />
-      ) : session!.status === "active" ? (
+      ) : operatorState === "stalled" ? (
+        <StalledActions sessionId={session!.id} />
+      ) : operatorState === "awaiting_respondent" ? (
         <div className="mt-10 rounded-lg border border-hairline bg-surface-container-low p-6">
           <p className="text-label-sm text-on-surface-variant">
             Awaiting respondent
           </p>
           <p className="mt-3 text-body-md text-on-surface-variant">
-            Round {sessionRounds.length} is open and the respondent has a pending
+            Round{" "}
+            {[...sessionRounds].reverse().find((r) => r.status === "in_progress")?.roundNumber ??
+              sessionRounds.length}{" "}
+            is open and the respondent has a pending
             question on their durable link. Operator controls (open another round
             / mark complete) reappear here once they finish and the round
             finalizes for review.
           </p>
         </div>
-      ) : (
+      ) : operatorState === "complete" ? (
         <div className="mt-10 rounded-lg border border-hairline bg-surface-container-low p-6">
           <p className="text-label-sm text-primary">
             Complete
           </p>
           <p className="mt-3 text-body-md text-on-surface-variant">
             This session is closed and its single-use invite has been consumed —
-            the durable link no longer resolves. The PRD below is the final
-            version.
+            the respondent&rsquo;s link now shows the closing screen and accepts no
+            more answers.{" "}
+            {session!.prdMarkdown
+              ? "The PRD above is the final version."
+              : "It closed without a PRD."}
+          </p>
+        </div>
+      ) : (
+        <div className="mt-10 rounded-lg border border-error/40 bg-surface-container-low p-6">
+          <p className="text-label-sm text-error">Unknown status</p>
+          <p className="mt-3 text-body-md text-on-surface-variant">
+            This session has an unrecognised status (&ldquo;{session!.status}
+            &rdquo;). No operator controls are offered.
           </p>
         </div>
       )}

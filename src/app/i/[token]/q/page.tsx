@@ -1,12 +1,12 @@
 import { redirect } from "next/navigation";
-import { and, eq, isNull } from "drizzle-orm";
-import { db } from "@/lib/db";
-import { invites, sessions, turns } from "@/lib/db/schema";
-import { verifyInviteToken } from "@/lib/tokens";
-import ThinkingScreen from "@/components/thinking-screen";
+import { loadRespondent } from "@/lib/respondent";
 import Interview from "./interview";
+import Resume from "./resume";
 
 export const dynamic = "force-dynamic";
+// Hosts the answer / resume actions: generation + finalize can take several
+// model calls.
+export const maxDuration = 60;
 
 export default async function InterviewPage({
   params,
@@ -14,44 +14,24 @@ export default async function InterviewPage({
   params: { token: string };
 }) {
   const token = params.token;
-  if (!verifyInviteToken(token)) redirect(`/i/${token}`);
+  const r = await loadRespondent(token);
 
-  const invite = await db.query.invites.findFirst({
-    where: eq(invites.token, token),
-  });
-  if (!invite) redirect(`/i/${token}`);
-
-  const session = await db.query.sessions.findFirst({
-    where: eq(sessions.inviteId, invite!.id),
-  });
-  if (!session) redirect(`/i/${token}`);
-
-  const [pending] = await db
-    .select()
-    .from(turns)
-    .where(and(eq(turns.sessionId, session!.id), isNull(turns.answer)));
-
-  // No question waiting: a finalized round (awaiting review or complete) rests
-  // on /done; otherwise the next round's question is still being prepared.
-  if (!pending) {
-    if (session!.completedAt) redirect(`/i/${token}/done`);
-    return <ThinkingScreen label="Preparing your next question…" />;
+  switch (r.view) {
+    case "question":
+      return (
+        <Interview
+          token={token}
+          initialTurnId={r.pending!.id}
+          initialQuestion={r.pending!.questionText}
+          initialAnswered={r.answeredInRound}
+        />
+      );
+    case "preparing":
+      // Active, no question waiting: resume instead of a static screen.
+      return <Resume token={token} />;
+    case "done":
+      redirect(`/i/${token}/done`);
+    default:
+      redirect(`/i/${token}`);
   }
-
-  // Progress reflects the current round only.
-  const all = await db
-    .select()
-    .from(turns)
-    .where(eq(turns.sessionId, session!.id));
-  const answeredCount = all.filter(
-    (t) => t.roundId === pending.roundId && t.answer != null
-  ).length;
-
-  return (
-    <Interview
-      token={token}
-      initialQuestion={pending.questionText}
-      initialAnswered={answeredCount}
-    />
-  );
 }

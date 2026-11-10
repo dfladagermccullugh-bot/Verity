@@ -1,35 +1,66 @@
 import "server-only";
-import { and, asc, desc, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { db } from "./db";
-import {
-  invites,
-  rounds,
-  sessions,
-  turns,
-  type Round,
-  type Session,
-  type Turn,
-} from "./db/schema";
+import { invites, rounds, sessions, turns, type Round, type Session, type Turn } from "./db/schema";
 import { callModel, type ChatMessage } from "./anthropic";
-import { guardOutput, STOP_CONFIRM } from "./guard";
-import { detectLeading } from "./anti-leading";
-import { classifyDimension } from "./dimensions";
+import { MIRROR_DIMENSION, classifyDimension, isMirrorQuestion } from "./dimensions";
 import { computeAnalysis } from "./analysis";
 import {
-  coverageMet,
-  uncoveredDimensionLabels,
-  type CoverageTurn,
-} from "./coverage";
+  RUNAWAY_CEILING,
+  enforceCoverage,
+  forcePrd,
+  generateNextShape,
+  type GenResult,
+  type ModelFn,
+  type NextShape,
+} from "./interview-policy";
+import type { CoverageTurn } from "./coverage";
+import { latestPrdRound, type Answer, type TerminationReason } from "./lifecycle";
 import { critiqueRound } from "./critic";
 import { sendPrdEmail } from "./email";
 import {
   buildPrdHeader,
   buildMethodologyDocument,
   buildAnalysisDocument,
+  type TerminationDiagnostics,
 } from "./disclosure";
 import { buildConstructBrief } from "./construct-brief";
+import {
+  claimAnswer,
+  findPendingTurn,
+  getSession,
+  listRounds,
+  listTurns,
+  lockInvite,
+  lockSession,
+  maxStep,
+  sessionForInvite,
+  type Executor,
+} from "./interview-store";
 
-export const RUNAWAY_CEILING = 40;
+/**
+ * The interview engine: claim, then re-entrant advance.
+ *
+ *  - `submitAnswer` claims the displayed turn with one conditional UPDATE.
+ *  - `advance` is idempotent: it reads the state and either returns the
+ *    pending turn, or generates the next turn / finalizes the round and
+ *    claims that write in a short transaction (session row locked, the
+ *    precondition re-checked). A lost claim just re-reads the state.
+ *
+ * Because `advance` derives everything from the database, it is also the
+ * recovery path: a request that died between the answer and the next turn
+ * leaves a session that the next call to `advance` simply picks up.
+ *
+ * Model calls never run inside a transaction (the pool has one connection).
+ */
+
+export { RUNAWAY_CEILING } from "./interview-policy";
+
+/** The interview model, bound for the policy module. */
+const model: ModelFn = (messages) => callModel(messages);
+
+/** Engine database handle (the typed executor view of `db`). */
+const dbx = db as unknown as Executor;
 
 /** Paradata captured alongside each answer (Survey Methodology §15). */
 export interface AnswerParadata {
@@ -37,6 +68,15 @@ export interface AnswerParadata {
   deviceClass?: string | null;
   viewport?: string | null;
 }
+
+export type StepResult =
+  | { kind: "question"; turnId: string; text: string; answeredInRound: number }
+  | { kind: "done" };
+
+/** Maximum claim attempts per `advance` before giving up for this request. */
+const MAX_ADVANCE_PASSES = 4;
+
+// ── Pure helpers ────────────────────────────────────────────────────────────
 
 /** Build the model conversation from the seed + already-answered turns. */
 function messagesFromTurns(seed: string, allTurns: Turn[]): ChatMessage[] {
@@ -49,198 +89,219 @@ function messagesFromTurns(seed: string, allTurns: Turn[]): ChatMessage[] {
   return messages;
 }
 
-/** All turns for a session, across rounds, ordered by step. */
-async function loadTurns(sessionId: string): Promise<Turn[]> {
-  return db
-    .select()
-    .from(turns)
-    .where(eq(turns.sessionId, sessionId))
-    .orderBy(asc(turns.step));
+/** The steering note for a follow-up round, re-injected on every turn. */
+function focusNote(focus: string | null): ChatMessage {
+  return {
+    role: "user",
+    content: focus
+      ? `(Continue the interview. The analyst flagged these gaps to focus on next: ${focus} Ask the next single yes/no question.)`
+      : `(Continue the interview with another round of questions. Ask the next single yes/no question about anything still unclear.)`,
+  };
 }
 
-function maxStep(allTurns: Turn[]): number {
-  return allTurns.reduce((m, t) => Math.max(m, t.step), 0);
+/** Termination reason for a non-question shape. */
+function stopReason(shape: NextShape, firstTurn: boolean): TerminationReason {
+  if (shape.kind === "prd") return "model_prd";
+  if (shape.kind === "exhausted") return "guard_exhausted";
+  return firstTurn ? "degenerate" : "forced_prd";
 }
 
-type NextShape =
-  | { kind: "question"; text: string }
-  | { kind: "stop_confirm" }
-  | { kind: "prd"; markdown: string };
-
-/** A generated shape plus the diagnostics recorded on the resulting turn. */
-interface GenResult {
-  shape: NextShape;
-  regenCount: number;
-  guardRejections: string[];
-  leadingRewrites: number;
+function answered(t: Turn): boolean {
+  return t.answer != null;
 }
 
-/**
- * Call the model, run the guard AND the deterministic anti-leading check,
- * regenerating on any rejection. After repeated failures, fall back to the
- * stop-confirm path. Returns the accepted shape with per-turn diagnostics.
- */
-async function generateNextShape(messages: ChatMessage[]): Promise<GenResult> {
-  const guardRejections: string[] = [];
-  let leadingRewrites = 0;
-  let regenCount = 0;
-
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const raw = await callModel(messages);
-    const g = guardOutput(raw);
-
-    if (g.kind === "question") {
-      const lead = detectLeading(g.text);
-      if (lead.leading) {
-        guardRejections.push(`leading:${lead.reason}`);
-        leadingRewrites += 1;
-        regenCount += 1;
-        continue; // regenerate a neutrally-phrased question
-      }
-      return {
-        shape: { kind: "question", text: g.text },
-        regenCount,
-        guardRejections,
-        leadingRewrites,
-      };
-    }
-    if (g.kind === "stop_confirm")
-      return { shape: { kind: "stop_confirm" }, regenCount, guardRejections, leadingRewrites };
-    if (g.kind === "prd")
-      return {
-        shape: { kind: "prd", markdown: g.markdown },
-        regenCount,
-        guardRejections,
-        leadingRewrites,
-      };
-
-    guardRejections.push(g.reason);
-    regenCount += 1;
-  }
-
-  return { shape: { kind: "stop_confirm" }, regenCount, guardRejections, leadingRewrites };
+function questionResult(turn: Turn, all: Turn[]): StepResult {
+  return {
+    kind: "question",
+    turnId: turn.id,
+    text: turn.questionText,
+    answeredInRound: all.filter((t) => t.roundId === turn.roundId && answered(t)).length,
+  };
 }
 
-/** Drive the model to emit the final PRD markdown. Best-effort, never throws. */
-async function forcePrd(messages: ChatMessage[]): Promise<string> {
-  const convo: ChatMessage[] = [
-    ...messages,
-    { role: "assistant", content: STOP_CONFIRM },
-    { role: "user", content: "yes" },
-  ];
-  for (let attempt = 0; attempt < 2; attempt++) {
-    const raw = await callModel(convo);
-    const g = guardOutput(raw);
-    if (g.kind === "prd") return g.markdown;
-    convo.push({ role: "assistant", content: raw });
-    convo.push({
-      role: "user",
-      content:
-        "Write the PRD now. Begin your reply with the line ===PRD=== and include every required section.",
-    });
-  }
-  const fallback = await callModel(convo);
-  return fallback.replace(/^===PRD===\s*/, "");
-}
-
-/**
- * Coverage gate (content validity). When the model tries to stop (PRD or
- * stop-confirm) before the round has covered enough construct dimensions, nudge
- * it once toward the uncovered dimensions and try to obtain one more question.
- * Falls back to the original stop-shape if the model still refuses to ask. The
- * caller bypasses this entirely on an explicit respondent "done".
- */
-async function enforceCoverage(
-  baseMessages: ChatMessage[],
-  answered: CoverageTurn[],
-  stopGen: GenResult
-): Promise<GenResult> {
-  if (coverageMet(answered)) return stopGen;
-  const remaining = uncoveredDimensionLabels(answered).join(", ");
-  const nudged: ChatMessage[] = [
-    ...baseMessages,
-    {
-      role: "user",
-      content: `(Not enough has been covered to write the PRD yet. These areas are still unaddressed: ${remaining}. Ask the next single yes/no question about one of them — do not write the PRD.)`,
-    },
-  ];
-  const gen = await generateNextShape(nudged);
-  return gen.shape.kind === "question" ? gen : stopGen;
-}
-
-/** Insert a pending question turn, computing its measurement metadata. */
-async function insertTurn(
+/** Turn metadata computed at insert time. */
+function turnValues(
   session: Session,
   round: Round,
   step: number,
-  questionText: string,
+  text: string,
   gen: GenResult,
-  priorRoundAnswered: Turn[]
-): Promise<void> {
-  const dimension = classifyDimension(questionText);
-  const isTriangulationProbe = priorRoundAnswered.some(
-    (t) => t.constructDimension === dimension
-  );
-  await db.insert(turns).values({
+  answeredInRound: Turn[]
+): typeof turns.$inferInsert {
+  // The skill's opening "mirror … Ready?" turn is protocol, not measurement:
+  // tagged so coverage and the analysis exclude it.
+  const dimension =
+    step === 1 && isMirrorQuestion(text) ? MIRROR_DIMENSION : classifyDimension(text);
+  return {
     sessionId: session.id,
     roundId: round.id,
     step,
-    questionText,
+    questionText: text,
     answer: null,
     timeToAnswerMs: null,
     constructDimension: dimension,
     regenCount: gen.regenCount,
     guardRejections: JSON.stringify(gen.guardRejections),
     leadingVerdict: gen.leadingRewrites > 0 ? "rewritten" : "clean",
-    isTriangulationProbe,
+    isTriangulationProbe: answeredInRound.some((t) => t.constructDimension === dimension),
     deviceClass: null,
     viewport: null,
-  });
+  };
 }
 
-/** The active (latest) round for a session. */
-async function getActiveRound(
-  sessionId: string,
-  pending: Turn | null
-): Promise<Round | null> {
-  if (pending?.roundId) {
-    const r = await db.query.rounds.findFirst({
-      where: eq(rounds.id, pending.roundId),
-    });
+// ── State ───────────────────────────────────────────────────────────────────
+
+interface State {
+  session: Session;
+  rounds: Round[];
+  turns: Turn[];
+  pending: Turn | null;
+}
+
+async function readState(ex: Executor, sessionId: string): Promise<State | null> {
+  const session = await getSession(ex, sessionId);
+  if (!session) return null;
+  const rs = await listRounds(ex, sessionId);
+  const ts = await listTurns(ex, sessionId);
+  return { session, rounds: rs, turns: ts, pending: ts.find((t) => !answered(t)) ?? null };
+}
+
+/** The round being driven: the pending turn's, else the latest open one. */
+function openRoundOf(st: State): Round | null {
+  const pendingRoundId = st.pending?.roundId;
+  if (pendingRoundId) {
+    const r = st.rounds.find((x) => x.id === pendingRoundId);
     if (r) return r;
   }
-  const rs = await db
-    .select()
-    .from(rounds)
-    .where(eq(rounds.sessionId, sessionId))
-    .orderBy(desc(rounds.roundNumber));
-  return rs[0] ?? null;
+  for (let i = st.rounds.length - 1; i >= 0; i--)
+    if (st.rounds[i].status === "in_progress") return st.rounds[i];
+  return null;
+}
+
+// ── Planning (model calls, no writes) ───────────────────────────────────────
+
+type Plan =
+  | { kind: "question"; text: string; gen: GenResult }
+  | { kind: "conclude"; markdown: string | null; termination: TerminationDiagnostics };
+
+/** Decide the next step for an open round with no pending turn. */
+async function plan(st: State, round: Round): Promise<Plan> {
+  const inRound = st.turns.filter((t) => t.roundId === round.id && answered(t));
+  const answeredAll = st.turns.filter(answered);
+  const last = answeredAll[answeredAll.length - 1] ?? null;
+  const messages = messagesFromTurns(st.session.seed, st.turns);
+
+  // Invitee asked to finish, or runaway ceiling reached → straight to PRD.
+  if (last && last.roundId === round.id && last.answer === "done")
+    return conclude(messages, "done_by_user", null, []);
+  if (inRound.length >= RUNAWAY_CEILING) return conclude(messages, "ceiling", null, []);
+
+  // Follow-up rounds carry their focus on every turn, not just the first.
+  const genMessages =
+    round.roundNumber > 1 ? [...messages, focusNote(round.focusBrief)] : messages;
+  let gen = await generateNextShape(model, genMessages);
+  let rejections = gen.guardRejections;
+  // Coverage gate, session-wide: a follow-up round is not forced to re-cover
+  // the dimensions earlier rounds already covered.
+  if (gen.shape.kind !== "question") {
+    const coverage: CoverageTurn[] = answeredAll;
+    const cov = await enforceCoverage(model, genMessages, coverage, gen);
+    rejections = [...gen.guardRejections, ...(cov.nudge?.guardRejections ?? [])];
+    gen = cov.gen;
+  }
+  if (gen.shape.kind === "question") return { kind: "question", text: gen.shape.text, gen };
+
+  return conclude(messages, stopReason(gen.shape, inRound.length === 0), gen, rejections);
+}
+
+/** Obtain the PRD (unless the model already wrote it). A PRD that cannot be
+ *  obtained fails the round (`prd_failed`) instead of storing arbitrary text. */
+async function conclude(
+  messages: ChatMessage[],
+  reason: TerminationReason,
+  gen: GenResult | null,
+  guardRejections: string[]
+): Promise<Plan> {
+  if (gen?.shape.kind === "prd")
+    return {
+      kind: "conclude",
+      markdown: gen.shape.markdown,
+      termination: { reason, guardRejections, prdRejections: [], prdVia: "model" },
+    };
+  const r = await forcePrd(model, messages);
+  return {
+    kind: "conclude",
+    markdown: r.ok ? r.markdown : null,
+    termination: {
+      reason: r.ok ? reason : "prd_failed",
+      guardRejections,
+      prdRejections: r.rejections,
+      prdVia: r.ok ? r.via : null,
+    },
+  };
+}
+
+// ── Claims (short transactions, no model calls) ─────────────────────────────
+
+function asExecutor(tx: unknown): Executor {
+  return tx as Executor;
 }
 
 /**
- * Finalize a round: build + freeze the PRD, methodology, and analysis
- * documents; mirror the latest version onto the session; email the operator;
- * then run the gap-analysis critic. If the critic opens a follow-up round,
- * generate its first question and leave the session active. Otherwise mark the
- * session complete and consume the invite.
+ * Insert the next question if the state is still the one it was planned from:
+ * session active, round open, no pending turn, same max step. Returns the
+ * pending turn (ours, or one a concurrent writer inserted first), or null if
+ * the state moved and the caller should re-read.
  */
-async function finalizeRound(
-  session: Session,
+async function claimQuestion(
+  st: State,
   round: Round,
-  markdown: string,
-  terminationReason: string
-): Promise<void> {
-  const fresh = await db.query.sessions.findFirst({
-    where: eq(sessions.id, session.id),
+  text: string,
+  gen: GenResult
+): Promise<Turn | null> {
+  return db.transaction(async (tx) => {
+    const ex = asExecutor(tx);
+    const s = await lockSession(ex, st.session.id);
+    if (!s || s.status !== "active") return null;
+    const pending = await findPendingTurn(ex, s.id);
+    if (pending) return pending;
+    const [r] = await ex
+      .select()
+      .from(rounds)
+      .where(and(eq(rounds.id, round.id), eq(rounds.status, "in_progress")));
+    if (!r) return null;
+    const current = await listTurns(ex, s.id);
+    if (maxStep(current) !== maxStep(st.turns)) return null;
+    const inRound = current.filter((t) => t.roundId === r.id && answered(t));
+    const [row] = await ex
+      .insert(turns)
+      .values(turnValues(s, r, maxStep(current) + 1, text, gen, inRound))
+      .returning();
+    return row;
   });
-  const constructBriefPresent = !!fresh?.constructBrief;
+}
 
-  const roundTurns = await db
-    .select()
-    .from(turns)
-    .where(eq(turns.roundId, round.id))
-    .orderBy(asc(turns.step));
+interface Finalized {
+  session: Session;
+  round: Round;
+  roundTurns: Turn[];
+  prdMarkdown: string | null;
+  methodologyMarkdown: string;
+  analysisMarkdown: string;
+}
 
+/**
+ * Freeze the round's documents and move the session to `awaiting_review`, in
+ * one transaction, if the state is still the one it was planned from. Returns
+ * null if another writer got there first.
+ */
+async function claimFinalize(
+  st: State,
+  round: Round,
+  markdown: string | null,
+  termination: TerminationDiagnostics
+): Promise<Finalized | null> {
+  const roundTurns = st.turns.filter((t) => t.roundId === round.id);
   const analysis = computeAnalysis(
     roundTurns.map((t) => ({
       answer: t.answer,
@@ -250,144 +311,118 @@ async function finalizeRound(
     }))
   );
   const analysisMarkdown = buildAnalysisDocument({
-    sessionId: session.id,
+    sessionId: st.session.id,
     analysis,
     prdVersion: round.prdVersion,
   });
-
-  const prdMarkdown = buildPrdHeader({ sessionId: session.id }) + markdown;
+  const prdMarkdown =
+    markdown == null ? null : buildPrdHeader({ sessionId: st.session.id }) + markdown;
   const methodologyMarkdown = buildMethodologyDocument({
-    sessionId: session.id,
-    constructBriefPresent,
+    sessionId: st.session.id,
+    constructBriefPresent: !!st.session.constructBrief,
     prdVersion: round.prdVersion,
     analysisPresent: true,
+    termination,
   });
 
-  const now = new Date();
-  await db
-    .update(rounds)
-    .set({
-      status: "complete",
-      terminationReason,
-      completedAt: now,
+  return db.transaction(async (tx) => {
+    const ex = asExecutor(tx);
+    const s = await lockSession(ex, st.session.id);
+    if (!s || s.status !== "active") return null;
+    if (await findPendingTurn(ex, s.id)) return null;
+    const current = await listTurns(ex, s.id);
+    if (maxStep(current) !== maxStep(st.turns)) return null;
+    const now = new Date();
+    const [r] = await ex
+      .update(rounds)
+      .set({
+        status: "complete",
+        terminationReason: termination.reason as TerminationReason,
+        completedAt: now,
+        prdMarkdown,
+        methodologyMarkdown,
+        analysisMarkdown,
+      })
+      .where(and(eq(rounds.id, round.id), eq(rounds.status, "in_progress")))
+      .returning();
+    if (!r) return null;
+    // Mirror the latest version onto the session for the existing routes. A
+    // failed round (no PRD) leaves the previous version's mirror in place.
+    const [updated] = await ex
+      .update(sessions)
+      .set({
+        ...(prdMarkdown != null ? { prdMarkdown, methodologyMarkdown } : {}),
+        completedAt: now,
+        abandonedAtStep: null,
+        status: "awaiting_review",
+      })
+      .where(and(eq(sessions.id, s.id), eq(sessions.status, "active")))
+      .returning();
+    return {
+      session: updated,
+      round: r,
+      roundTurns,
       prdMarkdown,
       methodologyMarkdown,
       analysisMarkdown,
-    })
-    .where(eq(rounds.id, round.id));
-
-  // Mirror the latest version onto the session for the existing routes/screens.
-  // The round is done but the session is not complete: it enters `awaiting_review`
-  // so a human operator can read the PRD and decide whether to open another round.
-  await db
-    .update(sessions)
-    .set({
-      prdMarkdown,
-      methodologyMarkdown,
-      completedAt: now,
-      abandonedAtStep: null,
-      status: "awaiting_review",
-    })
-    .where(eq(sessions.id, session.id));
-
-  // Email this version promptly, independent of whether more rounds follow.
-  const invite = await db.query.invites.findFirst({
-    where: eq(invites.id, session.inviteId),
+    };
   });
-  await sendPrdEmail({
-    inviteeName: invite?.inviteeName ?? "Unknown",
-    seed: session.seed,
-    sessionId: session.id,
-    prdVersion: round.prdVersion,
-    prdMarkdown,
-    methodologyMarkdown,
-    analysisMarkdown,
-  });
-
-  // Gap-analysis critic — ADVISORY. It runs at every finalize and its verdict
-  // is persisted on the round (so a one-round session still records *why* it
-  // stopped), but it no longer opens rounds itself. A human operator decides
-  // whether to extend, via `openFollowupRound`. Fail-safe: any error yields a
-  // "stop" verdict (see critic.ts), which simply records no recommendation.
-  const transcript = roundTurns
-    .filter((t) => t.answer != null && t.answer !== "done")
-    .map((t) => `Q${t.step}: ${t.questionText}\nA: ${t.answer}`)
-    .join("\n");
-  const critique = await critiqueRound(session.seed, transcript, markdown);
-  await db
-    .update(rounds)
-    .set({
-      criticRecommendOpen: critique.openNewRound,
-      criticGaps: JSON.stringify(critique.gaps),
-      criticFocus: critique.focus,
-    })
-    .where(eq(rounds.id, round.id));
 }
 
 /**
- * Operator-initiated follow-up round. Creates round N+1 (steered by the prior
- * round's stored critic focus, when present), generates its first question from
- * the full cross-round transcript, and reactivates the session. Returns
- * `ok: false` (leaving the session in `awaiting_review`) if no question could be
- * generated, so the operator can retry or complete instead.
+ * After the finalize commit: email the version, then run the advisory critic.
+ * Both are best-effort; neither can change the session state. A critic that
+ * fails leaves the verdict null ("not assessed"), never "no round needed".
  */
-export async function openFollowupRound(
-  session: Session
-): Promise<{ ok: boolean; reason?: string }> {
-  const rs = await db
-    .select()
-    .from(rounds)
-    .where(eq(rounds.sessionId, session.id))
-    .orderBy(desc(rounds.roundNumber));
-  const last = rs[0];
-  if (!last) return { ok: false, reason: "No prior round to follow." };
-
-  const [next] = await db
-    .insert(rounds)
-    .values({
-      sessionId: session.id,
-      roundNumber: last.roundNumber + 1,
-      prdVersion: last.prdVersion + 1,
-      status: "in_progress",
-      focusBrief: last.criticFocus ?? null,
-    })
-    .returning();
-
-  const allTurns = await loadTurns(session.id);
-  const messages = messagesFromTurns(session.seed, allTurns);
-  messages.push({
-    role: "user",
-    content: last.criticFocus
-      ? `(Continue the interview. The analyst flagged these gaps to focus on next: ${last.criticFocus} Ask the next single yes/no question.)`
-      : `(Continue the interview with another round of questions. Ask the next single yes/no question about anything still unclear.)`,
-  });
-  const gen = await generateNextShape(messages);
-
-  if (gen.shape.kind === "question") {
-    await insertTurn(session, next, maxStep(allTurns) + 1, gen.shape.text, gen, []);
-    await db
-      .update(sessions)
-      .set({ status: "active" })
-      .where(eq(sessions.id, session.id));
-    return { ok: true };
+async function afterFinalize(f: Finalized, rawMarkdown: string | null): Promise<void> {
+  if (f.prdMarkdown == null || rawMarkdown == null) return; // failed round
+  try {
+    const [invite] = await db.select().from(invites).where(eq(invites.id, f.session.inviteId));
+    await sendPrdEmail({
+      inviteeName: invite?.inviteeName ?? "Unknown",
+      seed: f.session.seed,
+      sessionId: f.session.id,
+      prdVersion: f.round.prdVersion,
+      prdMarkdown: f.prdMarkdown,
+      methodologyMarkdown: f.methodologyMarkdown,
+      analysisMarkdown: f.analysisMarkdown,
+    });
+  } catch (err) {
+    console.error("PRD email failed", err);
   }
-
-  // The follow-up produced no question — close the empty round, stay in review.
-  await db
-    .update(rounds)
-    .set({ status: "complete", terminationReason: "degenerate", completedAt: new Date() })
-    .where(eq(rounds.id, next.id));
-  return { ok: false, reason: "The model did not produce a new question." };
+  try {
+    const transcript = f.roundTurns
+      .filter((t) => t.answer != null && t.answer !== "done")
+      .map((t) => `Q${t.step}: ${t.questionText}\nA: ${t.answer}`)
+      .join("\n");
+    const critique = await critiqueRound(f.session.seed, transcript, rawMarkdown);
+    if (critique) {
+      await db
+        .update(rounds)
+        .set({
+          criticRecommendOpen: critique.openNewRound,
+          criticGaps: JSON.stringify(critique.gaps),
+          criticFocus: critique.focus,
+        })
+        .where(eq(rounds.id, f.round.id));
+    }
+  } catch (err) {
+    console.error("Critic failed", err);
+  }
 }
 
-/** The currently-displayed (unanswered) turn, if any. */
-export async function pendingTurn(sessionId: string) {
-  const [row] = await db
-    .select()
-    .from(turns)
-    .where(and(eq(turns.sessionId, sessionId), isNull(turns.answer)))
-    .orderBy(asc(turns.step));
-  return row ?? null;
+/** Open round 1 if the session has no round yet (the seed was saved but the
+ *  first generation never ran or died). */
+async function claimFirstRound(sessionId: string): Promise<void> {
+  await db.transaction(async (tx) => {
+    const ex = asExecutor(tx);
+    const s = await lockSession(ex, sessionId);
+    if (!s || s.status !== "active") return;
+    if ((await listRounds(ex, sessionId)).length > 0) return;
+    await ex
+      .insert(rounds)
+      .values({ sessionId, roundNumber: 1, prdVersion: 1, status: "in_progress" });
+  });
 }
 
 /**
@@ -401,128 +436,223 @@ async function persistConstructBrief(session: Session): Promise<void> {
       await db
         .update(sessions)
         .set({ constructBrief: brief })
-        .where(eq(sessions.id, session.id));
+        .where(and(eq(sessions.id, session.id), isNull(sessions.constructBrief)));
     }
   } catch {
     // Swallow — the interview must proceed even if the auditor call fails.
   }
 }
 
-/** Step 1: first model call after the seed is submitted. Opens round 1. */
-export async function beginInterview(session: Session): Promise<
-  | { kind: "question"; text: string }
-  | { kind: "done" }
-> {
-  await persistConstructBrief(session);
+// ── Public API ──────────────────────────────────────────────────────────────
 
-  const [round] = await db
-    .insert(rounds)
-    .values({ sessionId: session.id, roundNumber: 1, prdVersion: 1, status: "in_progress" })
-    .returning();
+/**
+ * Idempotent, re-entrant step. Returns the pending question if there is one;
+ * otherwise generates and claims the next turn or finalizes the round.
+ * Returns `done` when the session is not active (awaiting review, complete).
+ */
+export async function advance(sessionId: string): Promise<StepResult> {
+  for (let pass = 0; pass < MAX_ADVANCE_PASSES; pass++) {
+    const st = await readState(dbx, sessionId);
+    if (!st || st.session.status !== "active") return { kind: "done" };
+    if (st.pending) return questionResult(st.pending, st.turns);
 
-  const messages: ChatMessage[] = [{ role: "user", content: session.seed }];
-  let gen = await generateNextShape(messages);
-  // Coverage gate: a model that jumps straight to the PRD on turn 1 has covered
-  // nothing — push it to start asking.
-  if (gen.shape.kind !== "question") {
-    gen = await enforceCoverage(messages, [], gen);
+    const round = openRoundOf(st);
+    if (!round) {
+      // Legacy (pre-rounds) sessions carry a PRD but no rounds: nothing to drive.
+      if (st.rounds.length > 0 || st.session.prdMarkdown) return { kind: "done" };
+      if (!st.session.constructBrief) await persistConstructBrief(st.session);
+      await claimFirstRound(sessionId);
+      continue;
+    }
+
+    const next = await plan(st, round);
+    if (next.kind === "question") {
+      const turn = await claimQuestion(st, round, next.text, next.gen);
+      if (turn) return questionResult(turn, await listTurns(dbx, sessionId));
+      continue; // state moved under us — re-read
+    }
+    const fin = await claimFinalize(st, round, next.markdown, next.termination);
+    if (fin) {
+      await afterFinalize(fin, next.markdown);
+      return { kind: "done" };
+    }
   }
-
-  if (gen.shape.kind === "question") {
-    await insertTurn(session, round, 1, gen.shape.text, gen, []);
-    return { kind: "question", text: gen.shape.text };
-  }
-
-  // Degenerate first turn — model jumped straight to stop/PRD.
-  const markdown =
-    gen.shape.kind === "prd" ? gen.shape.markdown : await forcePrd(messages);
-  await finalizeRound(
-    session,
-    round,
-    markdown,
-    gen.shape.kind === "prd" ? "model_prd" : "degenerate"
-  );
-  return { kind: "done" };
+  // Still contended after several passes: report whatever is current.
+  const pending = await findPendingTurn(dbx, sessionId);
+  if (pending) return questionResult(pending, await listTurns(dbx, sessionId));
+  throw new Error("The interview is busy — please try again.");
 }
 
-/** Record the answer to the pending turn and produce the next step. */
+/**
+ * Create the session for an invite, or return the existing one. The invite
+ * row is locked, so concurrent starts yield exactly one session.
+ */
+export async function createSessionForInvite(
+  inviteId: string,
+  values: Omit<typeof sessions.$inferInsert, "inviteId">
+): Promise<Session> {
+  return db.transaction(async (tx) => {
+    const ex = asExecutor(tx);
+    await lockInvite(ex, inviteId);
+    const existing = await sessionForInvite(ex, inviteId);
+    if (existing) return existing;
+    const [row] = await ex
+      .insert(sessions)
+      .values({ ...values, inviteId })
+      .returning();
+    return row;
+  });
+}
+
+/**
+ * Record the answer to the displayed turn, then advance. A stale or
+ * duplicate answer (turn already answered, wrong session, session not active)
+ * changes nothing and returns the current state so the client resyncs.
+ */
 export async function submitAnswer(
-  session: Session,
-  answer: "yes" | "no" | "done",
+  sessionId: string,
+  turnId: string,
+  answer: Answer,
   paradata: AnswerParadata
-): Promise<{ kind: "question"; text: string } | { kind: "done" }> {
-  if (session.status === "complete") return { kind: "done" };
+): Promise<StepResult & { stale: boolean }> {
+  const claimed = await claimAnswer(dbx, sessionId, turnId, {
+    answer,
+    timeToAnswerMs: paradata.timeToAnswerMs,
+    deviceClass: paradata.deviceClass ?? null,
+    viewport: paradata.viewport ?? null,
+  });
+  const result = await advance(sessionId);
+  return { ...result, stale: !claimed };
+}
 
-  const allTurns = await loadTurns(session.id);
-  const pending = allTurns.find((t) => t.answer == null) ?? null;
-  // No pending question means the round has finalized (awaiting operator review)
-  // — there is nothing to answer, so never generate off a stale/duplicate POST.
-  if (!pending) return { kind: "done" };
-  const activeRound = await getActiveRound(session.id, pending);
+/**
+ * Operator-initiated follow-up round. Generates the first question first
+ * (steered by the latest PRD-bearing round's critic focus), then in one
+ * transaction claims the session, inserts round N+1 and its first turn, and
+ * reactivates the session. Nothing is written when no question comes back.
+ * A second concurrent call finds the session already active and succeeds
+ * without opening another round.
+ */
+export async function openFollowupRound(
+  sessionId: string
+): Promise<{ ok: boolean; reason?: string }> {
+  const st = await readState(dbx, sessionId);
+  if (!st) return { ok: false, reason: "Session not found." };
+  if (st.session.status === "active" && openRoundOf(st)) return { ok: true };
+  if (st.session.status !== "awaiting_review")
+    return { ok: false, reason: "This session is not awaiting review." };
+  if (st.rounds.length === 0) return { ok: false, reason: "No prior round to follow." };
 
-  if (pending) {
-    await db
-      .update(turns)
-      .set({
-        answer,
-        timeToAnswerMs: paradata.timeToAnswerMs,
-        deviceClass: paradata.deviceClass ?? null,
-        viewport: paradata.viewport ?? null,
-      })
-      .where(eq(turns.id, pending.id));
-    pending.answer = answer; // reflect in-memory; avoids a refetch
-  }
+  const prdRound = latestPrdRound(st.rounds);
+  const focus = prdRound?.criticFocus || null;
+  const messages = [...messagesFromTurns(st.session.seed, st.turns), focusNote(focus)];
+  const gen = await generateNextShape(model, messages);
+  if (gen.shape.kind !== "question")
+    return { ok: false, reason: "The model did not produce a new question. Try again." };
+  const text = gen.shape.text;
 
-  if (!activeRound) return { kind: "done" }; // safety: nothing to drive
+  return db.transaction(async (tx) => {
+    const ex = asExecutor(tx);
+    const s = await lockSession(ex, sessionId);
+    if (!s) return { ok: false, reason: "Session not found." };
+    const rs = await listRounds(ex, sessionId);
+    if (s.status === "active" && rs.some((r) => r.status === "in_progress")) return { ok: true };
+    if (s.status !== "awaiting_review")
+      return { ok: false, reason: "This session is not awaiting review." };
+    if (rs.length !== st.rounds.length)
+      return { ok: false, reason: "The session changed — reload and try again." };
+    const current = await listTurns(ex, sessionId);
+    const roundNumber = rs.reduce((m, r) => Math.max(m, r.roundNumber), 0) + 1;
+    const prdVersion = (latestPrdRound(rs)?.prdVersion ?? 0) + 1;
+    const [next] = await ex
+      .insert(rounds)
+      .values({ sessionId, roundNumber, prdVersion, status: "in_progress", focusBrief: focus })
+      .returning();
+    await ex.insert(turns).values(turnValues(s, next, maxStep(current) + 1, text, gen, []));
+    await ex
+      .update(sessions)
+      .set({ status: "active" })
+      .where(and(eq(sessions.id, sessionId), eq(sessions.status, "awaiting_review")));
+    return { ok: true };
+  });
+}
 
-  const messages = messagesFromTurns(session.seed, allTurns);
-  const answeredInRound = allTurns.filter(
-    (t) => t.roundId === activeRound.id && t.answer != null
-  ).length;
+/**
+ * Operator decision to close out a reviewed interview: mark the session
+ * complete and consume the invite. Conditional on `awaiting_review`, so it
+ * is refused while the respondent is mid-round.
+ */
+export async function completeReviewedSession(
+  sessionId: string
+): Promise<{ ok: boolean; reason?: string }> {
+  return db.transaction(async (tx) => {
+    const ex = asExecutor(tx);
+    const [s] = await ex
+      .update(sessions)
+      .set({ status: "complete" })
+      .where(and(eq(sessions.id, sessionId), eq(sessions.status, "awaiting_review")))
+      .returning();
+    if (!s) return { ok: false, reason: "This session is not awaiting review." };
+    await ex.update(invites).set({ consumedAt: new Date() }).where(eq(invites.id, s.inviteId));
+    return { ok: true };
+  });
+}
 
-  // Invitee asked to finish, or runaway ceiling reached → go straight to PRD.
-  if (answer === "done" || answeredInRound >= RUNAWAY_CEILING) {
-    const markdown = await forcePrd(messages);
-    await finalizeRound(
-      session,
-      activeRound,
-      markdown,
-      answer === "done" ? "done_by_user" : "ceiling"
-    );
-    return { kind: "done" };
-  }
+/** The session for an invite (oldest first), or null. */
+export async function sessionByInvite(inviteId: string): Promise<Session | null> {
+  return sessionForInvite(dbx, inviteId);
+}
 
-  const answeredInRoundTurns = allTurns.filter(
-    (t) => t.roundId === activeRound.id && t.answer != null
-  );
+/** The displayed (unanswered) turn for a session, if any. */
+export async function pendingTurn(sessionId: string): Promise<Turn | null> {
+  return findPendingTurn(dbx, sessionId);
+}
 
-  let gen = await generateNextShape(messages);
-  // Coverage gate: if the model tried to stop before the round covered enough
-  // construct dimensions, nudge it for one more question instead of finalizing.
-  if (gen.shape.kind !== "question") {
-    gen = await enforceCoverage(messages, answeredInRoundTurns, gen);
-  }
+/**
+ * Operator decision to close a stalled session (active, no question waiting:
+ * a request died and nobody resumed it). Any open round is closed with the
+ * `abandoned` reason, `abandonedAtStep` records the last answered step, the
+ * session completes and the invite is consumed — one transaction,
+ * conditional on the stalled state, so it is refused once a question exists.
+ */
+export async function closeStalledSession(
+  sessionId: string
+): Promise<{ ok: boolean; reason?: string }> {
+  return db.transaction(async (tx) => {
+    const ex = asExecutor(tx);
+    const s = await lockSession(ex, sessionId);
+    if (!s) return { ok: false, reason: "Session not found." };
+    if (s.status !== "active" || (await findPendingTurn(ex, sessionId)))
+      return { ok: false, reason: "This session is not stalled." };
+    const ts = await listTurns(ex, sessionId);
+    const lastAnswered = ts.filter(answered).reduce((m, t) => Math.max(m, t.step), 0);
+    const now = new Date();
+    await ex
+      .update(rounds)
+      .set({ status: "complete", terminationReason: "abandoned", completedAt: now })
+      .where(and(eq(rounds.sessionId, sessionId), eq(rounds.status, "in_progress")));
+    await ex
+      .update(sessions)
+      .set({ status: "complete", abandonedAtStep: lastAnswered || null })
+      .where(and(eq(sessions.id, sessionId), eq(sessions.status, "active")));
+    await ex.update(invites).set({ consumedAt: now }).where(eq(invites.id, s.inviteId));
+    return { ok: true };
+  });
+}
 
-  if (gen.shape.kind === "question") {
-    await insertTurn(
-      session,
-      activeRound,
-      maxStep(allTurns) + 1,
-      gen.shape.text,
-      gen,
-      answeredInRoundTurns
-    );
-    return { kind: "question", text: gen.shape.text };
-  }
-
-  // stop_confirm or prd → finish silently (invitee never sees the confirmation).
-  const markdown =
-    gen.shape.kind === "prd" ? gen.shape.markdown : await forcePrd(messages);
-  await finalizeRound(
-    session,
-    activeRound,
-    markdown,
-    gen.shape.kind === "prd" ? "model_prd" : "forced_prd"
-  );
-  return { kind: "done" };
+/**
+ * Revoke an invite nobody has used: it expires now. Refused once a session
+ * exists for it (the invite row is locked, so a concurrent start cannot slip
+ * in between the check and the write).
+ */
+export async function revokeUnusedInvite(inviteId: string): Promise<{ ok: boolean; reason?: string }> {
+  return db.transaction(async (tx) => {
+    const ex = asExecutor(tx);
+    const inv = await lockInvite(ex, inviteId);
+    if (!inv) return { ok: false, reason: "Invite not found." };
+    if (await sessionForInvite(ex, inviteId))
+      return { ok: false, reason: "This invite has already been used." };
+    await ex.update(invites).set({ expiresAt: new Date() }).where(eq(invites.id, inviteId));
+    return { ok: true };
+  });
 }
