@@ -54,7 +54,11 @@ export default function RoundActions({ sessionId }: { sessionId: string }) {
     async () => completeSession(sessionId),
     {} as { error?: string }
   );
-  const error = openState?.error || doneState?.error;
+  // Show only the error of the action that ran last (not a stale one left
+  // over from the other form).
+  const [last, setLast] = useState<"open" | "done" | null>(null);
+  const error =
+    last === "open" ? openState?.error : last === "done" ? doneState?.error : undefined;
 
   return (
     <div className="mt-10 rounded-lg border border-primary/30 bg-surface-container-low p-6 shadow-elevation-1">
@@ -67,7 +71,7 @@ export default function RoundActions({ sessionId }: { sessionId: string }) {
 
       {!confirming ? (
         <div className="mt-5 flex flex-wrap items-center gap-4">
-          <form action={openAction}>
+          <form action={openAction} onSubmit={() => setLast("open")}>
             <Submit idle="Open another round" busy="Opening…" variant="primary" />
           </form>
           <button
@@ -101,7 +105,7 @@ export default function RoundActions({ sessionId }: { sessionId: string }) {
             >
               Cancel
             </button>
-            <form action={doneAction}>
+            <form action={doneAction} onSubmit={() => setLast("done")}>
               <Submit
                 idle="Yes, complete & close"
                 busy="Completing…"

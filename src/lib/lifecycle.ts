@@ -146,3 +146,10 @@ export function deriveOperatorState(input: {
       return "unknown";
   }
 }
+
+/** The latest round that carries a PRD (failed and degenerate rounds don't).
+ *  Rounds must be in round order. */
+export function latestPrdRound<R extends { prdMarkdown: string | null }>(rs: R[]): R | null {
+  for (let i = rs.length - 1; i >= 0; i--) if (rs[i].prdMarkdown) return rs[i];
+  return null;
+}

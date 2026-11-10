@@ -9,7 +9,13 @@ import { db } from "@/lib/db";
 import { invites, sessions } from "@/lib/db/schema";
 import { createInviteToken } from "@/lib/tokens";
 import { getAdminSession, isAdmin } from "@/lib/session";
-import { completeReviewedSession, openFollowupRound } from "@/lib/interview-engine";
+import {
+  advance,
+  closeStalledSession,
+  completeReviewedSession,
+  openFollowupRound,
+  revokeUnusedInvite,
+} from "@/lib/interview-engine";
 
 function safeEqual(a: string, b: string): boolean {
   const ab = Buffer.from(a);
@@ -131,5 +137,42 @@ export async function unarchiveSession(formData: FormData): Promise<void> {
     .update(sessions)
     .set({ archivedAt: null })
     .where(eq(sessions.id, id));
+  revalidatePath("/admin/prds");
+}
+
+/**
+ * Resume a stalled session (active, no question waiting) from admin: the
+ * same idempotent `advance` the respondent's link runs. Produces the next
+ * question, or finalizes the round if the interview was already concluding.
+ */
+export async function resumeStalled(sessionId: string): Promise<{ error?: string }> {
+  if (!(await isAdmin())) return { error: "Not authorized." };
+  try {
+    await advance(sessionId);
+  } catch {
+    return { error: "Could not resume — the model call failed. Try again." };
+  }
+  revalidatePath(`/admin/prds/${sessionId}`);
+  return {};
+}
+
+/**
+ * Close a stalled session: its open round ends as `abandoned`, the session
+ * completes and the invite is consumed. Refused once a question exists.
+ */
+export async function closeStalled(sessionId: string): Promise<{ error?: string }> {
+  if (!(await isAdmin())) return { error: "Not authorized." };
+  const result = await closeStalledSession(sessionId);
+  if (!result.ok) return { error: result.reason ?? "Could not close the session." };
+  revalidatePath(`/admin/prds/${sessionId}`);
+  return {};
+}
+
+/** Revoke an invite that has not been used (it expires now). */
+export async function revokeInvite(formData: FormData): Promise<void> {
+  if (!(await isAdmin())) return;
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  await revokeUnusedInvite(id);
   revalidatePath("/admin/prds");
 }

@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { and, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, isNull, notExists, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { invites, sessions, turns } from "@/lib/db/schema";
-import { logout, archiveSession, unarchiveSession } from "@/actions/admin";
+import { logout, archiveSession, revokeInvite, unarchiveSession } from "@/actions/admin";
+import { deriveOperatorState } from "@/lib/lifecycle";
 import NewInvite from "./new-invite";
 import ThemeToggle from "@/components/theme-toggle";
 
@@ -75,6 +76,31 @@ export default async function PrdsPage({
   const answeredBySession = new Map<string, number>(
     counts.map((c) => [c.sessionId, c.n])
   );
+  const pendingRows = pageSessionIds.length
+    ? await db
+        .selectDistinct({ sessionId: turns.sessionId })
+        .from(turns)
+        .where(and(isNull(turns.answer), inArray(turns.sessionId, pageSessionIds)))
+    : [];
+  const hasPending = new Set(pendingRows.map((p) => p.sessionId));
+
+  // Invites nobody has used yet (no session): visible and revocable.
+  const unused = showArchived
+    ? []
+    : await db
+        .select()
+        .from(invites)
+        .where(
+          and(
+            isNull(invites.consumedAt),
+            notExists(
+              db.select({ one: sql`1` }).from(sessions).where(eq(sessions.inviteId, invites.id))
+            )
+          )
+        )
+        .orderBy(desc(invites.createdAt))
+        .limit(50);
+  const nowMs = Date.now();
 
   const pageHref = (p: number) =>
     `/admin/prds?${showArchived ? "archived=1&" : ""}page=${p}`;
@@ -162,6 +188,10 @@ export default async function PrdsPage({
             {rows.map(({ session, invite }) => {
               const qCount = answeredBySession.get(session.id) ?? 0;
               const hasBrief = !!session.prdMarkdown;
+              const opState = deriveOperatorState({
+                status: session.status,
+                hasPendingTurn: hasPending.has(session.id),
+              });
               const durationS = session.completedAt
                 ? Math.round(
                     (new Date(session.completedAt).getTime() -
@@ -186,12 +216,12 @@ export default async function PrdsPage({
                   </td>
                   <td className="p-3 font-mono">{qCount}</td>
                   <td className="whitespace-nowrap p-3">
-                    {session.status === "complete" ? (
+                    {opState === "complete" ? (
                       <span className="inline-flex items-center gap-2 text-label-sm text-primary">
                         <span className="inline-block h-1.5 w-1.5 rounded-full bg-primary" />
                         Complete{durationS != null ? ` · ${durationS}s` : ""}
                       </span>
-                    ) : session.status === "awaiting_review" ? (
+                    ) : opState === "awaiting_review" ? (
                       <span
                         className="inline-flex items-center gap-2 text-label-sm text-primary"
                         title="Round finalized — open another round or mark complete"
@@ -199,34 +229,44 @@ export default async function PrdsPage({
                         <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
                         Awaiting your review
                       </span>
-                    ) : (
+                    ) : opState === "stalled" ? (
+                      <span
+                        className="inline-flex items-center gap-2 text-label-sm text-error"
+                        title="Active but no question is waiting — resume or close it"
+                      >
+                        <span className="inline-block h-1.5 w-1.5 rounded-full bg-error" />
+                        Stalled
+                      </span>
+                    ) : opState === "awaiting_respondent" ? (
                       <span
                         className="text-label-sm text-on-surface-variant"
                         title="Respondent has an open question — no operator action yet"
                       >
                         Awaiting respondent
                       </span>
+                    ) : (
+                      <span className="text-label-sm text-error" title={session.status}>
+                        Unknown status
+                      </span>
                     )}
                   </td>
                   <td className="whitespace-nowrap p-3">
-                    {hasBrief ? (
-                      <span className="flex gap-4 text-label-sm">
-                        <Link
-                          href={`/admin/prds/${session.id}`}
-                          className="text-primary underline underline-offset-2 transition-colors hover:brightness-110"
-                        >
-                          View
-                        </Link>
+                    <span className="flex gap-4 text-label-sm">
+                      <Link
+                        href={`/admin/prds/${session.id}`}
+                        className="text-primary underline underline-offset-2 transition-colors hover:brightness-110"
+                      >
+                        View
+                      </Link>
+                      {hasBrief && (
                         <a
                           href={`/api/admin/prd/${session.id}`}
                           className="text-on-surface-variant underline-offset-2 transition-colors hover:text-on-surface hover:underline focus-visible:underline"
                         >
                           .md
                         </a>
-                      </span>
-                    ) : (
-                      "—"
-                    )}
+                      )}
+                    </span>
                   </td>
                   <td className="whitespace-nowrap p-3 text-right">
                     <form action={showArchived ? unarchiveSession : archiveSession}>
@@ -286,6 +326,60 @@ export default async function PrdsPage({
           </div>
         )}
       </div>
+
+      {unused.length > 0 && (
+        <section className="mt-12" aria-labelledby="unused-invites">
+          <h2 id="unused-invites" className="text-label-sm text-on-surface-variant">
+            Unused invites ({unused.length})
+          </h2>
+          <div className="mt-3 overflow-x-auto rounded-xl border border-hairline">
+            <table className="w-full text-left align-top text-body-md">
+              <caption className="sr-only">Invites with no session yet</caption>
+              <thead>
+                <tr className="border-b border-hairline text-label-sm text-on-surface-variant">
+                  <th scope="col" className="p-3 font-semibold">Invitee</th>
+                  <th scope="col" className="p-3 font-semibold">Note</th>
+                  <th scope="col" className="whitespace-nowrap p-3 font-semibold">Issued</th>
+                  <th scope="col" className="whitespace-nowrap p-3 font-semibold">Expires</th>
+                  <th scope="col" className="whitespace-nowrap p-3 text-right font-semibold">Manage</th>
+                </tr>
+              </thead>
+              <tbody>
+                {unused.map((inv) => {
+                  const expired = new Date(inv.expiresAt).getTime() < nowMs;
+                  return (
+                    <tr key={inv.id} className="border-t border-hairline text-on-surface">
+                      <td className="whitespace-nowrap p-3">{inv.inviteeName}</td>
+                      <td className="max-w-[16rem] truncate p-3 text-on-surface-variant" title={inv.note ?? ""}>
+                        {inv.note ?? "—"}
+                      </td>
+                      <td className="whitespace-nowrap p-3 text-on-surface-variant">{fmtDate(inv.createdAt)}</td>
+                      <td className="whitespace-nowrap p-3 text-on-surface-variant">
+                        {expired ? "Expired" : fmtDate(inv.expiresAt)}
+                      </td>
+                      <td className="whitespace-nowrap p-3 text-right">
+                        {expired ? (
+                          "—"
+                        ) : (
+                          <form action={revokeInvite}>
+                            <input type="hidden" name="id" value={inv.id} />
+                            <button
+                              type="submit"
+                              className="text-label-sm text-on-surface-variant underline-offset-2 transition-colors hover:text-on-surface hover:underline focus-visible:underline"
+                            >
+                              Revoke
+                            </button>
+                          </form>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
 
       <div className="mt-8 flex justify-end">
         <a

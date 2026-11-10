@@ -15,11 +15,18 @@ export async function GET(
     return new NextResponse("Unauthorized", { status: 401 });
   }
 
-  // Serve the latest round's analysis for this session.
+  // Serve the analysis of the latest PRD-bearing round, so it matches the PRD
+  // download (a failed round has an analysis but no PRD).
   const [round] = await db
     .select()
     .from(rounds)
-    .where(and(eq(rounds.sessionId, params.id), isNotNull(rounds.analysisMarkdown)))
+    .where(
+      and(
+        eq(rounds.sessionId, params.id),
+        isNotNull(rounds.analysisMarkdown),
+        isNotNull(rounds.prdMarkdown)
+      )
+    )
     .orderBy(desc(rounds.roundNumber));
 
   if (!round || !round.analysisMarkdown) {

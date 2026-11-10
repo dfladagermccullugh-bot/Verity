@@ -15,7 +15,7 @@ import {
   type NextShape,
 } from "./interview-policy";
 import type { CoverageTurn } from "./coverage";
-import type { Answer, TerminationReason } from "./lifecycle";
+import { latestPrdRound, type Answer, type TerminationReason } from "./lifecycle";
 import { critiqueRound } from "./critic";
 import { sendPrdEmail } from "./email";
 import {
@@ -108,12 +108,6 @@ function stopReason(shape: NextShape, firstTurn: boolean): TerminationReason {
 
 function answered(t: Turn): boolean {
   return t.answer != null;
-}
-
-/** The latest round that carries a PRD (failed and degenerate rounds don't). */
-export function latestPrdRound<R extends { prdMarkdown: string | null }>(rs: R[]): R | null {
-  for (let i = rs.length - 1; i >= 0; i--) if (rs[i].prdMarkdown) return rs[i];
-  return null;
 }
 
 function questionResult(turn: Turn, all: Turn[]): StepResult {
@@ -612,4 +606,53 @@ export async function sessionByInvite(inviteId: string): Promise<Session | null>
 /** The displayed (unanswered) turn for a session, if any. */
 export async function pendingTurn(sessionId: string): Promise<Turn | null> {
   return findPendingTurn(dbx, sessionId);
+}
+
+/**
+ * Operator decision to close a stalled session (active, no question waiting:
+ * a request died and nobody resumed it). Any open round is closed with the
+ * `abandoned` reason, `abandonedAtStep` records the last answered step, the
+ * session completes and the invite is consumed — one transaction,
+ * conditional on the stalled state, so it is refused once a question exists.
+ */
+export async function closeStalledSession(
+  sessionId: string
+): Promise<{ ok: boolean; reason?: string }> {
+  return db.transaction(async (tx) => {
+    const ex = asExecutor(tx);
+    const s = await lockSession(ex, sessionId);
+    if (!s) return { ok: false, reason: "Session not found." };
+    if (s.status !== "active" || (await findPendingTurn(ex, sessionId)))
+      return { ok: false, reason: "This session is not stalled." };
+    const ts = await listTurns(ex, sessionId);
+    const lastAnswered = ts.filter(answered).reduce((m, t) => Math.max(m, t.step), 0);
+    const now = new Date();
+    await ex
+      .update(rounds)
+      .set({ status: "complete", terminationReason: "abandoned", completedAt: now })
+      .where(and(eq(rounds.sessionId, sessionId), eq(rounds.status, "in_progress")));
+    await ex
+      .update(sessions)
+      .set({ status: "complete", abandonedAtStep: lastAnswered || null })
+      .where(and(eq(sessions.id, sessionId), eq(sessions.status, "active")));
+    await ex.update(invites).set({ consumedAt: now }).where(eq(invites.id, s.inviteId));
+    return { ok: true };
+  });
+}
+
+/**
+ * Revoke an invite nobody has used: it expires now. Refused once a session
+ * exists for it (the invite row is locked, so a concurrent start cannot slip
+ * in between the check and the write).
+ */
+export async function revokeUnusedInvite(inviteId: string): Promise<{ ok: boolean; reason?: string }> {
+  return db.transaction(async (tx) => {
+    const ex = asExecutor(tx);
+    const inv = await lockInvite(ex, inviteId);
+    if (!inv) return { ok: false, reason: "Invite not found." };
+    if (await sessionForInvite(ex, inviteId))
+      return { ok: false, reason: "This invite has already been used." };
+    await ex.update(invites).set({ expiresAt: new Date() }).where(eq(invites.id, inviteId));
+    return { ok: true };
+  });
 }

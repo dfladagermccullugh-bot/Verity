@@ -15,7 +15,8 @@
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "canary": "tsx scripts/canary.ts",
-    "canary:rebaseline": "tsx scripts/canary.ts --rebaseline"
+    "canary:rebaseline": "tsx scripts/canary.ts --rebaseline",
+    "e2e:interview": "node scripts/e2e/interview-client.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.32.1",

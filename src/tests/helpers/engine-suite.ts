@@ -9,6 +9,8 @@ import { and, eq, isNull } from "drizzle-orm";
 import { invites, rounds, sessions, turns } from "@/lib/db/schema";
 import {
   advance,
+  closeStalledSession,
+  revokeUnusedInvite,
   completeReviewedSession,
   createSessionForInvite,
   openFollowupRound,
@@ -376,6 +378,42 @@ export function engineSuite(label: string, migrationsFolder: () => string, m: Mo
       if (q1.kind !== "question") throw new Error("expected question");
       const [t1] = await db.select().from(turns).where(eq(turns.id, q1.turnId));
       expect(t1.constructDimension).toBe("mirror");
+    });
+
+    it("closes a stalled session as abandoned and consumes the invite", async () => {
+      const { session, invite } = await start();
+      const q1 = await advance(session.id);
+      if (q1.kind !== "question") throw new Error("expected question");
+      // Refused while a question is waiting.
+      expect((await closeStalledSession(session.id)).ok).toBe(false);
+
+      m.model.set(() => {
+        throw new Error("model down");
+      });
+      await expect(submitAnswer(session.id, q1.turnId, "yes", PARADATA)).rejects.toThrow();
+      expect((await closeStalledSession(session.id)).ok).toBe(true);
+
+      const s = await sessionRow(session.id);
+      expect(s.status).toBe("complete");
+      expect(s.abandonedAtStep).toBe(1);
+      const [r] = await db.select().from(rounds).where(eq(rounds.sessionId, session.id));
+      expect(r).toMatchObject({ status: "complete", terminationReason: "abandoned" });
+      const [inv] = await db.select().from(invites).where(eq(invites.id, invite.id));
+      expect(inv.consumedAt).not.toBeNull();
+      // Nothing more is generated for a closed session.
+      m.model.reset();
+      expect((await advance(session.id)).kind).toBe("done");
+      expect(m.model.fn).not.toHaveBeenCalled();
+    });
+
+    it("revokes only an unused invite", async () => {
+      const unused = await seedInvite(db);
+      expect((await revokeUnusedInvite(unused.id)).ok).toBe(true);
+      const [inv] = await db.select().from(invites).where(eq(invites.id, unused.id));
+      expect(inv.expiresAt.getTime()).toBeLessThanOrEqual(Date.now());
+
+      const { invite } = await start();
+      expect((await revokeUnusedInvite(invite.id)).ok).toBe(false);
     });
 
     it("finalizes at the runaway ceiling", async () => {
