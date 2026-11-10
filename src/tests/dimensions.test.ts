@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { classifyDimension, DIMENSIONS, TRACKED_DIMENSIONS } from "@/lib/dimensions";
+import {
+  classifyDimension,
+  DIMENSIONS,
+  TRACKED_DIMENSIONS,
+  isMirrorQuestion,
+} from "@/lib/dimensions";
 
 describe("classifyDimension", () => {
   it("maps a user-targeting question to primary_user", () => {
@@ -39,5 +44,16 @@ describe("dimension tables", () => {
   it("tracks exactly ten substantive dimensions", () => {
     expect(TRACKED_DIMENSIONS).toHaveLength(10);
     expect(DIMENSIONS).toHaveLength(10);
+  });
+});
+
+describe("isMirrorQuestion", () => {
+  it("recognizes the skill's mirror turn", () => {
+    expect(isMirrorQuestion("So you want a bottle that reminds you to drink. Ready?")).toBe(true);
+    expect(isMirrorQuestion("A habit tracker for kids — ready ?")).toBe(true);
+  });
+  it("does not match ordinary questions", () => {
+    expect(isMirrorQuestion("Is this for adults?")).toBe(false);
+    expect(isMirrorQuestion("Is it ready for launch soon?")).toBe(false);
   });
 });

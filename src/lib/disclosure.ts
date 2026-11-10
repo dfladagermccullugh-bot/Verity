@@ -35,6 +35,46 @@ export interface MethodologyInputs extends DocumentInputs {
   prdVersion?: number;
   /** True iff a response-quality analysis companion was produced. */
   analysisPresent?: boolean;
+  /** How the round ended, with the generation diagnostics behind it. */
+  termination?: TerminationDiagnostics;
+}
+
+/** Generation diagnostics frozen on the round's methodology document. */
+export interface TerminationDiagnostics {
+  reason: string;
+  /** Guard / anti-leading rejections of the final turn's generation. */
+  guardRejections: string[];
+  /** Rejections while forcing the PRD. */
+  prdRejections: string[];
+  /** How the PRD was obtained; null when none was. */
+  prdVia: "model" | "marker" | "fallback" | null;
+}
+
+const TERMINATION_LABELS: Record<string, string> = {
+  done_by_user: "the respondent chose to finish",
+  ceiling: "the per-round question ceiling was reached",
+  forced_prd: "the model judged it had enough; the PRD was then requested",
+  model_prd: "the model wrote the PRD on its own",
+  degenerate: "the model would not ask a first question",
+  guard_exhausted:
+    "every generation attempt for the next question was rejected by the guard; the PRD was then requested",
+  prd_failed: "no valid PRD could be obtained; this round has no PRD",
+  abandoned: "the operator closed the round",
+};
+
+function terminationLines(t: TerminationDiagnostics): string[] {
+  const lines = [
+    "## Round termination",
+    "",
+    `- **Reason:** \`${t.reason}\` — ${TERMINATION_LABELS[t.reason] ?? "unrecorded"}`,
+    `- **PRD obtained via:** ${t.prdVia ?? "none"}`,
+  ];
+  if (t.guardRejections.length > 0)
+    lines.push(`- **Rejected generations (final turn):** ${t.guardRejections.map((r) => `\`${r}\``).join(", ")}`);
+  if (t.prdRejections.length > 0)
+    lines.push(`- **Rejected PRD attempts:** ${t.prdRejections.map((r) => `\`${r}\``).join(", ")}`);
+  lines.push("");
+  return lines;
 }
 
 function today(): string {
@@ -141,6 +181,7 @@ export function buildMethodologyDocument(inputs: MethodologyInputs): string {
     `- **Sampling parameters:** Anthropic API defaults; \`max_tokens = ${MAX_TOKENS}\`; no custom temperature, top_p, or seed`,
     `- **Date of generation:** ${date}`,
     "",
+    ...(inputs.termination ? terminationLines(inputs.termination) : []),
   ].join("\n");
 }
 

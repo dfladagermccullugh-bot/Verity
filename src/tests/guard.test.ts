@@ -106,13 +106,70 @@ describe("guardOutput — rejections", () => {
     });
   });
 
-  it("documents the spec's substring matching: 'api' inside an ordinary word is rejected", () => {
-    // Per spec the blocklist uses includes(); 'capitalize' contains 'api'.
-    // Implemented exactly as specified — this test pins that behavior.
+  it("matches jargon on word boundaries, so 'api' inside an ordinary word passes", () => {
+    // Was pinned as substring matching (rejected as jargon:api); the
+    // boundary-aware filter accepts it.
     expect(guardOutput("Should names be capitalized?")).toEqual({
-      kind: "reject",
-      reason: "jargon:api",
+      kind: "question",
+      text: "Should names be capitalized?",
     });
+  });
+});
+
+describe("guardOutput — jargon boundary probes (false positives seen in production)", () => {
+  const ordinary = [
+    "Is it for a restaurant?",
+    "Are people interested in sharing?",
+    "Do users need to trust it?",
+    "Is the current process frustrating?",
+    "Does it need rapid answers?",
+    "Would a therapist use it?",
+    "Is a quick reaction needed?",
+    "Do people need to rest between sessions?",
+    "Can the bottle rust?",
+    "Would users react badly to reminders?",
+  ];
+  for (const q of ordinary) {
+    it(`accepts: ${q}`, () => {
+      expect(guardOutput(q)).toEqual({ kind: "question", text: q });
+    });
+  }
+
+  const technical: [string, string][] = [
+    ["Will it connect to an external API?", "jargon:api"],
+    ["Will it use several APIs?", "jargon:api"],
+    ["Should it store things in databases?", "jargon:database"],
+    ["Should it be built with React?", "jargon:react"],
+    ["Should it be written in Rust?", "jargon:rust"],
+    ["Should it expose REST endpoints?", "jargon:rest"],
+    ["Is it a React Native app?", "jargon:react native"],
+    ["Should it use Next.js?", "jargon:next.js"],
+    ["Does it need a back-end?", "jargon:back-end"],
+  ];
+  for (const [q, reason] of technical) {
+    it(`rejects: ${q}`, () => {
+      expect(guardOutput(q)).toEqual({ kind: "reject", reason });
+    });
+  }
+});
+
+describe("guardOutput — tolerant stop confirmation", () => {
+  const variants = [
+    `"${STOP_CONFIRM}"`,
+    "I think I have enough - want me to write the PRD now?",
+    "I think I have enough – want me to write the PRD now?",
+    "I think I have enough. Want me to write the PRD now?",
+    `**${STOP_CONFIRM}**`,
+    "I think I have enough — want me to write the PRD now",
+  ];
+  for (const v of variants) {
+    it(`matches: ${v}`, () => {
+      expect(guardOutput(v).kind).toBe("stop_confirm");
+    });
+  }
+
+  it("does not treat a partial phrase as the stop confirmation", () => {
+    expect(guardOutput("Want me to write the PRD now?").kind).toBe("question");
   });
 });
 

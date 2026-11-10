@@ -20,7 +20,10 @@ import {
   generateNextShape as generateNextShapePolicy,
   type GenResult,
   type ModelFn,
+  type NextShape,
 } from "./interview-policy";
+import type { CoverageTurn } from "./coverage";
+import { MIRROR_DIMENSION, isMirrorQuestion } from "./dimensions";
 import type { Answer, TerminationReason } from "./lifecycle";
 import { critiqueRound } from "./critic";
 import { sendPrdEmail } from "./email";
@@ -28,6 +31,7 @@ import {
   buildPrdHeader,
   buildMethodologyDocument,
   buildAnalysisDocument,
+  type TerminationDiagnostics,
 } from "./disclosure";
 import { buildConstructBrief } from "./construct-brief";
 
@@ -36,23 +40,59 @@ export { RUNAWAY_CEILING } from "./interview-policy";
 /** The interview model, bound for the policy module. */
 const model: ModelFn = (messages) => callModel(messages);
 
-// Phase-1 bindings: identical behaviour to the former in-file policy. An
-// exhausted generation is still treated like a stop confirmation here.
-function asStop(gen: GenResult): GenResult {
-  return gen.shape.kind === "exhausted" ? { ...gen, shape: { kind: "stop_confirm" } } : gen;
-}
 async function generateNextShape(messages: ChatMessage[]): Promise<GenResult> {
-  return asStop(await generateNextShapePolicy(model, messages));
+  return generateNextShapePolicy(model, messages);
 }
-async function enforceCoverage(
+
+/** Termination reason for a non-question shape. */
+function stopReason(shape: NextShape, firstTurn: boolean): TerminationReason {
+  if (shape.kind === "prd") return "model_prd";
+  if (shape.kind === "exhausted") return "guard_exhausted";
+  return firstTurn ? "degenerate" : "forced_prd";
+}
+
+/**
+ * Apply the coverage gate to a non-question shape. Returns the question to
+ * insert, or the stop to conclude with (plus the nudge's rejections).
+ */
+async function gateStop(
   messages: ChatMessage[],
-  answered: { answer: string | null; constructDimension: string | null }[],
-  stopGen: GenResult
-): Promise<GenResult> {
-  return asStop((await enforceCoveragePolicy(model, messages, answered, stopGen)).gen);
+  answered: CoverageTurn[],
+  gen: GenResult
+): Promise<{ gen: GenResult; rejections: string[] }> {
+  const cov = await enforceCoveragePolicy(model, messages, answered, gen);
+  return {
+    gen: cov.gen,
+    rejections: [...gen.guardRejections, ...(cov.nudge?.guardRejections ?? [])],
+  };
 }
-async function forcePrd(messages: ChatMessage[]): Promise<string> {
-  return (await forcePrdPolicy(model, messages)).markdown;
+
+/** End a round: obtain the PRD (unless the model already wrote it) and
+ *  finalize. A PRD that cannot be obtained fails the round (`prd_failed`). */
+async function concludeRound(
+  session: Session,
+  round: Round,
+  messages: ChatMessage[],
+  reason: TerminationReason,
+  gen: GenResult | null,
+  guardRejections: string[] = gen?.guardRejections ?? []
+): Promise<void> {
+  if (gen?.shape.kind === "prd") {
+    await finalizeRound(session, round, gen.shape.markdown, {
+      reason,
+      guardRejections,
+      prdRejections: [],
+      prdVia: "model",
+    });
+    return;
+  }
+  const r = await forcePrdPolicy(model, messages);
+  await finalizeRound(session, round, r.ok ? r.markdown : null, {
+    reason: r.ok ? reason : "prd_failed",
+    guardRejections,
+    prdRejections: r.rejections,
+    prdVia: r.ok ? r.via : null,
+  });
 }
 
 /** Paradata captured alongside each answer (Survey Methodology §15). */
@@ -95,7 +135,12 @@ async function insertTurn(
   gen: GenResult,
   priorRoundAnswered: Turn[]
 ): Promise<void> {
-  const dimension = classifyDimension(questionText);
+  // The skill's opening "mirror … Ready?" turn is protocol, not measurement:
+  // tagged so coverage and the analysis exclude it.
+  const dimension =
+    step === 1 && isMirrorQuestion(questionText)
+      ? MIRROR_DIMENSION
+      : classifyDimension(questionText);
   const isTriangulationProbe = priorRoundAnswered.some(
     (t) => t.constructDimension === dimension
   );
@@ -145,9 +190,10 @@ async function getActiveRound(
 async function finalizeRound(
   session: Session,
   round: Round,
-  markdown: string,
-  terminationReason: TerminationReason
+  markdown: string | null,
+  termination: TerminationDiagnostics
 ): Promise<void> {
+  const terminationReason = termination.reason as TerminationReason;
   const fresh = await db.query.sessions.findFirst({
     where: eq(sessions.id, session.id),
   });
@@ -173,12 +219,14 @@ async function finalizeRound(
     prdVersion: round.prdVersion,
   });
 
-  const prdMarkdown = buildPrdHeader({ sessionId: session.id }) + markdown;
+  const prdMarkdown =
+    markdown == null ? null : buildPrdHeader({ sessionId: session.id }) + markdown;
   const methodologyMarkdown = buildMethodologyDocument({
     sessionId: session.id,
     constructBriefPresent,
     prdVersion: round.prdVersion,
     analysisPresent: true,
+    termination,
   });
 
   const now = new Date();
@@ -197,16 +245,20 @@ async function finalizeRound(
   // Mirror the latest version onto the session for the existing routes/screens.
   // The round is done but the session is not complete: it enters `awaiting_review`
   // so a human operator can read the PRD and decide whether to open another round.
+  // A failed round (no PRD) leaves the previous version's mirror in place.
   await db
     .update(sessions)
     .set({
-      prdMarkdown,
-      methodologyMarkdown,
+      ...(prdMarkdown != null ? { prdMarkdown, methodologyMarkdown } : {}),
       completedAt: now,
       abandonedAtStep: null,
       status: "awaiting_review",
     })
     .where(eq(sessions.id, session.id));
+
+  // Nothing to email or critique without a PRD; the operator sees the
+  // failed round in admin.
+  if (markdown == null || prdMarkdown == null) return;
 
   // Email this version promptly, independent of whether more rounds follow.
   const invite = await db.query.invites.findFirst({
@@ -340,10 +392,11 @@ export async function beginInterview(session: Session): Promise<
 
   const messages: ChatMessage[] = [{ role: "user", content: session.seed }];
   let gen = await generateNextShape(messages);
+  let rejections = gen.guardRejections;
   // Coverage gate: a model that jumps straight to the PRD on turn 1 has covered
   // nothing — push it to start asking.
   if (gen.shape.kind !== "question") {
-    gen = await enforceCoverage(messages, [], gen);
+    ({ gen, rejections } = await gateStop(messages, [], gen));
   }
 
   if (gen.shape.kind === "question") {
@@ -352,14 +405,7 @@ export async function beginInterview(session: Session): Promise<
   }
 
   // Degenerate first turn — model jumped straight to stop/PRD.
-  const markdown =
-    gen.shape.kind === "prd" ? gen.shape.markdown : await forcePrd(messages);
-  await finalizeRound(
-    session,
-    round,
-    markdown,
-    gen.shape.kind === "prd" ? "model_prd" : "degenerate"
-  );
+  await concludeRound(session, round, messages, stopReason(gen.shape, true), gen, rejections);
   return { kind: "done" };
 }
 
@@ -400,12 +446,12 @@ export async function submitAnswer(
 
   // Invitee asked to finish, or runaway ceiling reached → go straight to PRD.
   if (answer === "done" || answeredInRound >= RUNAWAY_CEILING) {
-    const markdown = await forcePrd(messages);
-    await finalizeRound(
+    await concludeRound(
       session,
       activeRound,
-      markdown,
-      answer === "done" ? "done_by_user" : "ceiling"
+      messages,
+      answer === "done" ? "done_by_user" : "ceiling",
+      null
     );
     return { kind: "done" };
   }
@@ -415,10 +461,11 @@ export async function submitAnswer(
   );
 
   let gen = await generateNextShape(messages);
+  let rejections = gen.guardRejections;
   // Coverage gate: if the model tried to stop before the round covered enough
   // construct dimensions, nudge it for one more question instead of finalizing.
   if (gen.shape.kind !== "question") {
-    gen = await enforceCoverage(messages, answeredInRoundTurns, gen);
+    ({ gen, rejections } = await gateStop(messages, answeredInRoundTurns, gen));
   }
 
   if (gen.shape.kind === "question") {
@@ -433,14 +480,14 @@ export async function submitAnswer(
     return { kind: "question", text: gen.shape.text };
   }
 
-  // stop_confirm or prd → finish silently (invitee never sees the confirmation).
-  const markdown =
-    gen.shape.kind === "prd" ? gen.shape.markdown : await forcePrd(messages);
-  await finalizeRound(
+  // stop / prd / exhausted → finish silently (invitee never sees the confirmation).
+  await concludeRound(
     session,
     activeRound,
-    markdown,
-    gen.shape.kind === "prd" ? "model_prd" : "forced_prd"
+    messages,
+    stopReason(gen.shape, false),
+    gen,
+    rejections
   );
   return { kind: "done" };
 }

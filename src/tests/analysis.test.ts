@@ -103,3 +103,17 @@ describe("renderAnalysisMarkdown", () => {
     expect(md).toMatch(/## Triangulation reliability/);
   });
 });
+
+describe("computeAnalysis — mirror step exclusion", () => {
+  it("ignores the opening mirror turn in every metric", () => {
+    const base = [
+      { answer: "no", timeToAnswerMs: 2000, constructDimension: "problem", leadingVerdict: "clean" },
+      { answer: "no", timeToAnswerMs: 3000, constructDimension: "scale", leadingVerdict: "clean" },
+    ];
+    const withMirror = [
+      { answer: "yes", timeToAnswerMs: 100, constructDimension: "mirror", leadingVerdict: "clean" },
+      ...base,
+    ];
+    expect(computeAnalysis(withMirror)).toEqual(computeAnalysis(base));
+  });
+});

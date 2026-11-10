@@ -9,7 +9,7 @@
  */
 
 import { getModelName, type ChatMessage } from "../model-client";
-import { classifyDimension } from "../dimensions";
+import { MIRROR_DIMENSION, classifyDimension, isMirrorQuestion } from "../dimensions";
 import type { CoverageTurn } from "../coverage";
 import {
   RUNAWAY_CEILING,
@@ -45,8 +45,9 @@ async function prd(
 ): Promise<string> {
   const r = await forcePrd(model, messages);
   counters.rejects += r.rejects;
-  if (r.accepted) counters.accepts += 1;
-  return r.markdown;
+  if (r.ok && r.via === "marker") counters.accepts += 1;
+  // A failed PRD yields no headings, which the comparator reports as drift.
+  return r.ok ? r.markdown : "";
 }
 
 /**
@@ -91,7 +92,10 @@ export async function runOne(fixture: SeedFixture, model: ModelFn): Promise<Seed
     const answer = fixture.answerScript[answersUsed++];
     messages.push({ role: "assistant", content: shape.text });
     messages.push({ role: "user", content: answer });
-    answered.push({ answer, constructDimension: classifyDimension(shape.text) });
+    // Same tagging as the engine: the opening mirror turn is not coverage.
+    const constructDimension =
+      step === 0 && isMirrorQuestion(shape.text) ? MIRROR_DIMENSION : classifyDimension(shape.text);
+    answered.push({ answer, constructDimension });
 
     if (answer === "done") {
       terminatedNaturally = false;

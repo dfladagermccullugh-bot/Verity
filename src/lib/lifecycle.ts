@@ -31,6 +31,11 @@ export const TERMINATION_REASONS = [
   "degenerate",
   /** The operator closed a stalled round. */
   "abandoned",
+  /** Every generation attempt (and the coverage nudge) was rejected by the
+   *  guard; the PRD was then forced. Previously recorded as forced_prd. */
+  "guard_exhausted",
+  /** No valid PRD could be obtained; the round carries no PRD. */
+  "prd_failed",
 ] as const;
 export type TerminationReason = (typeof TERMINATION_REASONS)[number];
 
