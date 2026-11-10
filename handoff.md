@@ -28,11 +28,17 @@ AI voice survey interviewers on top of Qualtrics. Plan, decisions, phases:
 the **legacy app**: unchanged at the root (its `tsconfig.json` now excludes `voice/`),
 to be switched off at Phase 6.
 
-- **Phases 0 and 1 built** (85 tests, `cd voice && npm test`). Phase 1 = `.qsf` reader
+- **Phases 0, 1 and Phase 2 core built** (126 tests, `cd voice && npm test`). Phase 1 = `.qsf` reader
   (`src/qualtrics/qsf.ts`, declared subset, refuses the rest), readiness report, spoken
   script with version hash (`src/script/script.ts`), pure resumable survey-logic engine
   (`src/engine/flow.ts`), typed interview CLI, Qualtrics response CSV writer.
   `ci.yml` runs typecheck + tests for both packages on PRs.
+- **Phase 2 core** = `src/interviewer/`: `protocol.ts` (fixed call wording, AI disclosure
+  locked), `classify.ts` (rules first; model verdicts checked in code), `interviewer.ts`
+  (state machine; speaks by line id only; audit log), `simulate.ts` (personas).
+  `docs/sample-calls.md` is generated; `UPDATE_SAMPLES=1 npm test` regenerates it.
+  **Phase 2 still open:** Postgres persistence (reuse the legacy claim/advance + PGlite
+  pattern), live Claude classifier adapter, 300-answer labelled eval set, weekly canary.
 - **Not verified against a live Qualtrics account.** `library-test.qsf` is hand-written;
   reader also checked against genuine exports via `QSF_SAMPLES_DIR` (not committed).
 - **Operator-only, open:** rotate the Neon password (before the repo goes public), archive
