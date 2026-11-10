@@ -17,3 +17,6 @@ next-env.d.ts
 training-data-*.json
 *.dump
 *.sql.gz
+
+# Temporary worktrees used by parallel build agents.
+.claude/worktrees/
