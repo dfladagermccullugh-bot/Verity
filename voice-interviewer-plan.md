@@ -232,16 +232,23 @@ US, AI-written follow-up questions, any rebuilt survey editor or dashboard.
 
 ## 8. Needed from you
 
-1. **Qualtrics access:** free account only, or any university or employer licence? Then the
-   20-minute check in Phase 0.
-2. **Old data:** run the archive (I give exact steps), confirm the session count, rotate the
-   database password. Will this repo be public?
-3. **Location:** are you and your pilot volunteers in the US? Everything above assumes yes.
-4. **Keys, when each phase starts:** trial keys for the voice models being compared
-   (Cartesia, Fish Audio, ElevenLabs, Deepgram) at Phase 3; Telnyx at Phase 4. Do you
-   already have working Telnyx and Deepgram accounts and a Telnyx number from `phone_map`,
-   or were they never set up live? Telnyx requires identity verification for outbound calling.
-   Expected total spend for development and pilot: under about $50 (estimate).
+Answered 10 Nov 2026:
+- **Qualtrics:** free account only. The file-based path (D3) is the only path; the API
+  adapter stays optional. Whether a free account can import responses is still the
+  Phase 0 check.
+- **Repo:** likely to be made public. So the leaked database password must be rotated
+  before that happens, and no respondent data or archive may ever be committed.
+- **Accounts:** Telnyx and Deepgram accounts exist.
+
+Still open:
+1. **Location:** are you and your pilot volunteers in the US? Everything above assumes yes.
+2. **Old data (Phase 0):** run the archive (exact steps supplied), confirm the session
+   count, rotate the database password.
+3. **Qualtrics check (Phase 0):** the 20-minute test on a survey I specify.
+4. **Keys, when each phase starts:** trial keys for the other voice models being compared
+   (Cartesia, Fish Audio, ElevenLabs) at Phase 3; Telnyx key and number at Phase 4. Telnyx
+   requires identity verification for outbound calling. Expected total spend for
+   development and pilot: under about $50 (estimate).
 5. **Before calling anyone but yourself:** a short lawyer review of the consent script, or
    ethics-board review if you are university-affiliated.
 
