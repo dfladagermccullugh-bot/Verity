@@ -36,6 +36,29 @@ export interface SimulatedCall {
 
 export const DEFAULT_WORDING: CampaignWording = { sponsor: "the Library Study", topic: "your local public library", minutes: 3, askRecording: false };
 
+/** Let a persona talk to an interviewer until the call ends or the persona hangs up. */
+export async function converse(interviewer: Interviewer, persona: Persona, maxTurns = 500): Promise<{ transcript: TranscriptTurn[]; hungUp: boolean }> {
+  const transcript: TranscriptTurn[] = [];
+  const attempts = new Map<string, number>();
+  let said = interviewer.open();
+  let hungUp = false;
+  for (let turn = 0; turn < maxTurns && !interviewer.ended; turn++) {
+    for (const l of said) transcript.push({ speaker: "interviewer", text: l.text });
+    const expecting = interviewer.expecting();
+    const key = expecting.kind === "answer" ? expecting.slot : expecting.kind;
+    attempts.set(key, (attempts.get(key) ?? 0) + 1);
+    const reply = persona({ expecting, attempt: attempts.get(key)!, said });
+    if (reply === null) {
+      hungUp = true;
+      break;
+    }
+    transcript.push({ speaker: "respondent", text: reply });
+    said = await interviewer.hear(reply);
+  }
+  if (!hungUp) for (const l of said) transcript.push({ speaker: "interviewer", text: l.text });
+  return { transcript, hungUp };
+}
+
 export async function simulateCall(opts: {
   instrument: Instrument;
   persona: Persona;
@@ -52,24 +75,7 @@ export async function simulateCall(opts: {
   if (opts.policy) init.policy = opts.policy;
   if (opts.resumeFrom) init.resumeFrom = opts.resumeFrom;
   const interviewer = new Interviewer(init);
-  const transcript: TranscriptTurn[] = [];
-  const attempts = new Map<string, number>();
-  let said = interviewer.open();
-  let hungUp = false;
-  for (let turn = 0; turn < (opts.maxTurns ?? 500) && !interviewer.ended; turn++) {
-    for (const l of said) transcript.push({ speaker: "interviewer", text: l.text });
-    const expecting = interviewer.expecting();
-    const key = expecting.kind === "answer" ? expecting.slot : expecting.kind;
-    attempts.set(key, (attempts.get(key) ?? 0) + 1);
-    const reply = opts.persona({ expecting, attempt: attempts.get(key)!, said });
-    if (reply === null) {
-      hungUp = true;
-      break;
-    }
-    transcript.push({ speaker: "respondent", text: reply });
-    said = await interviewer.hear(reply);
-  }
-  if (!hungUp) for (const l of said) transcript.push({ speaker: "interviewer", text: l.text });
+  const { transcript, hungUp } = await converse(interviewer, opts.persona, opts.maxTurns);
   return { interviewer, transcript, table, hungUp };
 }
 

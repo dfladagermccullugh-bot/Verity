@@ -14,9 +14,13 @@
     "verity": "tsx src/cli.ts"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.16",
     "@types/node": "^22.20.5",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vitest": "^5.1.0"
+  },
+  "dependencies": {
+    "postgres": "^4.1.0"
   }
 }
