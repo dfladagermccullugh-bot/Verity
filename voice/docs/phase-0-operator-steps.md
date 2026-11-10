@@ -1,6 +1,6 @@
 # Phase 0 — steps for the operator
 
-Three jobs only you can do, because they need your logins. About 45 minutes in total.
+Four jobs only you can do, because they need your logins. About 45 minutes in total.
 Do them in this order. Menu names may differ slightly from what you see; if a step does
 not match, note what you saw and ask.
 
@@ -67,7 +67,17 @@ before making the repo public.** Do A first.
 Follow [`qualtrics-test-survey.md`](qualtrics-test-survey.md). It ends with a list of
 files and notes to send back.
 
+## D. Tag the old code (2 minutes)
+
+A tag is a permanent bookmark on the old app's code, so it can always be found again.
+It could not be created from the build session (that session may only push its own branch).
+
+1. On GitHub, open the repo → **Releases** → **Draft a new release**.
+2. **Choose a tag** → type `idea-seeder-v1` → **Create new tag**. Target: `main`.
+   Do this before any Verity Voice work is merged into `main`.
+3. Title: `Legacy Verity web app`. Publish.
+
 ## What happens next
 
-When A, B and C are back, Phase 0 is verified and closed, and Phase 1 (survey file in,
+When A, B, C and D are done, Phase 0 is verified and closed, and Phase 1 (survey file in,
 responses out) can start on your "go".
