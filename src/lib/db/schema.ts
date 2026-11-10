@@ -1,4 +1,14 @@
-import { pgTable, uuid, text, timestamp, integer, boolean } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import {
+  pgTable,
+  uuid,
+  text,
+  timestamp,
+  integer,
+  boolean,
+  index,
+  uniqueIndex,
+} from "drizzle-orm/pg-core";
 import {
   ANSWERS,
   ROUND_STATUSES,
@@ -45,7 +55,11 @@ export const sessions = pgTable("sessions", {
   // Operator-set archive flag: hides a session from the default registry view
   // without deleting it (the row + all rounds/turns are retained). Null = active.
   archivedAt: timestamp("archived_at", { withTimezone: true }),
-});
+}, (t) => ({
+  // Migration 0006 (guarded: skipped if duplicates remain — the engine's
+  // locked claims enforce the same invariants either way).
+  inviteUnique: uniqueIndex("sessions_invite_id_unique").on(t.inviteId),
+}));
 
 export const rounds = pgTable("rounds", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -70,7 +84,9 @@ export const rounds = pgTable("rounds", {
   criticRecommendOpen: boolean("critic_recommend_open"),
   criticGaps: text("critic_gaps"),
   criticFocus: text("critic_focus"),
-});
+}, (t) => ({
+  roundNumberUnique: uniqueIndex("rounds_session_round_unique").on(t.sessionId, t.roundNumber),
+}));
 
 export const turns = pgTable("turns", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -92,7 +108,14 @@ export const turns = pgTable("turns", {
   isTriangulationProbe: boolean("is_triangulation_probe"),
   deviceClass: text("device_class"),
   viewport: text("viewport"),
-});
+}, (t) => ({
+  stepUnique: uniqueIndex("turns_session_step_unique").on(t.sessionId, t.step),
+  // At most one unanswered (displayed) turn per session.
+  onePending: uniqueIndex("turns_one_pending_per_session")
+    .on(t.sessionId)
+    .where(sql`${t.answer} is null`),
+  roundIdx: index("turns_round_id_idx").on(t.roundId),
+}));
 
 export type Invite = typeof invites.$inferSelect;
 export type Session = typeof sessions.$inferSelect;
