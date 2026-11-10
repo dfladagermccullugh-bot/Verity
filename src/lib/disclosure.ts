@@ -16,7 +16,7 @@
  * document — so the association survives separation in transit.
  */
 
-import { getModelName, MAX_TOKENS } from "./anthropic";
+import { getModelName, MAX_TOKENS } from "./model-client";
 import { getSkillVersion } from "./skill/version";
 import { renderAnalysisMarkdown, type RoundAnalysis } from "./analysis";
 

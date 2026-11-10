@@ -11,15 +11,17 @@ import {
   type Turn,
 } from "./db/schema";
 import { callModel, type ChatMessage } from "./anthropic";
-import { guardOutput, STOP_CONFIRM } from "./guard";
-import { detectLeading } from "./anti-leading";
 import { classifyDimension } from "./dimensions";
 import { computeAnalysis } from "./analysis";
 import {
-  coverageMet,
-  uncoveredDimensionLabels,
-  type CoverageTurn,
-} from "./coverage";
+  RUNAWAY_CEILING,
+  enforceCoverage as enforceCoveragePolicy,
+  forcePrd as forcePrdPolicy,
+  generateNextShape as generateNextShapePolicy,
+  type GenResult,
+  type ModelFn,
+} from "./interview-policy";
+import type { Answer, TerminationReason } from "./lifecycle";
 import { critiqueRound } from "./critic";
 import { sendPrdEmail } from "./email";
 import {
@@ -29,7 +31,29 @@ import {
 } from "./disclosure";
 import { buildConstructBrief } from "./construct-brief";
 
-export const RUNAWAY_CEILING = 40;
+export { RUNAWAY_CEILING } from "./interview-policy";
+
+/** The interview model, bound for the policy module. */
+const model: ModelFn = (messages) => callModel(messages);
+
+// Phase-1 bindings: identical behaviour to the former in-file policy. An
+// exhausted generation is still treated like a stop confirmation here.
+function asStop(gen: GenResult): GenResult {
+  return gen.shape.kind === "exhausted" ? { ...gen, shape: { kind: "stop_confirm" } } : gen;
+}
+async function generateNextShape(messages: ChatMessage[]): Promise<GenResult> {
+  return asStop(await generateNextShapePolicy(model, messages));
+}
+async function enforceCoverage(
+  messages: ChatMessage[],
+  answered: { answer: string | null; constructDimension: string | null }[],
+  stopGen: GenResult
+): Promise<GenResult> {
+  return asStop((await enforceCoveragePolicy(model, messages, answered, stopGen)).gen);
+}
+async function forcePrd(messages: ChatMessage[]): Promise<string> {
+  return (await forcePrdPolicy(model, messages)).markdown;
+}
 
 /** Paradata captured alongside each answer (Survey Methodology §15). */
 export interface AnswerParadata {
@@ -60,112 +84,6 @@ async function loadTurns(sessionId: string): Promise<Turn[]> {
 
 function maxStep(allTurns: Turn[]): number {
   return allTurns.reduce((m, t) => Math.max(m, t.step), 0);
-}
-
-type NextShape =
-  | { kind: "question"; text: string }
-  | { kind: "stop_confirm" }
-  | { kind: "prd"; markdown: string };
-
-/** A generated shape plus the diagnostics recorded on the resulting turn. */
-interface GenResult {
-  shape: NextShape;
-  regenCount: number;
-  guardRejections: string[];
-  leadingRewrites: number;
-}
-
-/**
- * Call the model, run the guard AND the deterministic anti-leading check,
- * regenerating on any rejection. After repeated failures, fall back to the
- * stop-confirm path. Returns the accepted shape with per-turn diagnostics.
- */
-async function generateNextShape(messages: ChatMessage[]): Promise<GenResult> {
-  const guardRejections: string[] = [];
-  let leadingRewrites = 0;
-  let regenCount = 0;
-
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const raw = await callModel(messages);
-    const g = guardOutput(raw);
-
-    if (g.kind === "question") {
-      const lead = detectLeading(g.text);
-      if (lead.leading) {
-        guardRejections.push(`leading:${lead.reason}`);
-        leadingRewrites += 1;
-        regenCount += 1;
-        continue; // regenerate a neutrally-phrased question
-      }
-      return {
-        shape: { kind: "question", text: g.text },
-        regenCount,
-        guardRejections,
-        leadingRewrites,
-      };
-    }
-    if (g.kind === "stop_confirm")
-      return { shape: { kind: "stop_confirm" }, regenCount, guardRejections, leadingRewrites };
-    if (g.kind === "prd")
-      return {
-        shape: { kind: "prd", markdown: g.markdown },
-        regenCount,
-        guardRejections,
-        leadingRewrites,
-      };
-
-    guardRejections.push(g.reason);
-    regenCount += 1;
-  }
-
-  return { shape: { kind: "stop_confirm" }, regenCount, guardRejections, leadingRewrites };
-}
-
-/** Drive the model to emit the final PRD markdown. Best-effort, never throws. */
-async function forcePrd(messages: ChatMessage[]): Promise<string> {
-  const convo: ChatMessage[] = [
-    ...messages,
-    { role: "assistant", content: STOP_CONFIRM },
-    { role: "user", content: "yes" },
-  ];
-  for (let attempt = 0; attempt < 2; attempt++) {
-    const raw = await callModel(convo);
-    const g = guardOutput(raw);
-    if (g.kind === "prd") return g.markdown;
-    convo.push({ role: "assistant", content: raw });
-    convo.push({
-      role: "user",
-      content:
-        "Write the PRD now. Begin your reply with the line ===PRD=== and include every required section.",
-    });
-  }
-  const fallback = await callModel(convo);
-  return fallback.replace(/^===PRD===\s*/, "");
-}
-
-/**
- * Coverage gate (content validity). When the model tries to stop (PRD or
- * stop-confirm) before the round has covered enough construct dimensions, nudge
- * it once toward the uncovered dimensions and try to obtain one more question.
- * Falls back to the original stop-shape if the model still refuses to ask. The
- * caller bypasses this entirely on an explicit respondent "done".
- */
-async function enforceCoverage(
-  baseMessages: ChatMessage[],
-  answered: CoverageTurn[],
-  stopGen: GenResult
-): Promise<GenResult> {
-  if (coverageMet(answered)) return stopGen;
-  const remaining = uncoveredDimensionLabels(answered).join(", ");
-  const nudged: ChatMessage[] = [
-    ...baseMessages,
-    {
-      role: "user",
-      content: `(Not enough has been covered to write the PRD yet. These areas are still unaddressed: ${remaining}. Ask the next single yes/no question about one of them — do not write the PRD.)`,
-    },
-  ];
-  const gen = await generateNextShape(nudged);
-  return gen.shape.kind === "question" ? gen : stopGen;
 }
 
 /** Insert a pending question turn, computing its measurement metadata. */
@@ -228,7 +146,7 @@ async function finalizeRound(
   session: Session,
   round: Round,
   markdown: string,
-  terminationReason: string
+  terminationReason: TerminationReason
 ): Promise<void> {
   const fresh = await db.query.sessions.findFirst({
     where: eq(sessions.id, session.id),
@@ -448,7 +366,7 @@ export async function beginInterview(session: Session): Promise<
 /** Record the answer to the pending turn and produce the next step. */
 export async function submitAnswer(
   session: Session,
-  answer: "yes" | "no" | "done",
+  answer: Answer,
   paradata: AnswerParadata
 ): Promise<{ kind: "question"; text: string } | { kind: "done" }> {
   if (session.status === "complete") return { kind: "done" };
