@@ -1,9 +1,17 @@
 # Verity Voice — AI voice interviewers on top of Qualtrics: plan
 
-**Status (10 Nov 2026):** plan approved. Phase 0 scaffold shipped: `voice/` package, `ci.yml`
-pull-request check, operator steps and Qualtrics test-survey spec in `voice/docs/`.
-Phase 0 closes when the operator steps come back (archive counts, password rotation,
-Qualtrics files). Each later phase waits for its own "go".
+**Status (10 Nov 2026):** Phases 0 and 1 built. The operator has asked for the build to
+proceed without per-phase sign-off. Open items that need the operator's logins are in
+`voice/docs/phase-0-operator-steps.md` (password rotation, archive, Qualtrics import check).
+
+- **Phase 0:** `voice/` package, `ci.yml`, old code bookmarked as branch
+  `legacy/idea-seeder-v1`. Not done: archive and password rotation (need logins).
+- **Phase 1:** `.qsf` reader, readiness report, spoken script, survey-logic engine, typed
+  interview, response CSV writer; 85 tests. Checked against three genuine Qualtrics
+  exports. **Not yet verified against a live Qualtrics account.**
+- **Deviations from this plan:** piped text and multi-select are refused for now, not
+  supported (piped text needs live speech, Phase 3). The test survey file is hand-written
+  until a real export replaces it. Location is assumed to be the US.
 
 ## Context
 

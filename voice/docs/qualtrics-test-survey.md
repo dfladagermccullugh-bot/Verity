@@ -1,16 +1,39 @@
-# Qualtrics test survey — build, answer, export, import
+# Qualtrics test survey — the one check that needs a Qualtrics login
 
-Purpose: give Verity Voice real Qualtrics files to build against, and find out what a free
-account allows. About 20 minutes. All answers are made up, so the files are safe to share.
+Nothing in the build is waiting on this. It answers one open question — can a free
+Qualtrics account import responses? — and replaces a hand-written test file with a real
+export. About 10 minutes, whenever convenient. All answers are made up.
 
-Menu names are from Qualtrics' help pages and may differ slightly on your screen. If a step
-does not match what you see, note what you saw and carry on.
+Menu names are from Qualtrics' help pages and may differ slightly on your screen.
 
-## 1. Build the survey
+## Quick route (10 minutes)
+
+1. **Import the survey.** In Qualtrics: create a new survey project and choose to import
+   from a file. Pick `voice/fixtures/qualtrics/library-test.qsf` (download it from GitHub
+   first). This file was written by hand in Qualtrics' format, so the import itself is a
+   test: if Qualtrics rejects it, note the message and use the manual route below instead.
+2. **Export it back.** Survey tab → **Tools** → **Import/Export** → **Export survey**.
+   Rename the download `library-test-real.qsf`.
+3. **Import responses.** Publish the survey. Then **Data & Analysis** → **Export & Import**
+   → **Import data**, and upload `voice/fixtures/qualtrics/library-test-expected-import.csv`.
+   Two responses should appear. Note any error or any message about your account type.
+4. **Export responses.** **Data & Analysis** → **Export & Import** → **Export data** → CSV,
+   with **Use numeric values**. Rename it `library-test-numeric.csv`.
+5. **Send back** in the chat: the two files from steps 2 and 4, and what happened in
+   steps 1 and 3 (a screenshot of any message is ideal).
+
+If step 3 fails on a free account, the plan's fallback applies (a university licence or
+a short paid plan for the demonstration); the rest of the product is unaffected.
+
+## Manual route (only if the quick route's step 1 fails)
+
+Build the survey by hand from the specification below, then continue from step 2 above.
+
+### Specification
 
 Create a new blank survey named **Library test**.
 
-### Block 1 — rename it "Main"
+#### Block 1 — rename it "Main"
 
 | # | Question type | Question text | Answer options | Extra setting |
 |---|---|---|---|---|
@@ -21,7 +44,7 @@ Create a new blank survey named **Library test**.
 | Q5 | Net Promoter Score | How likely are you to recommend your local public library to a friend or neighbor? | 0 to 10 (built in) | — |
 | Q6 | Text entry, single line | How many books did you read in the past 12 months? | — | **Validation:** content type Number, minimum 0, maximum 500 |
 
-### Block 2 — add a new block, name it "Extra"
+#### Block 2 — add a new block, name it "Extra"
 
 | # | Question type | Question text | Answer options | Extra setting |
 |---|---|---|---|---|
@@ -29,83 +52,13 @@ Create a new blank survey named **Library test**.
 | Q8 | Text entry, multi-line | What one change would most improve your local public library? | — | — |
 | Q9 | Multiple choice, single answer | Overall, how would you rate your local public library? | Excellent · Good · Fair · Poor · Don't know | — |
 
-### Embedded data
+#### Embedded data
 
 Open **Survey flow**. Add an **Embedded Data** element, move it to the top, and add two
 fields with no value set: `vv_mode` and `vv_case_id`. Apply.
 
-Type the wording exactly as written. Verity Voice reads questions word for word, so the
-fixtures should match this page.
+Type the wording exactly as written; the test files expect it word for word.
 
-## 2. Export the survey file
-
-Survey tab → **Tools** → **Import/Export** → **Export survey**. A `.qsf` file downloads.
-Rename it `library-test.qsf`.
-
-## 3. Answer it twice
-
-Publish the survey, then use **Preview** (or the anonymous link) and submit these two
-responses exactly.
-
-**Response A**
-
-| Question | Answer |
-|---|---|
-| Q2 | Yes |
-| Q3 | About once a month |
-| Q4 staff are helpful | Somewhat agree |
-| Q4 opening hours | Neither agree nor disagree |
-| Q4 easy to get to | Strongly agree |
-| Q5 | 8 |
-| Q6 | 12 |
-| Q7 | Yes |
-| Q8 | Longer weekend hours |
-| Q9 | Good |
-
-**Response B**
-
-| Question | Answer |
-|---|---|
-| Q2 | No (Q3 and Q4 should not appear) |
-| Q5 | 3 |
-| Q6 | 0 |
-| Q7 | No (the survey should end) |
-
-## 4. Export the responses
-
-**Data & Analysis** → **Export & Import** → **Export data** → **CSV**. Download twice:
-
-1. with **Use numeric values** selected → rename `library-test-numeric.csv`
-2. with **Use choice text** selected → rename `library-test-labels.csv`
-
-If you do not see both responses, check whether preview responses are being filtered out,
-and note it.
-
-## 5. Try an import
-
-**Data & Analysis** → **Export & Import** → **Import data**.
-
-1. If the window offers an example or template file, download it and rename it
-   `import-template.csv`.
-2. Upload `library-test-numeric.csv` unchanged and follow the prompts.
-3. Note the result: did two new responses appear? Was there an error or a message about
-   your account type? A screenshot of any message is ideal.
-
-This is the main unknown. If a free account cannot import, the plan has a fallback.
-
-## 6. Look for contacts
-
-In the main left-hand menu, look for **Contacts** or **Directories**. Note only whether it
-exists and whether it lets you create a list. Free accounts reportedly have none.
-
-## 7. Send back
-
-Attach in the chat:
-
-- `library-test.qsf`
-- `library-test-numeric.csv`
-- `library-test-labels.csv`
-- `import-template.csv`, if there was one
-- your notes for steps 4, 5 and 6, with any screenshots
-
-They go into `voice/fixtures/qualtrics/` and become the test files for Phase 1.
+The two made-up responses in the import file are: A — Yes; About once a month; Somewhat
+agree / Neither agree nor disagree / Strongly agree; 8; 12; Yes; "Longer weekend hours";
+Good. B — No; 3; 0; No (Q3, Q4, Q8 and Q9 are never asked).

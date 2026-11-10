@@ -1,38 +1,48 @@
-# Phase 0 — steps for the operator
+# What still needs the operator
 
-Four jobs only you can do, because they need your logins. About 45 minutes in total.
-Do them in this order. Menu names may differ slightly from what you see; if a step does
-not match, note what you saw and ask.
+The build does not wait on any of this. These are the few things that cannot be done
+from the build session, because they need a login it has no way to hold.
 
-## A. Archive the old Verity sessions (10 minutes)
+| | What | Why only you | Time | When |
+|---|---|---|---|---|
+| **B** | Change the leaked database password | Needs your Neon and Vercel logins | 10 min | **Before the repo is made public** |
+| **A** | Archive the old Verity sessions | Needs database access | 2 min to connect Neon, or 10 min by hand | Before the old app is switched off |
+| **C** | Qualtrics import check | Needs your Qualtrics login | 10 min | Any time |
 
-Two copies, because each catches what the other misses.
+Done without you: the old code is bookmarked as branch `legacy/idea-seeder-v1` (a tag
+could not be pushed from the build session; the branch does the same job).
 
-**A1. Download the export file.**
+## B. Change the leaked database password
 
-1. Log in to the live Verity admin page (`/admin/login` on your site).
-2. In the same browser, open `/api/admin/export` on your site. A file named
-   `training-data-<date>.json` downloads.
-3. Open it in a text editor and search for `"session_id"`. Write down how many matches
-   there are. That is the number of sessions in the file.
-4. Store the file somewhere private that you back up. **Do not put it in the repo folder.**
+An old copy of the database password is in this repo's history. Changing the password
+makes that copy useless; the repo can then be made public safely.
 
-This file holds every question, answer and PRD. It leaves out invitee names, the construct
-brief and the methodology text, which is why A2 exists.
+1. Neon console → the Verity project → **Roles** (may be under "Roles & Databases") → the
+   role your app uses → **Reset password**. Copy the new connection string.
+2. Vercel → the Verity project → **Settings** → **Environment Variables** → `DATABASE_URL`.
+   Replace the value for Production and Preview. Save.
+3. Vercel → **Deployments** → the current production deployment → **Redeploy**.
+4. Open the live site's admin page and check that the session list loads.
 
-**A2. Make a frozen full copy inside Neon.**
+The build session cannot do this: it has no Neon or Vercel login, the Vercel connector
+cannot edit settings, and it is not permitted to use the old password from the history.
 
-1. Log in to the Neon console and open the Verity project.
-2. Open **Branches** → **Create branch**. Branch from your main (production) branch, as of
-   now. Name it `archive-2026-11`.
-3. Do not connect anything to this branch. It is a complete copy; leave it alone.
+## A. Archive the old sessions
 
-Whether your Neon plan allows an extra branch was not checked. If it does not, say so
-and I will give you a one-command alternative.
+**Easiest:** connect the **Neon** connector in your claude.ai connector settings, then
+say "Neon is connected". The build session will then make a frozen copy
+(`archive-2026-11`), count the rows and confirm the copy matches. No other step.
 
-**A3. Count the live rows.**
+**By hand, if you prefer:**
 
-In the Neon console, open **SQL Editor**, make sure the main branch is selected, and run:
+1. Log in to the live Verity admin page, then open `/api/admin/export` on the same site.
+   A file `training-data-<date>.json` downloads. Keep it somewhere private, **never in
+   the repo folder**. It leaves out invitee names, the construct brief and the
+   methodology text.
+2. Neon console → **Branches** → **Create branch** from main, named `archive-2026-11`.
+   That is a complete copy; leave it alone.
+3. Neon console → **SQL Editor** on the main branch, run the query below, and send the
+   four numbers.
 
 ```sql
 select
@@ -42,42 +52,6 @@ select
   (select count(*) from invites)  as invites;
 ```
 
-**Send me:** the four numbers, and the count from A1 step 3. The `sessions` number and
-the A1 count must match. Nothing in this step changes any data.
+## C. Qualtrics import check
 
-## B. Change the leaked database password (10 minutes)
-
-An old copy of the database password is in this repo's history. Once the password is
-changed, that old copy is useless, and the repo can be made public safely. **Do this
-before making the repo public.** Do A first.
-
-1. Neon console → the Verity project → **Roles** (may be under "Roles & Databases") → the
-   role your app uses → **Reset password**. Copy the new connection string.
-2. Vercel → the Verity project → **Settings** → **Environment Variables** → `DATABASE_URL`.
-   Replace the value for Production and Preview. Save.
-3. Vercel → **Deployments** → the current production deployment → **Redeploy**.
-4. Open the live site's admin page and check that the session list loads.
-5. If you keep a copy of the old connection string on your own computer (for example in
-   `.claude/settings.local.json` or a `.env.local` file), update it there too.
-
-**Send me:** "password rotated, admin page loads" — not the password or connection string.
-
-## C. The Qualtrics check (20 minutes)
-
-Follow [`qualtrics-test-survey.md`](qualtrics-test-survey.md). It ends with a list of
-files and notes to send back.
-
-## D. Tag the old code (2 minutes)
-
-A tag is a permanent bookmark on the old app's code, so it can always be found again.
-It could not be created from the build session (that session may only push its own branch).
-
-1. On GitHub, open the repo → **Releases** → **Draft a new release**.
-2. **Choose a tag** → type `idea-seeder-v1` → **Create new tag**. Target: `main`.
-   Do this before any Verity Voice work is merged into `main`.
-3. Title: `Legacy Verity web app`. Publish.
-
-## What happens next
-
-When A, B, C and D are done, Phase 0 is verified and closed, and Phase 1 (survey file in,
-responses out) can start on your "go".
+See [`qualtrics-test-survey.md`](qualtrics-test-survey.md).
