@@ -1,0 +1,50 @@
+# Pull-request check: typecheck + tests for both packages.
+#
+# No live model, database or carrier is touched — tests use in-memory Postgres
+# and scripted models. The live-model canary stays in canary.yml (schedule-only).
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # The original Verity web app at the repo root.
+  legacy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+
+  # Verity Voice (voice/).
+  voice:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: voice
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: voice/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test

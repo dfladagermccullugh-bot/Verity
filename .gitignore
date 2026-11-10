@@ -11,3 +11,9 @@ next-env.d.ts
 
 # Local Claude Code settings — machine-specific, may hold secrets. Never commit.
 .claude/settings.local.json
+
+# Archives of respondent data — never commit (see voice/docs/phase-0-operator-steps.md).
+/archive/
+training-data-*.json
+*.dump
+*.sql.gz

@@ -1,7 +1,9 @@
 # Verity Voice — AI voice interviewers on top of Qualtrics: plan
 
-**Status:** plan approved 10 Nov 2026. No code yet. Phase 0 starts on the operator's "go";
-each later phase waits for its own go.
+**Status (10 Nov 2026):** plan approved. Phase 0 scaffold shipped: `voice/` package, `ci.yml`
+pull-request check, operator steps and Qualtrics test-survey spec in `voice/docs/`.
+Phase 0 closes when the operator steps come back (archive counts, password rotation,
+Qualtrics files). Each later phase waits for its own "go".
 
 ## Context
 

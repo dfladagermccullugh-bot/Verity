@@ -20,6 +20,25 @@ Integration in Survey Research (2026)*. Verity sits in the highest-risk AAPOR
 quadrant — it is both AI Interviewer and AI Analyst — and treats that as a
 design constraint, not a disclaimer.
 
+## Verity Voice — new product, in progress (started 2026-11-10)
+
+AI voice survey interviewers on top of Qualtrics. Plan, decisions, phases:
+[voice-interviewer-plan.md](voice-interviewer-plan.md). Lives in `voice/` (own
+`package.json`, Node 22, vitest). The web app described in the rest of this file is now
+the **legacy app**: unchanged at the root (its `tsconfig.json` now excludes `voice/`),
+to be switched off at Phase 6.
+
+- **Phase 0 scaffold shipped.** `voice/` typechecks, 4 scaffold tests. New
+  `.github/workflows/ci.yml` runs typecheck + tests for both packages on PRs.
+- **Phase 0 open, operator-only:** archive the legacy sessions, rotate the Neon
+  password, run the Qualtrics free-account check. Steps:
+  `voice/docs/phase-0-operator-steps.md`, `voice/docs/qualtrics-test-survey.md`.
+- **Rules:** carrier is Telnyx (no Twilio); voice models chosen by a measured bake-off in
+  Phase 3; repo is intended to go public, so no respondent data, archive or credential is
+  ever committed (`.gitignore` guards `archive/`, `training-data-*.json`, dumps);
+  each phase needs the operator's explicit "go".
+- `phone_map` (separate repo) is the source of the Telnyx/audio files to port in Phase 4.
+
 ## Method (the two core bets)
 
 1. **Constraint as interface.** Reduce the user to three buttons; a well-aimed
