@@ -51,7 +51,9 @@ An admin issues a single-use invite. The invitee writes one seed sentence, then 
 
 Key files:
 
-- [src/lib/interview-engine.ts](src/lib/interview-engine.ts) — the round-aware turn loop, retry policy, 40-turn runaway ceiling, PRD-forcing fallback, `finalizeRound` (freezes each round's documents and records the advisory verdict), and `openFollowupRound` (operator-initiated next round)
+- [src/lib/interview-engine.ts](src/lib/interview-engine.ts) — the re-entrant engine: `submitAnswer` claims the displayed turn, `advance` idempotently produces the next turn or finalizes the round (each write a short locked transaction), `openFollowupRound` (operator-initiated next round); also the recovery path for interrupted sessions
+- [src/lib/interview-policy.ts](src/lib/interview-policy.ts) — the generation policy shared with the canary: guard + anti-leading retries with a corrective message, coverage nudge, 40-turn ceiling, validated PRD forcing
+- [src/lib/lifecycle.ts](src/lib/lifecycle.ts) — every status / reason / answer value, the transition table, and the derived respondent and operator views
 - [src/lib/guard.ts](src/lib/guard.ts) — output classifier; the form check between the model and the user
 - [src/lib/anti-leading.ts](src/lib/anti-leading.ts) — rejects leading/loaded question phrasing
 - [src/lib/coverage.ts](src/lib/coverage.ts) — content-validity gate; blocks a model-initiated stop until enough topics are covered
@@ -64,10 +66,11 @@ Key files:
 
 Failure handling:
 
-- *Bad or leading format.* The guard or anti-leading check rejects, the engine regenerates the question, and after repeated failures it forces the stop-confirm path. No dead-ends.
+- *Bad or leading format.* The guard or anti-leading check rejects, and the retry tells the model why. After repeated failures the round ends as `guard_exhausted` and the PRD is requested.
 - *No termination.* A 40-turn ceiling short-circuits to PRD generation.
-- *PRD refusal.* The forcer appends an increasingly explicit instruction and accepts a best-effort markdown blob on the last attempt. The operator always gets something to read.
-- *Reviewer failure.* If the between-round reviewer errors or returns anything malformed, it fails safe — it simply records no recommendation rather than guessing, and the operator still decides.
+- *PRD refusal.* The forcer re-asks for the marked PRD; an unmarked last attempt is accepted only if it has the PRD's sections. Otherwise the round ends as `prd_failed` with no PRD — arbitrary text is never stored as one — and the operator decides what next.
+- *Interrupted step.* A model error or timeout between an answer and the next question leaves nothing half-written: reopening the link (or *Resume* in admin) picks the session up where it stopped. Duplicate clicks, tabs and devices are serialized per session.
+- *Reviewer failure.* If the between-round reviewer errors or returns anything malformed, the verdict stays empty ("not assessed") rather than reading as "no further round needed", and the operator still decides.
 - *Latency feel.* Optimistic card transitions and a cycling loading word turn the wait into motion.
 
 ## Result
