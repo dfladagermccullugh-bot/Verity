@@ -1,8 +1,9 @@
 import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { invites, sessions } from "@/lib/db/schema";
+import { invites } from "@/lib/db/schema";
 import { verifyInviteToken } from "@/lib/tokens";
+import { pendingTurn, sessionByInvite } from "@/lib/interview-engine";
 import { BrandHeader, ContextTag, SiteFooter } from "@/components/chrome";
 
 export const dynamic = "force-dynamic";
@@ -20,14 +21,13 @@ export default async function DonePage({
   });
   if (!invite) redirect(`/i/${token}`);
 
-  const session = await db.query.sessions.findFirst({
-    where: eq(sessions.inviteId, invite.id),
-  });
+  const session = await sessionByInvite(invite.id);
   if (!session) redirect(`/i/${token}`);
-  // Sticky once any round has been compiled. A follow-up round may already be
-  // queued (pull-based) — the respondent reaches it by reopening their link,
-  // not by being bounced from this screen.
-  if (!session.completedAt) redirect(`/i/${token}/q`);
+  // Leave only for a question that is actually waiting. (Redirecting an active
+  // session with no question back to /q could loop when there is nothing left
+  // to generate; /q itself resumes interrupted sessions.)
+  if (session.status === "active" && (await pendingTurn(session.id)))
+    redirect(`/i/${token}/q`);
 
   return (
     <>

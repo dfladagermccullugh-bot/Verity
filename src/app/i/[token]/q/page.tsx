@@ -1,12 +1,15 @@
 import { redirect } from "next/navigation";
-import { and, eq, isNull } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { invites, sessions, turns } from "@/lib/db/schema";
+import { invites, turns } from "@/lib/db/schema";
 import { verifyInviteToken } from "@/lib/tokens";
+import { advance, pendingTurn, sessionByInvite } from "@/lib/interview-engine";
 import ThinkingScreen from "@/components/thinking-screen";
 import Interview from "./interview";
 
 export const dynamic = "force-dynamic";
+// Hosts the answer action: generation + finalize can take several model calls.
+export const maxDuration = 60;
 
 export default async function InterviewPage({
   params,
@@ -21,21 +24,25 @@ export default async function InterviewPage({
   });
   if (!invite) redirect(`/i/${token}`);
 
-  const session = await db.query.sessions.findFirst({
-    where: eq(sessions.inviteId, invite!.id),
-  });
+  const session = await sessionByInvite(invite!.id);
   if (!session) redirect(`/i/${token}`);
 
-  const [pending] = await db
-    .select()
-    .from(turns)
-    .where(and(eq(turns.sessionId, session!.id), isNull(turns.answer)));
+  let pending = await pendingTurn(session!.id);
 
-  // No question waiting: a finalized round (awaiting review or complete) rests
-  // on /done; otherwise the next round's question is still being prepared.
+  // No question waiting. A session that is not active rests on /done. An
+  // active one was interrupted mid-step (or is being advanced right now):
+  // advance is idempotent, so resume it here instead of waiting forever.
   if (!pending) {
-    if (session!.completedAt) redirect(`/i/${token}/done`);
-    return <ThinkingScreen label="Preparing your next question…" />;
+    if (session!.status !== "active") redirect(`/i/${token}/done`);
+    let result;
+    try {
+      result = await advance(session!.id);
+    } catch {
+      return <ThinkingScreen label="Preparing your next question… reload in a moment." />;
+    }
+    if (result.kind === "done") redirect(`/i/${token}/done`);
+    pending = await pendingTurn(session!.id);
+    if (!pending) redirect(`/i/${token}/done`);
   }
 
   // Progress reflects the current round only.
@@ -44,13 +51,14 @@ export default async function InterviewPage({
     .from(turns)
     .where(eq(turns.sessionId, session!.id));
   const answeredCount = all.filter(
-    (t) => t.roundId === pending.roundId && t.answer != null
+    (t) => t.roundId === pending!.roundId && t.answer != null
   ).length;
 
   return (
     <Interview
       token={token}
-      initialQuestion={pending.questionText}
+      initialTurnId={pending!.id}
+      initialQuestion={pending!.questionText}
       initialAnswered={answeredCount}
     />
   );

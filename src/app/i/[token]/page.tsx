@@ -7,6 +7,9 @@ import NoticeScreen from "@/components/notice-screen";
 import SeedForm from "./seed-form";
 
 export const dynamic = "force-dynamic";
+// Hosts the start action: moderation, the construct probe and the first
+// generation can take several model calls.
+export const maxDuration = 60;
 
 function InvalidLink({ message }: { message: string }) {
   return (
@@ -43,11 +46,11 @@ export default async function SeedPage({ params }: { params: { token: string } }
       .from(turns)
       .where(and(eq(turns.sessionId, existing.id), isNull(turns.answer)));
     if (pending) redirect(`/i/${token}/q`);
-    // A finalized round (awaiting review or complete) has a compiled PRD →
-    // the respondent rests on /done until the operator opens another round,
-    // which creates a new pending turn and routes them back to /q above.
-    if (existing.completedAt) redirect(`/i/${token}/done`);
-    redirect(`/i/${token}/q`);
+    // An active session with no question waiting was interrupted mid-step:
+    // /q resumes it. A finalized round rests on /done until the operator
+    // opens another round, which creates a new pending turn (routes above).
+    if (existing.status === "active") redirect(`/i/${token}/q`);
+    redirect(`/i/${token}/done`);
   }
 
   if (invite.consumedAt)

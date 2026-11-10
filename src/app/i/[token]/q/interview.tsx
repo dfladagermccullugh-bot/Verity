@@ -23,16 +23,21 @@ function deviceClass(): string | null {
 
 export default function Interview({
   token,
+  initialTurnId,
   initialQuestion,
   initialAnswered,
 }: {
   token: string;
+  initialTurnId: string;
   initialQuestion: string;
   initialAnswered: number;
 }) {
   const router = useRouter();
   const reduce = useReducedMotion();
   const [question, setQuestion] = useState(initialQuestion);
+  // The answer is bound to the turn that was displayed, never "whatever is
+  // pending now" — a stale tab cannot answer a question it never showed.
+  const [turnId, setTurnId] = useState(initialTurnId);
   const [answered, setAnswered] = useState(initialAnswered);
   const [error, setError] = useState<string | null>(null);
   const [loadingWord, setLoadingWord] = useState(LOADING_WORDS[0]);
@@ -81,7 +86,7 @@ export default function Interview({
     };
     startTransition(async () => {
       try {
-        const res = await submitAnswer(token, value, paradata);
+        const res = await submitAnswer(token, turnId, value, paradata);
         if (!res.ok) {
           setError(res.error);
           if (value !== "done") setAnswered((a) => Math.max(0, a - 1));
@@ -91,7 +96,9 @@ export default function Interview({
           router.replace(`/i/${token}/done`);
           return;
         }
+        setTurnId(res.turnId);
         setQuestion(res.text);
+        setAnswered(res.answered); // server count (also resyncs a stale tab)
       } catch {
         // Transport/server failure — never leave the action ambiguous. Roll
         // back the optimistic step and invite a retry (buttons re-enable).

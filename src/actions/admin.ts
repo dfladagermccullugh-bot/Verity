@@ -9,7 +9,7 @@ import { db } from "@/lib/db";
 import { invites, sessions } from "@/lib/db/schema";
 import { createInviteToken } from "@/lib/tokens";
 import { getAdminSession, isAdmin } from "@/lib/session";
-import { openFollowupRound } from "@/lib/interview-engine";
+import { completeReviewedSession, openFollowupRound } from "@/lib/interview-engine";
 
 function safeEqual(a: string, b: string): boolean {
   const ab = Buffer.from(a);
@@ -78,14 +78,9 @@ export async function createInvite(
 export async function openRound(sessionId: string): Promise<{ error?: string }> {
   if (!(await isAdmin())) return { error: "Not authorized." };
 
-  const session = await db.query.sessions.findFirst({
-    where: eq(sessions.id, sessionId),
-  });
-  if (!session) return { error: "Session not found." };
-  if (session.status !== "awaiting_review")
-    return { error: "This session is not awaiting review." };
-
-  const result = await openFollowupRound(session);
+  // Conditional inside the engine: only an `awaiting_review` session opens a
+  // round, and two concurrent clicks open one round between them.
+  const result = await openFollowupRound(sessionId);
   if (!result.ok)
     return { error: result.reason ?? "Could not open another round." };
 
@@ -102,19 +97,10 @@ export async function completeSession(
 ): Promise<{ error?: string }> {
   if (!(await isAdmin())) return { error: "Not authorized." };
 
-  const session = await db.query.sessions.findFirst({
-    where: eq(sessions.id, sessionId),
-  });
-  if (!session) return { error: "Session not found." };
-
-  await db
-    .update(sessions)
-    .set({ status: "complete" })
-    .where(eq(sessions.id, sessionId));
-  await db
-    .update(invites)
-    .set({ consumedAt: new Date() })
-    .where(eq(invites.id, session.inviteId));
+  // Conditional on `awaiting_review` (refused while a round is open); the
+  // status change and the invite consumption commit together.
+  const result = await completeReviewedSession(sessionId);
+  if (!result.ok) return { error: result.reason ?? "Could not complete the session." };
 
   revalidatePath(`/admin/prds/${sessionId}`);
   return {};

@@ -9,9 +9,10 @@ import { callModelOneShot } from "./anthropic";
  * it emits a focus brief that steers the next round's questions.
  *
  * Runs off the hot path (at round finalization, not between questions), so its
- * one model call never adds latency to the respondent's loop. Fail-safe: any
- * parse/transport failure returns `openNewRound: false`, so a broken critic
- * silently ends the interview rather than trapping the respondent in rounds.
+ * one model call never adds latency to the respondent's loop. Advisory only:
+ * a human operator opens rounds. A parse or transport failure returns null
+ * ("not assessed"), which the engine stores as a null verdict — never as
+ * "no further round needed".
  */
 
 const SYSTEM_PROMPT = `You are a survey-methodology critic reviewing a completed round of a constrained yes/no product interview and the PRD it produced. Your job is to decide whether a FURTHER round of yes/no questions would materially improve the PRD, and if so, what it should focus on.
@@ -42,31 +43,31 @@ function isStringArray(v: unknown): v is string[] {
   return Array.isArray(v) && v.every((x) => typeof x === "string");
 }
 
-/** Tolerant parse. Returns the safe "stop" result on any malformed output. */
-export function parseCritic(raw: string): CriticResult {
+/** Tolerant parse. Returns null on malformed output (no verdict). */
+export function parseCritic(raw: string): CriticResult | null {
   try {
     const parsed = extractJson(raw);
-    if (typeof parsed !== "object" || parsed === null) return STOP;
+    if (typeof parsed !== "object" || parsed === null) return null;
     const obj = parsed as Record<string, unknown>;
-    if (typeof obj.openNewRound !== "boolean") return STOP;
+    if (typeof obj.openNewRound !== "boolean") return null;
     const gaps = isStringArray(obj.gaps) ? obj.gaps : [];
     const focus = typeof obj.focus === "string" ? obj.focus : "";
-    // Never open a round without a focus to steer it.
-    if (obj.openNewRound && focus.trim() === "") return STOP;
+    // A recommendation without a focus to steer it is read as "don't".
+    if (obj.openNewRound && focus.trim() === "") return { ...STOP, gaps };
     return { openNewRound: obj.openNewRound, gaps, focus };
   } catch {
-    return STOP;
+    return null;
   }
 }
 
 const STOP: CriticResult = { openNewRound: false, gaps: [], focus: "" };
 
-/** Run the critic over a finished round. Never throws. */
+/** Run the critic over a finished round. Never throws; null on failure. */
 export async function critiqueRound(
   seed: string,
   transcript: string,
   prdMarkdown: string
-): Promise<CriticResult> {
+): Promise<CriticResult | null> {
   try {
     const user = [
       `Seed: ${seed}`,
@@ -80,6 +81,6 @@ export async function critiqueRound(
     const raw = await callModelOneShot(SYSTEM_PROMPT, user);
     return parseCritic(raw);
   } catch {
-    return STOP;
+    return null;
   }
 }
