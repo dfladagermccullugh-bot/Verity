@@ -4,7 +4,7 @@ Lean, session-to-session working memory. Keep this under ~5k tokens. When an
 item goes stale or a to-do is done, move it to [history.md](history.md) and
 trim it from here.
 
-_Last updated: 2026-06-16 (adopted **[ux-source-of-truth.md](ux-source-of-truth.md)** — the Laws of UX / a11y governing doc — and implemented every finding from the [ux-audit.md](ux-audit.md) gap analysis: P0/P1/P2 + a subtle round 2. Verified by typecheck + 136 tests + build; **live a11y verification still pending**. Full detail in history.md.)_
+_Last updated: 2026-11-10 (state-machine work shipped, PR #48: re-entrant claim-then-advance engine, guard/protocol fixes, guarded migration `0006`, canary repaired + 14 false drift issues closed, respondent/operator flow fixes. Verified by typecheck + **270 tests** + build + PGlite/PG16 integration + Playwright client check; **live QA with a real DB + model still pending**. Detail in history.md; what remains is in [state-machine-plan.md](state-machine-plan.md).)_
 
 ## What Verity is
 
@@ -25,8 +25,10 @@ design constraint, not a disclaimer.
 1. **Constraint as interface.** Reduce the user to three buttons; a well-aimed
    yes/no is worth a paragraph of vague prose.
 2. **Hard guardrails, not soft prompting.** The system prompt asks for good
-   behavior; `guard.ts` *enforces* it. Bad output → regenerate → on second
-   failure force the PRD path. The model is never trusted to self-format.
+   behavior; `guard.ts` *enforces* it. Bad output → regenerate with a corrective
+   message naming the reason → after 3 rejections the round ends
+   `guard_exhausted` and the PRD is forced (validated; else `prd_failed`). The
+   model is never trusted to self-format.
 
 ## Architecture at a glance
 
@@ -43,27 +45,29 @@ durable anonymous link resumes into the next round on revisit (pull-based)
 ```
 
 Key files:
-- `src/lib/interview-engine.ts` — **round-aware** turn loop, retry policy (guard + anti-leading), **coverage gate** (`enforceCoverage`), 40-turn ceiling, `forcePrd`, `finalizeRound` (per-round docs + advisory critic verdict + `awaiting_review`), and `openFollowupRound` (operator-initiated round N+1).
+- `src/lib/interview-engine.ts` — **claim, then re-entrant advance.** `submitAnswer(sessionId, turnId, …)` = one conditional UPDATE; `advance(sessionId)` is idempotent (returns the pending turn, else generates + claims the next turn or finalizes) and is the recovery path for interrupted sessions (`/q`, `startSession`, admin Resume). Every write is a short transaction locking the session/invite row and re-checking its precondition — **never hold a tx across a model call (pool `max: 1`)**. Also `openFollowupRound` (generate first, then claim), `completeReviewedSession`, `closeStalledSession` (`abandoned`), `revokeUnusedInvite`.
+- `src/lib/interview-policy.ts` — generation policy shared with the canary (model injected): retries + corrective message, `exhausted` shape, coverage nudge, `forcePrd` (fallback validated: ≥7/14 headings), `RUNAWAY_CEILING`.
+- `src/lib/lifecycle.ts` — all status/reason/answer unions (schema typed from them), transition table, `deriveRespondentView` / `deriveOperatorState`, `latestPrdRound`. `src/lib/respondent.ts` = the one respondent-routing loader; `src/lib/interview-store.ts` = executor-taking queries; `src/lib/interview-state.ts` = client reducer.
 - `src/lib/coverage.ts` — **pure** content-validity gate: covered/uncovered dimensions + `coverageMet` (`COVERAGE_FLOOR = 7` of 10, tunable). Blocks a *model* stop until coverage met; an explicit "done" always wins.
-- `src/lib/guard.ts` — deterministic *form* classifier → `question | stop_confirm | prd | reject`. Rejects multiline, batched, jargon, >200 chars, missing `?`.
+- `src/lib/guard.ts` — deterministic *form* classifier → `question | stop_confirm | prd | reject`. Rejects multiline, batched, jargon (**word-boundary**; react/rust/rest only in tech spelling), >200 chars, missing `?`. Stop confirmation matched tolerantly.
 - `src/lib/anti-leading.ts` — deterministic *semantic* check; rejects tag questions, loaded openers, presupposition. Runs in the same retry loop; no model call.
 - `src/lib/dimensions.ts` — keyword classifier mapping each question to one of 10 coverage dimensions (per-turn tag; drives coverage gate + analysis + triangulation).
 - `src/lib/analysis.ts` — pure per-round metrics (acquiescence, straightlining, latency, leading rate, coverage, triangulation reliability) + markdown render.
-- `src/lib/critic.ts` — between-round gap-analysis (`callModelOneShot`); **advisory only** now — verdict is persisted on the round but a human opens/closes rounds. Fail-safe (stop on parse/transport error). Off the hot path.
+- `src/lib/critic.ts` — between-round gap-analysis (`callModelOneShot`); **advisory only** — verdict persisted on the round, a human opens/closes rounds. Failure → `null` ("not assessed"), never "no round needed". Runs after the finalize commit.
 - `src/actions/admin.ts` — `openRound` / `completeSession` server actions (admin-gated); admin UI in `prds/[id]` (`round-actions.tsx`) surfaces them when `awaiting_review`.
 - `src/lib/seed-quality.ts` — non-blocking seed warnings (vague / double-barreled / presupposition / too-short).
 - `src/lib/construct-brief.ts` — AAPOR §4.3.1 pre-flight probe (now also captures decision + unit); **log-only**, non-fatal.
 - `src/lib/disclosure.ts` — PRD header + methodology + **analysis** companion docs; provenance + version **frozen per round**.
-- `src/lib/anthropic.ts` — `callModel` (interview, prompt-cached) + `callModelOneShot` (sidecars). Model from `ANTHROPIC_MODEL`, default `claude-sonnet-4-6`; `MAX_TOKENS=4096`.
-- `src/lib/canaries/` + `scripts/canary.ts` — weekly drift suite (`run-one.ts` mirrors the anti-leading reject **and the coverage gate** so the canary tracks real engine behavior).
+- `src/lib/model-client.ts` — raw calls, no `server-only`, returns `stop_reason`, 50s timeout; `src/lib/anthropic.ts` = server-only binding (`callModel` → `{text, stopReason}`, `callModelOneShot` → string). Model from `ANTHROPIC_MODEL`, default `claude-sonnet-4-6`; `MAX_TOKENS=4096`.
+- `src/lib/canaries/` + `scripts/canary.ts` — weekly drift suite; `run-one.ts` uses the **same policy module** as the engine; skill read via `fs`; baseline checked before spending. Exit codes: 0 ok · 2 config · 3 fixture · **10 drift** (only 10 opens an issue).
 
 Stack: Next.js 14 (App Router, server actions), React 18, TS. Postgres via
-Drizzle (`invites`, `sessions`, `rounds`, `turns` — migrations through `0005`).
+Drizzle (`invites`, `sessions`, `rounds`, `turns` — migrations through `0006`).
 iron-session admin auth, Resend email, Tailwind (Warm Paper Calm design
 system; `--md-*` token names retained), Framer Motion. Deployed on Vercel
 (`vercel-build` = `drizzle-kit migrate && next build`).
 
-**Data model (post-0005):** `sessions` is the durable respondent container
+**Data model (post-0006):** unique `sessions(invite_id)`, `rounds(session_id, round_number)`, `turns(session_id, step)`, partial unique `turns(session_id) WHERE answer IS NULL`, index `turns(round_id)` — each created only if no duplicates remained (check the build log for `0006:` warnings); the engine enforces the same invariants either way. Termination reasons add `guard_exhausted`, `prd_failed`, `abandoned` (now written); a failed round has no PRD and the session keeps the previous mirror. Earlier:  `sessions` is the durable respondent container
 (`status` **active | awaiting_review | complete**, `archivedAt` (migration `0005`,
 operator-set list-hide; row retained + still exported), `resumePhrase`, `seedWarnings`,
 + latest-round mirror of `prdMarkdown`/`methodologyMarkdown`/`completedAt`).
@@ -72,8 +76,9 @@ operator-set list-hide; row retained + still exported), `resumePhrase`, `seedWar
 (migration `0004`) the persisted advisory critic verdict `criticRecommendOpen` /
 `criticGaps` / `criticFocus`. `turns`: `roundId` + measurement metadata
 (`constructDimension`, `regenCount`, `guardRejections`, `leadingVerdict`,
-`isTriangulationProbe`, `deviceClass`, `viewport`). Routing now keys off
-`completedAt` (a finalized round → `/done`; a new pending turn → `/q`).
+`isTriangulationProbe`, `deviceClass`, `viewport`). Routing keys off **status +
+pending turn** (`deriveRespondentView`): pending → `/q`; active without one →
+`/q` resumes; awaiting review / complete → `/done`.
 
 ## Design system — Warm Paper Calm (shipped)
 
@@ -146,31 +151,22 @@ copy is sentence-case. Full before/after in history.md.
   `DAVIN_EMAIL`; emails **every round** so Davin always has the latest version;
   fails silently since the PRD is already persisted.
 
-## Current health (verified 2026-06-16)
+## Current health (verified 2026-11-10)
 
-- `npm run typecheck` — clean. `npm run build` — passes (all routes incl. new
-  `prd/[id]/analysis` compile).
-- `npm test` — **136 passing** (+16 markdown-parser suite for the new operator
-  doc renderer; +11 coverage gate before that). Existing suites green.
-- **UX/a11y layer (this session):** the UI now conforms to
-  [ux-source-of-truth.md](ux-source-of-truth.md); every audit finding is implemented
-  (see [ux-audit.md](ux-audit.md) for status + L-1..L-3 accepted limitations). New
-  UI files: `src/lib/markdown.ts` + `src/components/markdown.tsx` (operator-doc
-  renderer), `src/components/theme-toggle.tsx`. **Still static-only verified — the
-  live a11y/keyboard/dark-mode pass is the open UX to-do (checklist in ux-audit.md).**
-- **Never run live** (no `DATABASE_URL` / `ANTHROPIC_API_KEY` in the container):
-  the dev server, the multi-round + operator flow, and the canary's model run.
-  Logic verified by typecheck + unit tests only — **the standing to-do is live QA.**
-- **Bootstrap:** a `SessionStart` hook (`.claude/hooks/session-start.sh`, registered
-  in `.claude/settings.json`) runs `npm install` automatically in Claude-on-web
-  sessions, so typecheck/lint/tests work immediately — **once this branch is merged
-  to the default branch.** Local clones still `npm install` manually. The canary
-  under `tsx` also needs the `server-only` shim/package (pre-existing; not installed
-  here). Note: the repo has **no ESLint config** (`next lint` is unconfigured) — the
-  static gate is `npm run typecheck`, not `npm run lint`.
-- All three original AAPOR iterations remain shipped (PRs #5–#12); the
-  survey-methodology measurement layer (15 features) and the multi-round loop are
-  shipped on top — see history.md.
+- `npm run typecheck` clean · `npm test` **270 passing** (incl. engine integration
+  on PGlite with and without the 0006 indexes, migration-0006 suite) ·
+  `npm run build` passes. Same on `main` after merging PR #48.
+- `npm run e2e:interview` — Playwright against `next dev` via the dev-only
+  `/dev/interview` harness (stubbed actions; renders not-found in prod). Needs a
+  Playwright Chromium (preinstalled in cloud sessions; not a dependency).
+- **Never run live with a real model.** `ANTHROPIC_API_KEY= npx tsx
+  scripts/canary.ts` now exits 2 with the key message (was a crash). Real
+  concurrency and `drizzle-kit migrate` were exercised on a local PostgreSQL 16
+  (installed in the container; `initdb` as the `postgres` user).
+- **CI:** there is no PR workflow; the only PR check is the Vercel preview build,
+  which runs `drizzle-kit migrate` (against whatever DB previews use) + build.
+- **Bootstrap:** the `SessionStart` hook runs `npm install` in cloud sessions.
+  No ESLint config — the static gate is `npm run typecheck`.
 
 ## Multi-round loop — durable design notes
 
@@ -194,57 +190,53 @@ operator-side. Full build history in history.md.
   validity. _Auto-open rationale preserved in history.md._
 
 **Design notes worth remembering:**
-- Routing now keys off `completedAt`: a pending turn → `/q`; else `completedAt`
-  set (round finalized, `awaiting_review` or `complete`) → `/done`. `/done` is
-  sticky; the respondent reaches round N+1 only after the operator opens it (new
-  pending turn) and they reopen their link.
+- Routing: a pending turn → `/q`; active without one → `/q` resumes (`advance`);
+  otherwise `/done`, which leaves only for a waiting question (no loop). The
+  respondent reaches round N+1 when the operator opens it and they reopen the link.
+- Follow-up rounds re-inject the focus every turn and gate coverage session-wide;
+  focus + version come from the latest **PRD-bearing** round.
 - Invite is consumed only at **true** completion, so the durable link keeps
   resolving across rounds.
 - Each round freezes its own PRD/methodology/analysis at version `prdVersion`.
 - Anti-leading + dimension tagging are deterministic ⇒ **zero added model calls
-  per turn**; only the critic adds one call, at finalize, off the hot path.
+  per turn**; only the critic adds one call, after the finalize commit.
+- The skill's opening "mirror … Ready?" turn is tagged `mirror` and excluded from
+  coverage + analysis (skill prompt untouched on purpose: `skillVersion` stable).
 - Out of scope by design: the representation half of TSE (sampling, weighting,
   coverage) — meaningless for an n=1 tool.
 
 ## Open to-dos (priority order)
 
-1. **Live-QA the full multi-round + operator flow.** No DB/API key in the
-   container, so this has never run live. Migrations `0003`+`0004` are additive
-   and auto-apply on deploy via `vercel-build` (or `npm run db:migrate` locally).
-   If the DB holds pre-`0003` completed rows, backfill
-   `update sessions set status='complete' where completed_at is not null`
-   (admin was locked out, so likely none). Then run an interview end-to-end and
-   verify: yes/no/done is the only surface; a leading question is rewritten;
-   turns carry dimension/regen metadata; the **coverage gate** keeps the round
-   going until ≥7/10 dimensions before the PRD; the round finalizes to
-   `awaiting_review` (NOT auto-completed); the critic verdict shows in admin; then
-   **Open another round** → respondent resumes via the *same* link → **Mark
-   complete** consumes the invite. Check admin detail (version history + diff +
-   analysis + critic verdict), the three download routes, and the export JSON.
+1. **Check migration 0006 in the production build log** for `0006: … skipped`
+   warnings (= an index was not created; invariant still enforced in code). Fix
+   duplicates + add a guarded `0007` if needed. Details: state-machine-plan.md.
 
-   **While live, also run the UX/a11y verification checklist** at the bottom of
-   [ux-audit.md](ux-audit.md) (keyboard-only walk incl. Y/N/D + visible focus ring;
-   screen-reader announce of each new question; dark-mode toggle round-trip with no
-   flash on reload; rendered-PRD readability; zoom to 200%). This closes the one
-   caveat carried by the whole audit. Log results in ux-audit.md.
+2. **Live-QA the full flow** with a real DB + model (never done). Interview
+   end-to-end: yes/no/done only; leading question rewritten; turns carry
+   dimension/regen metadata; coverage gate holds to ≥7/10; round →
+   `awaiting_review`; critic verdict in admin; **Open another round** → same link
+   resumes, focus steers every turn → **Mark complete** consumes the invite. Also:
+   kill a request mid-answer (or set a bad API key briefly) → `/q` shows Try again
+   and resumes; admin shows **Stalled** with Resume / Close; unused invite →
+   Revoke. Check admin detail, the three download routes, the export JSON. Run the
+   UX/a11y checklist in [ux-audit.md](ux-audit.md) at the same time.
 
-2. **Re-baseline the canary suite.** Still a sentinel (`"model": null`,
-   `"seeds": {}`), AND the generation policy has changed twice now: anti-leading
-   reject in `run-one.ts`, and (2026-06-16) the **coverage gate** is mirrored in
-   `run-one.ts` too — so the baseline MUST be captured against this behavior
-   (coverage-gated stops may raise turn counts vs. the old early-stop runs). Run
-   `npm run canary:rebaseline` once with
-   `ANTHROPIC_API_KEY` + production `ANTHROPIC_MODEL`, eyeball the per-seed table,
-   commit with a message explaining the baseline conditions. Confirm the repo has
-   secret `ANTHROPIC_API_KEY` and var `ANTHROPIC_MODEL`.
+3. **Re-baseline the canary** (`baseline.json` is still the sentinel). The
+   policy changed again (corrective retries, tolerant stop, boundary jargon,
+   validated PRD fallback, mirror tagging). `npm run canary:rebaseline` with
+   `ANTHROPIC_API_KEY` + production `ANTHROPIC_MODEL`, review, commit with the
+   baseline conditions. Confirm repo secret `ANTHROPIC_API_KEY` + var
+   `ANTHROPIC_MODEL` exist so the weekly run works.
 
-_Recently closed (full detail in history.md): **UX/UI source of truth adopted +
-full a11y/UX audit implemented (P0/P1/P2 + round 2; dark-mode toggle + border fix;
-operator-doc markdown renderer)**; admin login restored (password rotated); operator-
-gated rounds + coverage gate shipped._
+_Recently closed (detail in history.md): **state machines (PR #48)** — dead-end
+recovery, atomic/locked writes, guard false positives, latency paradata, canary
+repair + false issues #13–#46 closed, migration 0006; UX/UI source of truth +
+a11y audit; operator-gated rounds + coverage gate._
 
 ## Backlog / deferred ideas (not committed work)
 
+- **CHECK constraints** on status/reason/answer (`0007`, `NOT VALID` then
+  `VALIDATE`) once production data is confirmed clean.
 - **Close the construct-brief loop?** Still log-only. The audit story it was
   waiting on now exists (per-turn `constructDimension` tagging + the per-round
   analysis/coverage map), so feeding the brief into the interview prompt is now
@@ -290,6 +282,12 @@ gated rounds + coverage gate shipped._
   style when extending it (see `disclosure.ts` header comment).
 - Canary `baseline.json` must **never** be silently rebaselined; an explicit
   reason in the commit message is the rule, else drift detection is theater.
+- **Migrations run on every Vercel build, previews included.** Write them
+  idempotent and unable to fail (per-statement exception blocks, `lock_timeout`),
+  never delete respondent data; test with `src/tests/migration-0006.test.ts` as
+  the pattern (apply 0000..N-1, seed dirty rows, apply N, re-run).
+- State changes go through the engine's locked claims — don't add direct
+  `db.update(sessions)` status writes in actions/pages.
 - Develop on the designated feature branch; commit + push there; never open a PR
   unless explicitly asked.
 - **UI/UX changes are reviewed against [ux-source-of-truth.md](ux-source-of-truth.md)**

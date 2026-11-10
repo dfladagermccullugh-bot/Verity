@@ -197,6 +197,29 @@ open._
   placeholder + focus ring, so this is a legibility fix, not a claim of full ≥3:1 —
   see L-2.)
 
+## State-machine pass (2026-11-10) — respondent/operator flow fixes
+
+Shipped with the state-machine work (PR #48); reviewed against
+ux-source-of-truth.md. Verified by unit tests, a Playwright run of the
+interview client against `next dev` (`npm run e2e:interview`), and page renders
+against a local Postgres. **Live check with a real model still pending.**
+
+- **No dead-end screen (Peak-End / error recovery).** An interrupted step no
+  longer leaves "Preparing your next question…" forever: `/q` resumes the
+  session, and a failure shows a plain-language message with *Try again*.
+- **Try again resyncs.** After a failed answer the buttons stay disabled and
+  *Try again* fetches the current question from the server (same question if the
+  answer was not saved, the next one if it was) — no double-answering.
+- **Held key (L1 in the plan).** Auto-repeated Y/N/D keydowns are ignored, so a
+  held key cannot answer each new question as it arrives.
+- **Honest closing copy.** `/done` says "your answers are in" while the round is
+  with the operator (more questions may follow on the same link) and "closed" only
+  once it is; admin no longer claims the link "no longer resolves".
+- **Operator states.** Registry and detail show *Stalled* (with Resume / Close,
+  Close confirmed Cancel-first like Mark complete) and *Unknown status* instead of
+  labelling anything unrecognised "Complete"; unused invites are listed with
+  *Revoke*. Each action form shows only its own error.
+
 ## Known limitations / accepted (documented, not bugs)
 
 - **L-1 · Admin link tap targets are dense.** Inline 12.5px links ("View", ".md",

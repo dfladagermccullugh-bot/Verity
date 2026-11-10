@@ -5,6 +5,101 @@ completed to-dos, they land here so the handoff stays lean. Newest first.
 
 ---
 
+## 2026-11-10 — State machines: inventory, fixes, migration 0006 (PR #48)
+
+Implemented every phase of the former `state-machine-plan.md` (moved here; the
+plan file now holds only what remains). One commit per phase; typecheck + tests +
+build green after each. Merged as PR #48 (`7fec4d0`). Tests 136 → **270**.
+
+**Inventory (13 machines).** Session lifecycle (`active → awaiting_review ⇄
+active → complete`, orthogonal `archivedAt`); round lifecycle (`in_progress →
+complete` + reason); turn lifecycle (pending → yes/no/done); invite lifecycle
+(derived from timestamps); model-output protocol (question / stop_confirm / prd /
+reject, retries, coverage gate, forced PRD); the skill's model-side script
+(mirror → interview → stop → PRD); critic verdict; respondent routing; operator
+status; interview client UI; operator review UI; canary exit codes; and small
+self-contained ones (admin auth, rate limiter, markdown parser, theme toggle —
+left unchanged).
+
+**Findings fixed.**
+- H1 permanent dead-end after a failed/timed-out model call (session `active`,
+  no pending turn, static "Preparing…" forever; round 2+ showed "closed").
+- H2 canary never ran: `npx tsx scripts/canary.ts` crashed on `server-only`
+  (exit 1 = "drift") → 14 false "Canary drift detected" issues (#13–#46), now
+  closed with an explanation. Second blocker (`.md` import) also removed.
+- H3 jargon filter matched substrings (restaurant → `rest`, trust → `rust`,
+  therapist → `api`, reaction → `react`).
+- H4 `timeToAnswerMs` after Q1 included model latency (timer reset on send).
+- H5 no DB invariants: duplicate sessions/pending turns/rounds possible;
+  `answer()` not bound to a turn id.
+- M1–M9: unguarded `completeSession`; non-atomic finalize; orphan/degenerate
+  follow-up rounds and lost focus/version skip; follow-up rounds re-covering
+  7/10 dimensions and focus injected once; no runtime validation; identical
+  retries, exhaustion recorded as `forced_prd`, unvalidated PRD fallback,
+  `stop_reason` ignored; failed critic stored as "no round needed"; free-text
+  statuses; no engine tests / duplicated policy; email + critic inside the
+  respondent request with no `maxDuration`.
+- L1–L6: held-key repeat; mirror step counted in metrics; routing re-derived in
+  five places without ORDER BY; misleading /done + admin copy; unused invites
+  invisible/unrevocable, pre-0003 sessions still `active`; misnamed param, dead
+  branches, stale cross-action error.
+
+**What shipped, by phase.**
+1. `lifecycle.ts` (unions, transition table, `deriveRespondentView`,
+   `deriveOperatorState`; schema typed with `text(..., { enum })`),
+   `interview-policy.ts` (model injected, `exhausted` shape), `model-client.ts`
+   (no `server-only`, `stop_reason`, 50s timeout; `anthropic.ts` is the
+   server-only binding). Canary uses the shared policy, reads the skill via `fs`,
+   checks the baseline before spending; exit codes 0 ok / 2 config / 3 fixture /
+   **10 drift**; `canary.yml` files an issue only on 10.
+2. Boundary-aware jargon (tech-only spellings for react/rust/rest), tolerant
+   stop-confirm; corrective retry naming the reason; `max_tokens` = reject;
+   PRD fallback needs ≥7/14 section headings else `prd_failed`; new reason
+   `guard_exhausted`; termination diagnostics frozen in the round's methodology
+   doc. Mirror step (`… Ready?` as the session's first question) tagged `mirror`
+   and excluded from coverage/analysis — skill prompt unchanged, `skillVersion`
+   unchanged.
+3. Claim-then-advance engine: conditional answer claim bound to the turn id;
+   idempotent `advance` (also `/q` load, `startSession` resume, admin Resume);
+   every write a short transaction locking the session (or invite) row and
+   re-checking its precondition — never across a model call (pool `max: 1`);
+   email + critic after commit; critic failure → null verdict; follow-up rounds
+   generate first then claim, focus from the latest PRD-bearing round, re-injected
+   every turn, session-wide coverage; conditional complete; action input
+   validation; `maxDuration = 60`; `interview-store.ts`.
+4. Migration `0006_state_invariants`: legacy-status backfill (no-rounds sessions
+   only), surplus *unanswered* pending turns removed, duplicate steps/round
+   numbers renumbered, five indexes each created only if no duplicates remain.
+   Every statement idempotent, in its own exception-catching block, with
+   `lock_timeout = 5s` — cannot fail a build.
+5. Respondent pages via one loader (`respondent.ts`); `/q` Resume component;
+   interview client on a pure reducer (`interview-state.ts`), latency keyed on
+   turn id, `e.repeat` guard, Try again resyncs; admin detail without a PRD,
+   Stalled panel (Resume / Close → `abandoned`), PRD version from the PRD-bearing
+   round; registry Stalled/Unknown states, unused invites + Revoke; copy fixes.
+
+**Decisions taken where the plan left a choice** (lower-risk option): see the PR
+description; notably diagnostics live in the methodology doc (no new column), a
+PRD that cannot be obtained fails the round rather than storing arbitrary text,
+Close is offered only for stalled sessions, Revoke expires the invite.
+
+**Verification.** Engine integration suite on PGlite (real migrations, mocked
+model) run twice — with and without the 0006 indexes; migration-0006 suite
+(dirty rows, no data loss, skipped index, idempotent re-run). PGlite serializes
+transactions, so real concurrency was checked ad hoc on PostgreSQL 16 (pool 10
+and pool 1): one session per 20 concurrent starts, one next turn per 10
+concurrent answers, one round per 10 concurrent follow-ups, no deadlock. Real
+`drizzle-kit migrate` on PG16: duplicate sessions → index skipped with a
+WARNING, build passes; held ACCESS EXCLUSIVE lock → statements skip after 5s,
+build passes. Playwright check of the client (`npm run e2e:interview`) 8/8.
+Verified again on `main` after merge. The Vercel preview build for the PR
+(which runs `drizzle-kit migrate`) succeeded.
+
+**Not verifiable here:** real model behaviour, Vercel time limits, production
+data (whether any 0006 index was skipped — check the build log), canary baseline.
+
+---
+
 ## 2026-06-16 (later) — UX/UI source of truth adopted + full a11y/UX audit implemented
 
 Added a second governing doc, **[ux-source-of-truth.md](ux-source-of-truth.md)** —
