@@ -42,6 +42,8 @@ export interface Case {
   nextAttemptAt: Date | null;
   interview: InterviewState;
   review: string[];
+  /** Response latency by slot, from spoken calls. */
+  latencyMs: Record<string, number>;
   finalOutcome: AttemptOutcome | null;
 }
 
@@ -95,6 +97,7 @@ function toCase(r: Row): Case {
     nextAttemptAt: asDate(r.next_attempt_at),
     interview: asJson(r.interview),
     review: asJson(r.review),
+    latencyMs: asJson(r.latency_ms ?? {}),
     finalOutcome: r.final_outcome,
   };
 }
@@ -218,7 +221,7 @@ export class Store {
   }
 
   /** Close an attempt: save the answers, the audit log and the outcome, and schedule or close the case. */
-  async finishAttempt(input: { claim: Claim; outcome: AttemptOutcome; interview: InterviewState; review: string[]; recordingConsent: boolean | null; events: AuditEvent[]; now: Date }): Promise<{ final: boolean; nextAttemptAt: Date | null }> {
+  async finishAttempt(input: { claim: Claim; outcome: AttemptOutcome; interview: InterviewState; review: string[]; recordingConsent: boolean | null; events: AuditEvent[]; now: Date; latencyMs?: Record<string, number> }): Promise<{ final: boolean; nextAttemptAt: Date | null }> {
     const { claim, outcome, now } = input;
     const next = afterAttempt({ outcome, attemptsMade: claim.attempt.number, candidate: claim.case, settings: claim.campaign.settings, now });
     await this.sql.tx(async (tx) => {
@@ -227,15 +230,19 @@ export class Store {
       for (const e of input.events) {
         await tx.query("insert into audit_events (attempt_id, seq, at, body) values ($1,$2,$3,$4::text::jsonb)", [claim.attempt.id, e.seq, now.toISOString(), JSON.stringify(e)]);
       }
-      await tx.query("update cases set status = $2, next_attempt_at = $3, interview = $4::text::jsonb, review = $5::text::jsonb, final_outcome = $6, updated_at = $7 where id = $1", [
-        claim.case.id,
-        next.final ? "final" : "pending",
-        next.nextAttemptAt ? next.nextAttemptAt.toISOString() : null,
-        JSON.stringify(input.interview),
-        JSON.stringify(input.review),
-        next.final ? outcome : null,
-        now.toISOString(),
-      ]);
+      await tx.query(
+        "update cases set status = $2, next_attempt_at = $3, interview = $4::text::jsonb, review = $5::text::jsonb, final_outcome = $6, updated_at = $7, latency_ms = latency_ms || $8::text::jsonb where id = $1",
+        [
+          claim.case.id,
+          next.final ? "final" : "pending",
+          next.nextAttemptAt ? next.nextAttemptAt.toISOString() : null,
+          JSON.stringify(input.interview),
+          JSON.stringify(input.review),
+          next.final ? outcome : null,
+          now.toISOString(),
+          JSON.stringify(input.latencyMs ?? {}),
+        ],
+      );
       if (next.addToDnc) {
         await tx.query("insert into do_not_call (phone, reason, source, added_at) values ($1,$2,$3,$4) on conflict (phone) do nothing", [claim.case.phone, "asked to be removed during a call", `attempt ${claim.attempt.id}`, now.toISOString()]);
       }

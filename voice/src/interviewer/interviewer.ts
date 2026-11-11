@@ -10,7 +10,7 @@
 import type { Answer, Instrument, Item, GridRow } from "../instrument/types.js";
 import { emptyState, markHeard, nextStep, recordAnswer, type InterviewState, type Step } from "../engine/flow.js";
 import { linesForStep, type Script, type ScriptId } from "../script/script.js";
-import { classify, type Classification, type ModelClassifier } from "./classify.js";
+import { classify, classifyKeys, type Classification, type ModelClassifier } from "./classify.js";
 import type { ProtocolKey, SpeechTable, SpokenLine } from "./protocol.js";
 
 export type Outcome = "complete" | "breakoff" | "consent_declined" | "opt_out" | "callback";
@@ -37,6 +37,8 @@ export interface CallState {
   attempts: Record<string, { probes: number; repeats: number }>;
   /** Slots whose recorded value should be checked by a person. */
   review: string[];
+  /** Milliseconds from the end of the question audio to the start of the reply, by slot (first reply only). */
+  latencyMs: Record<string, number>;
   outcome: Outcome | null;
 }
 
@@ -45,6 +47,11 @@ export type AuditEvent = { seq: number } & (
   | { type: "heard"; text: string }
   | { type: "classified"; expecting: "consent" | "recording" | "answer"; slot?: string; classification: Classification }
   | { type: "decision"; action: "record" | "probe" | "repeat" | "nonresponse" | "consent" | "end"; slot?: string; detail: string }
+  /** What actually reached the respondent's ear: when a line played and whether it was cut off. */
+  | { type: "played"; lineId: string; startedMs: number; endedMs: number; completed: boolean }
+  /** How the reply arrived: its timing, and the response latency when a question was pending. */
+  | { type: "turn"; via: "speech" | "keys" | "silence"; startedMs: number; endedMs: number; slot?: string; latencyMs?: number }
+  | { type: "flag"; slot: string; reason: string }
 );
 
 type AuditBody = AuditEvent extends infer E ? (E extends { seq: number } ? Omit<E, "seq"> : never) : never;
@@ -52,7 +59,7 @@ type AuditBody = AuditEvent extends infer E ? (E extends { seq: number } ? Omit<
 export type Expecting = { kind: "consent" } | { kind: "recording" } | { kind: "answer"; item: Item; row?: GridRow; slot: string } | { kind: "nothing" };
 
 export function newCallState(interview: InterviewState = emptyState()): CallState {
-  return { phase: "not_started", interview, consent: { participate: null, recording: null }, attempts: {}, review: [], outcome: null };
+  return { phase: "not_started", interview, consent: { participate: null, recording: null }, attempts: {}, review: [], latencyMs: {}, outcome: null };
 }
 
 export interface InterviewerOptions {
@@ -128,6 +135,50 @@ export class Interviewer {
       this.onAnswer(expecting, c);
     }
     return this.flush();
+  }
+
+  /** Keypad digits. On a question they mean an option's position, a scale point or a number; "*" asks for a repeat. */
+  async hearKeys(digits: string): Promise<SpokenLine[]> {
+    if (this.state.phase === "not_started") throw new Error("The call has not started.");
+    if (this.state.phase === "ended") return [];
+    this.out = [];
+    this.push({ type: "heard", text: `[keypad ${digits}]` });
+    const expecting = this.expecting();
+    if (expecting.kind === "answer") {
+      const c = classifyKeys(expecting.item, digits);
+      this.push({ type: "classified", expecting: "answer", slot: expecting.slot, classification: c });
+      this.onAnswer(expecting, c);
+    } else if (expecting.kind === "consent" || expecting.kind === "recording") {
+      // Consent is spoken. Keys are not taken as agreement.
+      const c: Classification = { intent: "unclear", confidence: 0, evidence: `keypad ${digits}`, by: "rule" };
+      this.push({ type: "classified", expecting: expecting.kind, classification: c });
+      if (expecting.kind === "consent") this.onConsent(c);
+      else this.onRecording(c);
+    }
+    return this.flush();
+  }
+
+  /** The line went quiet or dropped: end the call without saying anything more. Answers so far are kept. */
+  abandon(detail: string): void {
+    if (this.state.phase === "ended") return;
+    this.state.phase = "ended";
+    this.state.outcome = this.state.consent.participate === true ? "breakoff" : "consent_declined";
+    this.decide("end", `${this.state.outcome}: ${detail}`);
+  }
+
+  /** Record a fact about the call that is not speech (timing, playback), from the layer carrying the audio. */
+  note(event: Extract<AuditEvent, { type: "played" | "turn" }>): void {
+    const { seq: _seq, ...body } = event as AuditEvent & { seq?: number };
+    this.push(body as AuditBody);
+    if (event.type === "turn" && event.slot !== undefined && event.latencyMs !== undefined && this.state.latencyMs[event.slot] === undefined) {
+      this.state.latencyMs[event.slot] = event.latencyMs;
+    }
+  }
+
+  /** Mark a slot for a person to check, with the reason. */
+  flag(slot: string, reason: string): void {
+    if (!this.state.review.includes(slot)) this.state.review.push(slot);
+    this.push({ type: "flag", slot, reason });
   }
 
   // ── speaking: by line id only ──────────────────────────────────────────────

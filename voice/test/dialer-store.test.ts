@@ -34,7 +34,7 @@ describe("migrations", () => {
   it("apply once and are safe to run again", async () => {
     const sql = await testDb();
     expect(await migrate(sql)).toEqual([]);
-    expect((await sql.query("select name from schema_migrations")).length).toBe(1);
+    expect((await sql.query("select name from schema_migrations")).length).toBe(2);
   });
 
   it("keeps function bodies whole when splitting statements", () => {

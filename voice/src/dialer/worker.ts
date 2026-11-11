@@ -58,7 +58,7 @@ export async function runClaim(store: Store, claim: Claim, opts: Pick<RunOptions
   } catch {
     outcome = "carrier_error";
   }
-  await store.finishAttempt({ claim, outcome, interview: interviewer.state.interview, review: interviewer.state.review, recordingConsent: interviewer.state.consent.recording, events: interviewer.log, now: opts.now() });
+  await store.finishAttempt({ claim, outcome, interview: interviewer.state.interview, review: interviewer.state.review, recordingConsent: interviewer.state.consent.recording, events: interviewer.log, now: opts.now(), latencyMs: interviewer.state.latencyMs });
   return outcome;
 }
 

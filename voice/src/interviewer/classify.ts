@@ -144,3 +144,23 @@ export async function classify(req: ModelRequest, model?: ModelClassifier): Prom
   }
   return checkVerdict(req, verdict, model.id);
 }
+
+/** Keypad input on a question. Exact by nature, so it is always a rule and never goes to a model. */
+export function classifyKeys(item: Item, digits: string): Classification {
+  const keys = digits.replace(/#$/, "");
+  const evidence = `keypad ${digits}`;
+  const unclearKeys: Classification = { intent: "unclear", confidence: 0, evidence, by: "rule" };
+  if (keys === "*") return { intent: "repeat", confidence: 1, evidence, by: "rule" };
+  if (!/^\d+$/.test(keys)) return unclearKeys;
+  const n = Number(keys);
+  let answer: Answer | undefined;
+  if (item.kind === "single" || item.kind === "grid") {
+    const c = (item.choices ?? [])[n - 1];
+    if (c) answer = { kind: "choice", code: c.code };
+  } else if (item.kind === "scale") {
+    const c = (item.choices ?? []).find((x) => x.label.trim() === String(n));
+    if (c) answer = { kind: "choice", code: c.code };
+  } else if (item.kind === "number") answer = { kind: "number", value: n };
+  if (!answer || validateAnswer(item, answer) !== null) return unclearKeys;
+  return { intent: "answer", answer, confidence: 1, evidence, by: "rule" };
+}
