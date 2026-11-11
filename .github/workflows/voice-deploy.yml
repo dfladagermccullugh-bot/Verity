@@ -44,7 +44,16 @@ jobs:
             flyctl apps create "$APP" --org personal || flyctl apps create "$APP"
           fi
       - name: Deploy
-        run: flyctl deploy --app "$APP" --remote-only --ha=false
+        run: flyctl deploy --app "$APP" --remote-only --ha=false --wait-timeout 180
+      - name: What the server says (shown whether or not the deploy passed)
+        if: always()
+        run: |
+          flyctl status --app "$APP" || true
+          flyctl checks list --app "$APP" || true
+          echo "----- server log -----"
+          timeout 25 flyctl logs --app "$APP" --no-tail | tail -n 80 || true
+          echo "----- health -----"
+          curl -sS -m 15 -i "https://$APP.fly.dev/health" || true
       - name: Check the server answers
         run: |
           for i in 1 2 3 4 5 6; do
