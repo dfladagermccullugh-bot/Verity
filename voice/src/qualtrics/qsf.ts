@@ -135,21 +135,34 @@ function parseSkip(entry: Json): SkipRule {
   return { when, to };
 }
 
-function orderedChoices(choices: unknown, order: unknown, recodes: unknown): Choice[] {
-  if (!isObj(choices)) return [];
+/**
+ * A QSF map from code to value. When the codes run 0, 1, 2, … Qualtrics writes the map as a plain
+ * list (seen in a genuine export: the options of a 0-to-10 recommend question), so a list is read
+ * as a map keyed by position.
+ */
+function mapOf(v: unknown): Json | null {
+  if (Array.isArray(v)) return Object.fromEntries(v.map((x, i) => [String(i), x]));
+  return isObj(v) ? v : null;
+}
+
+function orderedChoices(choicesIn: unknown, order: unknown, recodesIn: unknown): Choice[] {
+  const choices = mapOf(choicesIn);
+  const recodes = mapOf(recodesIn);
+  if (!choices) return [];
   const codes = Array.isArray(order) && order.length > 0 ? order.map(str) : Object.keys(choices);
   const out: Choice[] = [];
   for (const code of codes) {
     const c = choices[code];
     if (!isObj(c)) continue;
-    const recode = isObj(recodes) ? str(recodes[code]) : "";
+    const recode = recodes ? str(recodes[code]) : "";
     out.push({ code, label: htmlToText(str(c.Display)), exportValue: recode !== "" ? recode : code });
   }
   return out;
 }
 
-function choicesHave(choices: unknown, key: string): boolean {
-  return isObj(choices) && Object.values(choices).some((c) => isObj(c) && c[key] !== undefined && c[key] !== false && c[key] !== "false");
+function choicesHave(choicesIn: unknown, key: string): boolean {
+  const choices = mapOf(choicesIn);
+  return choices !== null && Object.values(choices).some((c) => isObj(c) && c[key] !== undefined && c[key] !== false && c[key] !== "false");
 }
 
 /** Returns the item, or null when the question is deliberately left out (with a finding). */
@@ -218,7 +231,7 @@ function readQuestion(p: Json, blockId: string, findings: Finding[]): Item | nul
     const scale = orderedChoices(p.Answers, p.AnswerOrder, p.RecodeValues);
     const statements = orderedChoices(p.Choices, p.ChoiceOrder, undefined);
     if (scale.length < 2 || statements.length < 1) throw new Refusal("too_few_choices", "The grid needs at least one statement and two scale points.");
-    const tags = isObj(p.ChoiceDataExportTags) ? p.ChoiceDataExportTags : {};
+    const tags = mapOf(p.ChoiceDataExportTags) ?? {};
     const rows: GridRow[] = statements.map((s) => ({ code: s.code, label: s.label, exportSuffix: str(tags[s.code]) || s.code }));
     item = { ...base, kind: "grid", choices: scale, rows };
   } else {

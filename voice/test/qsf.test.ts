@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { readQsf } from "../src/qualtrics/qsf.js";
 import { htmlToText } from "../src/instrument/text.js";
@@ -46,6 +47,26 @@ describe("reading the library test survey", () => {
     expect(inst.items[2]!.displayIf).toEqual({ op: "selected", itemId: "QID2", choiceCode: "1" });
     expect(inst.items[6]!.skips).toEqual([{ when: { op: "selected", itemId: "QID7", choiceCode: "2" }, to: { kind: "endOfSurvey" } }]);
     expect(inst.embeddedFields).toEqual(["vv_mode", "vv_case_id"]);
+  });
+});
+
+describe("the same survey as Qualtrics itself exports it", () => {
+  // library-test-real.qsf is the hand-written file after a round trip through a Qualtrics account
+  // (imported, then exported, 2026-11-11). Qualtrics rewrote parts of it, so this is the format as
+  // Qualtrics writes it today.
+  const real = readQsf(readFileSync(new URL("../fixtures/qualtrics/library-test-real.qsf", import.meta.url), "utf8"));
+
+  it("is read without findings, to the same questionnaire apart from its name and ID", () => {
+    expect(real.findings).toEqual([]);
+    const hand = readQsf(LIBRARY_QSF).instrument!;
+    expect({ ...real.instrument!, surveyId: "", name: "" }).toEqual({ ...hand, surveyId: "", name: "" });
+    expect(real.instrument!.name).toBe("verity_talk_test");
+  });
+
+  it("reads options that Qualtrics wrote as a list (codes 0, 1, 2, …) by their position", () => {
+    const nps = real.instrument!.items.find((i) => i.id === "QID5")!;
+    expect(nps.choices!.map((c) => c.code)).toEqual(["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]);
+    expect(nps.choices!.map((c) => c.exportValue)).toEqual(nps.choices!.map((c) => c.code));
   });
 });
 

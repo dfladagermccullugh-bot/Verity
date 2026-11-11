@@ -85,11 +85,16 @@ their editor: the NPS question with both end labels, the number question, the "E
 Q7's skip to end of survey. Qualtrics' only flags are accessibility/mobile tips about the
 matrix (Q4), which concern the web form, not voice. Display logic on Q3/Q4 and the embedded
 data fields were not on screen: confirm from the export. Survey name there: `verity_talk_test`.
-**Waiting on the operator** for step 2 of `voice/docs/qualtrics-test-survey.md`: export the
-survey (Tools → Import/Export → Export survey) and upload the `.qsf` to the chat. Then: save
-it as `fixtures/qualtrics/library-test-real.qsf`, run the reader on it, compare with the
-hand-written one, fix differences. Then steps 3 to 5, one per turn. `import-probe.qsf` was
-not needed.
+Step 2 done: the operator exported it back; saved as `fixtures/qualtrics/library-test-real.qsf`.
+It found a real reader bug: Qualtrics writes a map whose codes run 0, 1, 2, … as a plain list
+(the 0-to-10 question's options), which the reader refused as "fewer than two answer
+options". Fixed (`mapOf` in `qsf.ts`); the export now reads to the same questionnaire as the
+hand-written file apart from name and ID (tested). Display logic and embedded data came
+through Qualtrics intact. Qualtrics also adds `PL` and `PROJ` entries; the reader ignores them.
+**Waiting on the operator** for step 3: publish the survey, then Data & Analysis → Export &
+Import → Import data with `library-test-expected-import.csv` (sent to them in chat); two
+responses should appear. This answers the open question of whether a free account can import
+responses. Then step 4 (export the data as CSV with numeric values, upload it here).
 
 **Next, in this order (one per turn)**
 
@@ -140,7 +145,7 @@ AI voice survey interviewers on top of Qualtrics. Plan and phase status table:
 own Postgres schema). The web app described in the rest of this file is now the **legacy
 app**: unchanged at the root (its `tsconfig.json` excludes `voice/`), to be switched off later.
 
-- **State (2026-11-11):** all code that needs no account login is built; 355 tests
+- **State (2026-11-11):** all code that needs no account login is built; 357 tests
   (`cd voice && npm test`); database tests also pass on real Postgres 16
   (`TEST_DATABASE_URL=… npx vitest run test/dialer-store.test.ts`).
 - **Never run live:** Telnyx calls, Deepgram/Cartesia speech, the Claude classifier, a
