@@ -4,7 +4,7 @@ Lean, session-to-session working memory. Keep this under ~5k tokens. When an
 item goes stale or a to-do is done, move it to [history.md](history.md) and
 trim it from here.
 
-_Last updated: 2026-11-11 (Verity Voice demo page rebuilt, see "Start here"). Legacy app: 2026-11-10 (state-machine work shipped, PR #48: re-entrant claim-then-advance engine, guard/protocol fixes, guarded migration `0006`, canary repaired + 14 false drift issues closed, respondent/operator flow fixes. Verified by typecheck + **270 tests** + build + PGlite/PG16 integration + Playwright client check; **live QA with a real DB + model still pending**. Detail in history.md; what remains is in [state-machine-plan.md](state-machine-plan.md).)_
+_Last updated: 2026-11-11 (Verity Voice: live voice, model, Qualtrics round trip and first real calls; see "Start here"). Legacy app: 2026-11-10 (state-machine work shipped, PR #48: re-entrant claim-then-advance engine, guard/protocol fixes, guarded migration `0006`, canary repaired + 14 false drift issues closed, respondent/operator flow fixes. Verified by typecheck + **270 tests** + build + PGlite/PG16 integration + Playwright client check; **live QA with a real DB + model still pending**. Detail in history.md; what remains is in [state-machine-plan.md](state-machine-plan.md).)_
 
 ## What Verity is
 
@@ -20,206 +20,110 @@ Integration in Survey Research (2026)*. Verity sits in the highest-risk AAPOR
 quadrant — it is both AI Interviewer and AI Analyst — and treats that as a
 design constraint, not a disclaimer.
 
-## Start here next session (written 2026-11-11)
+## Start here next session (rewritten 2026-11-11, end of the second session that day)
 
-The operator is being walked through getting Verity Voice fully running, **one step at a
-time** (their instruction: give one thing, wait until it is done, then the next). They are
-not deeply technical and want short, plain replies. Prefer routes that need no installs on
-their computer: GitHub Actions, and the Fly.io / Neon / Vercel dashboards in a browser.
-Secrets go into GitHub or Fly.io secret settings, never into chat.
+**How to work with the operator.** They are being walked through getting Verity Voice
+running, **one step at a time**: give one thing, wait until it is done, then the next. They
+are not deeply technical and want short, plain replies. Use routes that need nothing
+installed on their computer: GitHub Actions and browser dashboards. Secrets go into GitHub
+repository secrets, never into chat. Proceed without asking for sign-off on each phase, but
+ask before anything that changes one of their outside accounts or makes a phone ring.
 
-**Where the walkthrough stands**
+**Their direction.** Voice through calling first. Order they gave: models (done), Qualtrics
+(done), Telnyx (in progress). The demo page's ribbon is parked: they want it to become "its
+own independent voice thing" later; do not work on it. They have said there are "a lot of
+things I kind of don't agree with", still unspecified: ask, one at a time; do not guess.
 
-1. Done: the browser demo is online at https://verity-voice-demo.fly.dev. It is deployed by
-   `.github/workflows/voice-deploy.yml` (manual: Actions tab, or `run_workflow` with input
-   `app: verity-voice-demo`; it deploys the branch it is run on). The repo secret
-   `FLY_API_TOKEN` is set.
-2. Done: the operator tried the first demo. Verdict: "very rudimentary", "not at all what we
-   want". They named three things (interface, real voices, a good model) and said there are
-   "a lot of things I kind of don't agree with", not yet specified. Ask, one at a time; do
-   not guess.
-3. Done (2026-11-11, second session): `voice/src/server/demo.html` rebuilt to the operator's
-   reference (`voice/docs/design/interface-reference.webp`). Detail in history.md. **The
-   operator has not yet said whether it is what they want; ask before building on it.**
-   Open choices made without asking, to confirm: the brand reads "verity / voice" (the
-   reference's "human / loop" was not adopted); the headline copy is the reference's
-   ("Space to speak. / A conversation, taking shape."); a fourth pill button (keyboard)
-   opens the keypad, typed reply and transcript; dark mode follows the device.
+**The very next thing: a third real phone call.** Calling is off. When the operator says
+go (calls are placed 9am to 8pm Pacific only):
+1. Run `voice-deploy.yml` on this branch with task `set-up-call` (a fresh one-person
+   campaign from the secrets), then task `deploy` (starts the server with calling on; the
+   phone rings about three minutes later). Tell them before the deploy. Suggest they answer
+   with "Hello?" and ask a question at the consent step: that is what broke last time.
+2. Read what happened: task `server-log` (carrier events, numbers masked), and the audit
+   trail with the Neon connector: `run_sql` on project `cold-wildflower-22977142`,
+   `select a.outcome, e.seq, e.body from attempts a join audit_events e on e.attempt_id =
+   a.id where a.started_at > now() - interval '30 minutes' order by a.started_at, e.seq`.
+   **Never select `cases.phone`, and never print their number anywhere.**
+3. Run task `stop-calls` afterwards, every time.
+4. Fix what the call shows. Then import that call's results into Qualtrics (see the
+   time-zone point below).
 
-4. Done (2026-11-11, second session), **built but never run against a real vendor**: the
-   demo can use the server's own voice and hearing. With `DEEPGRAM_API_KEY` set the page plays
-   server-rendered recordings (`/demo/audio/<line id>`, 24 kHz WAV) and sends its microphone
-   over the same connection (binary: 4-byte page clock + 16 kHz 16-bit samples); the server
-   runs the recogniser and decides the turns (`browser-channel.ts`). The ribbon follows the
-   real sound (six pitch bands per side; `ribbon.follow`). Without keys nothing changes: the
-   browser's own speech is used. Detail in history.md.
+**What the last call showed, and what was changed (2026-11-11 evening; detail in
+history.md).** The second call was answered and went badly: four seconds of silence, the
+operator's "Hello?" cut the introduction off and was taken as their reply, and "take part in
+what?" ended the call. Fixed with tests that replay it (368 pass), **not yet tried on a real
+call, and not yet deployed** (the live server runs the commit before these fixes; the next
+`deploy` carries them): the interviewer speaks once the greeting is over
+(`dialer/phone-connect.ts`); a greeting neither interrupts nor counts as a reply
+(`voice/phone.ts`); agreement is not asked for or accepted until the whole introduction has
+played, a cut-off introduction starts again, and a question at the consent step gets the
+introduction again (`interviewer/interviewer.ts`).
 
-**Deepgram is live (2026-11-11).** The operator added the repository secret
-`DEEPGRAM_API_KEY`. The `compare-voices` task passed on its first live run (37 lines rendered
-with `aura-2-thalia-en`; heard back 98.6% correctly; 24 kHz page WAV correct; streaming
-recogniser heard the test line exactly, with speech-start and end-of-utterance events). The
-demo is deployed from this branch and its log reads "Demo voice: deepgram/aura-2-thalia-en/page.
-Demo hearing: deepgram/nova-3." **Waiting on the operator** to try it in a real browser with a
-real microphone and loudspeakers (never done) and say what is wrong.
+**An open question to put to the operator.** They said the interviewer "doesn't handle
+natural language at all… anything not within its scope, it just immediately ends". Part of
+that was the bugs above. Part is design: during the survey a respondent's question gets "I
+am not able to answer questions or explain further" and the question again, because the
+interviewer may only speak lines from the fixed script. They were asked what they would want
+instead and have not answered. Do not loosen the script rule without their decision.
 
-**Operator's direction (2026-11-11, after hearing the Deepgram voice):** the focus is voice
-through calling. The ribbon is parked: they want it to become "its own independent voice
-thing" later, and it need not be worked on now (they did not report whether it moved with
-the sound; do not build on it). Order they gave: hook up the models, then Qualtrics, then
-Telnyx.
+**What is live.**
+- Demo: https://verity-voice-demo.fly.dev, deployed from this branch by `voice-deploy.yml`
+  (never from `main`). Deepgram voice (`aura-2-thalia-en`, a default, not a choice) and
+  hearing (`nova-3`); answers read by rules, then `claude-haiku-5-5`. The operator heard
+  the voice in the browser; they did not report on hearing or the ribbon.
+- Repository secrets set: `FLY_API_TOKEN`, `DEEPGRAM_API_KEY`, `ANTHROPIC_API_KEY`,
+  `TELNYX_API_KEY`, `VOICE_DATABASE_URL`, `MY_PHONE_NUMBER`. Not set: Cartesia.
+- Telnyx: application "verity-voice" (created by us) calls from the account's one number,
+  which stays attached to the operator's other project "phone-map". **Never re-point or
+  reassign phone-map or that number.** Anyone calling the number back reaches phone-map; a
+  dedicated number for Verity is a later decision for the operator (it costs money).
+- Database: Neon project `verity-voice` (`cold-wildflower-22977142`), created by us.
+- Qualtrics: a free-trial account imported our survey file and our results file, and its
+  exports read back correctly (fixtures in `voice/fixtures/qualtrics/`). Open: Qualtrics
+  read our UTC times as Pacific; its import dialog has a Timezone option (choose UTC), not
+  yet tried. Its help page says imported responses can be billable on newer plans.
 
-**The language model is live (2026-11-11).** The operator added `ANTHROPIC_API_KEY`. First
-live measurement (task `measure-model`, `claude-haiku-5-5/prompt-v1`, 298 hand-written
-replies): 96.3% acceptable; model-decided 167, 93.4% right; 0 wrong answers recorded without
-a probe; 20 right answers probed anyway. All 11 misses were on the cautious side: plain
-answers called unclear ("monthly", "once every two weeks", "around 40", self-corrections
-like "five, no, six"), so the caller is re-asked. Worth a prompt revision later (bump
-`CLASSIFIER_PROMPT_VERSION`, re-measure); not blocking. The demo server now has the key (its health check reports
-`claude-haiku-5-5/prompt-v1`).
+**`voice-deploy.yml` tasks** (run with `actions_run_trigger`, ref = this branch, inputs
+`app: verity-voice-demo`, `task: …`): `deploy`, `server-log`, `stop-calls`, `set-up-call`,
+`look-at-telnyx` (read-only), `set-up-telnyx`, `compare-voices`, `measure-model`. A new
+workflow file cannot be started until it is on `main`, so new jobs go in this file as tasks.
 
-**Qualtrics (2026-11-11).** The operator's free-trial account ("Start Free Trial" shown)
-accepted the corrected `library-test.qsf` (first version was refused; the fixture was brought
-into line with a genuine export: question count in `SecondaryAttribute`, skip logic on the
-block entry, 15-character IDs, `SCO`/`STAT` entries; which mattered is unknown). Seen in
-their editor: the NPS question with both end labels, the number question, the "Extra" block,
-Q7's skip to end of survey. Qualtrics' only flags are accessibility/mobile tips about the
-matrix (Q4), which concern the web form, not voice. Display logic on Q3/Q4 and the embedded
-data fields were not on screen: confirm from the export. Survey name there: `verity_talk_test`.
-Step 2 done: the operator exported it back; saved as `fixtures/qualtrics/library-test-real.qsf`.
-It found a real reader bug: Qualtrics writes a map whose codes run 0, 1, 2, … as a plain list
-(the 0-to-10 question's options), which the reader refused as "fewer than two answer
-options". Fixed (`mapOf` in `qsf.ts`); the export now reads to the same questionnaire as the
-hand-written file apart from name and ID (tested). Display logic and embedded data came
-through Qualtrics intact. Qualtrics also adds `PL` and `PROJ` entries; the reader ignores them.
-Step 3 done: Qualtrics reported "Import complete. 2 of 2 responses were successfully
-imported." on the free-trial account, so the open question (can a free account import
-responses?) is answered yes. Not yet seen: whether the values landed in the right fields.
-Step 4 done: their data export is `fixtures/qualtrics/library-test-numeric.csv`. Every value
-is in the field it was sent to (tested), skipped questions are blank, `vv_mode` and
-`vv_case_id` came through. Qualtrics set Status to 4 (imported), its own RecordedDate and
-ResponseId, and added `Q5_NPS_GROUP`. **Open point:** the dates came back unchanged but
-labelled America/Los_Angeles: Qualtrics read our UTC times in the account's zone. Its import
-dialog has a Timezone option; choosing UTC there should fix it (not tried). An in-file
-`"timeZone"` key in the ImportId row is what Qualtrics' own exports carry and its importer
-"tries to detect" it; writing it from our side is untested. Verify one or the other the next
-time results are imported (after the first real call). **The Qualtrics check is complete.**
+**After the call works, in this order (one per turn).**
+- Voices: Cartesia key and voice ID so the voices can be compared by listening
+  (`what-needs-you.md` §G). Fish Audio, which they named, has no adapter. They also named
+  OpenRouter and Hugging Face; nothing uses them. Ask before building.
+- The classifier is cautious: it calls plain answers such as "monthly" unclear and re-asks.
+  A prompt revision would help (bump `CLASSIFIER_PROMPT_VERSION`, run `measure-model`).
+- Cutting in by voice on the demo page (`DEMO_BARGE_IN=1`) is off; untested echo risk.
+- Before calling anyone but the operator: legal review of the consent wording (§I).
+- Before the repository is made public: rotate the legacy Neon password; blank the account
+  IDs in `voice/fixtures/qualtrics/library-test-real.qsf`.
+- This branch is 20-odd commits ahead of `main` with no pull request. The operator has not
+  been asked whether to merge; raise it.
 
-**First real call, in progress (2026-11-11).** The operator has a Telnyx account with a
-number. Built for it (nothing run live yet): `voice-deploy.yml` tasks `look-at-telnyx`
-(read-only listing via `voice/scripts/telnyx-look.ts`), `set-up-call` (one-contact campaign
-from secrets; rehearsed on a local Postgres with a made-up number) and `stop-calls`; the
-deploy task now hands the server the Telnyx keys, `VOICE_DATABASE_URL` (as `DATABASE_URL`),
-`MY_PHONE_NUMBER` (as `DIAL_ALLOWLIST`), `PUBLIC_BASE_URL` and `TTS_VENDOR=deepgram`.
-`TELNYX_API_KEY` is set. What `look-at-telnyx` showed (2026-11-11): one number (…8345)
-attached to the Voice API application "phone-map" (webhook `https://phone-map.fly.dev/…`,
-the operator's other project: **do not re-point or reassign**); one outbound profile
-"Default" (US, CA); a credential connection "Forward Only". `GET /v2/public_key` returns the
-account's public key, so it need not be copied by hand.
-Plan: a second application, "verity-voice", created by task `set-up-telnyx`
-(`voice/scripts/telnyx-env.ts ensure-app`), using the "Default" profile; calls are placed
-from the existing number as caller ID while it stays attached to phone-map (so anyone
-calling back reaches phone-map). Whether Telnyx lets an application call from a number
-attached to another application is **unverified**; the first call will show. The deploy task
-reads the connection ID, from-number and public key from the account itself.
-The operator said yes; `set-up-telnyx` created the application "verity-voice"
-(id 3090548507606517423, webhook at this server, API v2, "Default" profile). phone-map was
-not touched. A Neon project for Verity Voice was created with the Neon connector:
-`verity-voice`, id `cold-wildflower-22977142`, aws-us-east-1, Postgres 17, empty (the
-server and the CLI run the migrations themselves).
-`VOICE_DATABASE_URL` and `MY_PHONE_NUMBER` are set (the operator asked why their own number:
-it is only the phone that receives the test call, any phone they can answer). `set-up-call`
-ran (2026-11-11 03:42 UTC): a one-contact campaign is running in the new database and
-`DIAL_CAMPAIGN_ID` is staged on Fly. **Nothing has been deployed since, so nothing dials yet.**
-**First real call placed, 2026-11-11 03:46 UTC (7:46pm Pacific).** What it proved: Telnyx
-accepted a call from the "verity-voice" application using the number attached to phone-map
-as caller ID; the webhooks arrived and passed the signature check (public key read from the
-account); the server rendered 36 lines with Deepgram first; the operator's phone logged a
-missed call from …8345. What happened: the phone did not ring (it sent the unknown caller to
-voicemail), Telnyx's detection said "machine", and the server hung up after 7 seconds without
-leaving a message, as designed (outcome `answering_machine`). **No audio has yet been played
-to, or heard from, a person on a call.** `stop-calls` was run afterwards. The case's own retry
-would be 26 hours later; each new try needs `set-up-call` (a fresh campaign) and `deploy`.
-Mistake to remember: the server printed the allowed number in full and the `server-log` task
-copied it into an Actions log. That run's log was deleted; the server now prints the last four
-digits and the log tasks mask numbers. Never print the number. Second mistake: a commit was
-pushed with failing tests because the test command's exit status was hidden by a pipe; fixed
-in the next commit. Run `npm test` on its own line and read the result before committing.
-Carrier events are now traced one line each (`trace` in `TelnyxConfig`) for the next try.
-**Second real call, 2026-11-11 03:53 UTC: answered by the operator, and it went badly.**
-Read from the audit trail (Neon connector, `run_sql` on project `cold-wildflower-22977142`:
-`attempts` joined to `audit_events`; never select the `cases.phone` column) and the server
-trace. What happened: Telnyx's person-or-machine verdict took 4 s ("human"), and the server
-sat silent for it; the operator said "Hello?" twice into the silence; that cut the
-introduction off 0.4 s in and was then taken as the reply to the consent question; they heard
-"Sorry, I did not catch that. Do you agree to take part?" without ever hearing that it was an
-AI or what the call was; they asked "Take [your] part in what?", the model correctly said
-"question", and the consent logic ended the call as declined. Operator's words: "it was not
-able to handle natural language at all… anything that's not within its scope, it just
-immediately ends."
-**Fixed the same evening (tests replay the call; 368 pass; not yet tried on a real call):**
-- `phone-connect.ts`: after pickup the interviewer waits for the greeting to finish (0.5 s of
-  quiet, or 1.5 s of nothing, 4 s at most), not for the carrier's verdict; a "machine" verdict
-  that arrives later hangs up there and the attempt is `answering_machine`.
-- `phone.ts`: anything that began before the interviewer's first words, or within 0.8 s after
-  they began, is the greeting: it neither interrupts nor counts as a reply.
-- `interviewer.ts`: agreement cannot be asked for or accepted until every line of the
-  introduction has played to its end (known from the `played` events; typed conversations
-  report none and are unaffected). If it was cut off, the introduction starts again (twice at
-  most, not counted as a failed reply); a clear "no", "stop" or "remove me" is still taken at
-  once. A question at the consent step ("who is this?", "take part in what?") gets the whole
-  introduction again, twice at most.
-**Still as designed, and the operator may not agree with it:** during the survey a question
-from the respondent gets "I am not able to answer questions or explain further" and the
-question again (standardised interviewing); the interviewer has no way to say anything that
-is not in the fixed script. Ask them about this rather than guess.
-Calling is off (`stop-calls`). **Waiting on the operator** to say go for a third call (9am to
-8pm Pacific): `set-up-call`, then `deploy`, then read the audit trail the same way.
-Then `set-up-call`, then `deploy` (the call is placed at server start, 9am to 8pm in the
-phone's time zone; tell the operator before deploying). The server renders every line with
-the voice before the first call. Expect fixes: see the open points at the top of
-`voice/src/telephony/telnyx.ts`. After the call: `stop-calls`, then import the call's
-results into Qualtrics (and settle the time-zone point above).
+**Mistakes made this session; do not repeat them.**
+- The server printed the operator's number in full and a log job copied it into an Actions
+  log (deleted since; logs now show the last four digits). Check anything new that prints.
+- A commit was pushed with 23 failing tests because the test command's exit status was
+  hidden by a pipe. Run `npm test`, look at its own exit status, then commit.
+- A foreground `sleep` is blocked here; wait with a background command.
 
-**Next, in this order (one per turn)**
+**Checking the demo page** (the page is read once at server start; restart after edits).
+From `voice/`: `PORT=3311 HOST=127.0.0.1 npx tsx src/server/index.ts`, then
+`node scripts/demo-check.cjs http://127.0.0.1:3311 <dir>` (read-and-type, three sizes) and
+`node scripts/demo-voice-check.cjs …` (browser speech, stand-ins). Server voice path:
+`PORT=3312 npx tsx scripts/demo-standin-server.ts`, then
+`node scripts/demo-server-voice-check.cjs http://127.0.0.1:3312 <dir>`. Look at the
+screenshots. This container cannot reach `*.fly.dev`; check the live site through the jobs.
 
-- Cartesia key + voice id (`what-needs-you.md` §G) so the voices can be compared by
-  listening; other vendors the operator has named (Fish Audio) have no adapter yet. They
-  also named OpenRouter and Hugging Face keys; nothing uses them. Ask before building.
-- Qualtrics: the import check (§C) needs their Qualtrics login.
-- Telnyx: first real call to their own phone (§H).
-- Cutting in by voice (`DEMO_BARGE_IN=1`) is off: untested echo risk through loudspeakers.
-- Ask the operator what else they do not agree with (they said "a lot"; unspecified).
-- Still open from before: rotate the legacy Neon password.
-
-**Checking the demo page** (the page is read once at server start, so restart after edits)
-
-- `cd voice && PORT=3311 HOST=127.0.0.1 npx tsx src/server/index.ts`, then
-  `node scripts/demo-check.cjs http://127.0.0.1:3311 <dir>` (read-and-type mode, three
-  screen sizes, one dark; saves screenshots; follows `<body data-phase>`) and
-  `node scripts/demo-voice-check.cjs http://127.0.0.1:3311 <dir>` (browser-speech logic
-  with stand-ins for the browser's speech features).
-- Server voice path: `PORT=3312 npx tsx scripts/demo-standin-server.ts` (a hum for a voice,
-  a scripted "recogniser"), then `node scripts/demo-server-voice-check.cjs
-  http://127.0.0.1:3312 <dir>` (headless Chromium with a fake microphone).
-- Look at the screenshots. Real speech in a real browser has only been tried by the
-  operator, on the old page.
-- A new workflow file cannot be started until it is on `main`; that is why the live vendor
-  check is a task inside `voice-deploy.yml` (which can be run from this branch).
-
-**Things learned the hard way this session**
-
-- Anything the server needs at run time must be under `dependencies`: with
-  `NODE_ENV=production`, npm skips `devDependencies` even when asked for by name (`tsx`).
-  Rehearse image steps locally with `NODE_ENV=production` exported for every command.
-- A Fly.io release does not restart a machine that is stopped (for example after a crash
-  loop); the deploy job now starts machines explicitly, and `auto_start_machines` is on.
-- `flyctl deploy` reported success while the server was down; trust the job's final
-  "Check the server answers" step, not the deploy step.
-- This container cannot reach `*.fly.dev`; verify the live site through the deploy job.
-- The reference image carries the name "human / loop". Do not adopt it as the product name
-  without asking: there is an existing AI company called Humanloop.
-- `main` now carries all of this work (the operator asked for it to be pushed to `main`,
-  which redeploys the unchanged legacy app on Vercel). Verity Voice does not run on Vercel.
+**Older lessons that still apply.**
+- Anything the server needs at run time goes under `dependencies` (`NODE_ENV=production`
+  skips `devDependencies`).
+- `flyctl deploy` can report success while the server is down; trust the job's "Check the
+  server answers" step. A release does not restart a stopped machine; the job starts it.
+- The reference image for the demo page carries the name "human / loop". It is not the
+  product name (there is an AI company called Humanloop).
 
 ## Verity Voice — new product (started 2026-11-10)
 
