@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Verity Voice demo</title>
+<style>
+  :root { --bg: #f7f5f0; --card: #fffdf9; --ink: #1f2428; --muted: #5d6670; --line: #ddd6c8; --accent: #1f5f8b; --accent-ink: #fff; --warn: #8a4b00; --them: #eaf2f8; --me: #efeadd; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #15181b; --card: #1d2125; --ink: #e8e6e1; --muted: #a2abb3; --line: #353b41; --accent: #6fb1dc; --accent-ink: #10202c; --warn: #e0a44f; --them: #1d2c38; --me: #2a2a25; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 720px; margin: 0 auto; padding: 24px 16px 64px; }
+  h1 { font-size: 1.5rem; margin: 0 0 4px; } h2 { font-size: 1.1rem; margin: 24px 0 8px; }
+  p { margin: 8px 0; } .muted { color: var(--muted); font-size: 0.92rem; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin-top: 16px; }
+  button { font: inherit; padding: 10px 16px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--ink); cursor: pointer; min-height: 44px; }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+  button:disabled { opacity: 0.5; cursor: default; } button:focus-visible, input:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  label { display: flex; gap: 8px; align-items: flex-start; margin: 8px 0; }
+  #log { display: flex; flex-direction: column; gap: 8px; max-height: 46vh; overflow-y: auto; padding: 4px; }
+  .turn { padding: 8px 12px; border-radius: 10px; max-width: 88%; } .turn.iv { background: var(--them); align-self: flex-start; } .turn.me { background: var(--me); align-self: flex-end; }
+  .turn .who { display: block; font-size: 0.75rem; color: var(--muted); }
+  #status { min-height: 1.5em; font-weight: 600; margin: 12px 0 8px; } #status.warn { color: var(--warn); }
+  form { display: flex; gap: 8px; } input[type=text] { flex: 1; min-width: 0; font: inherit; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--ink); min-height: 44px; }
+  #keys { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin-top: 8px; } #keys button { padding: 6px; }
+  .scroll { overflow-x: auto; } table { border-collapse: collapse; width: 100%; font-size: 0.9rem; } th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Verity Voice demo</h1>
+  <p class="muted">An AI interviewer asks a short survey about public libraries, word for word, and shows how it read each answer.</p>
+
+  <section class="card" id="gate">
+    <h2>Before you start</h2>
+    <p>You will talk to an <strong>automated AI interviewer, not a person</strong>. It takes about three minutes. You can stop at any time.</p>
+    <p>If you use your voice, your browser turns your speech into text; in Chrome that means your audio is sent to Google. This demo stores nothing you say: when you close the page it is gone.</p>
+    <label><input type="radio" name="mode" value="voice" checked> <span>Speak and listen <span class="muted" id="voiceNote"></span></span></label>
+    <label><input type="radio" name="mode" value="text"> <span>Read and type instead</span></label>
+    <label><input type="checkbox" id="agree"> <span>I understand, and I want to try the demo.</span></label>
+    <p><button class="primary" id="start" disabled>Start the interview</button></p>
+  </section>
+
+  <section class="card" id="call" hidden>
+    <div id="log" aria-live="polite" aria-label="Conversation"></div>
+    <div id="status" role="status"></div>
+    <form id="reply">
+      <input type="text" id="typed" autocomplete="off" maxlength="500" aria-label="Type your reply" placeholder="Type a reply, or speak when it is your turn">
+      <button class="primary" type="submit">Send</button>
+      <button type="button" id="interrupt" hidden>Interrupt</button>
+    </form>
+    <div id="keys" aria-label="Phone keypad"></div>
+    <p class="muted" id="hint">The keypad works like a phone's: press the number of an option, or a number followed by #. Say "stop" to end, or "remove me" to see how opting out works.</p>
+  </section>
+
+  <section class="card" id="result" hidden>
+    <h2>How your answers were read</h2>
+    <p id="outcome"></p>
+    <div class="scroll"><table><thead><tr><th>Question</th><th>You said</th><th>Read as</th><th>Decided by</th><th>Decision</th></tr></thead><tbody id="trail"></tbody></table></div>
+    <p class="muted">"rule" means an exact match, with no AI involved. "model" means a language model read the reply, and its reading was checked in code before it counted. Nothing from this interview was stored.</p>
+    <p><button onclick="location.reload()">Start again</button></p>
+  </section>
+</main>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const canSpeak = "speechSynthesis" in window;
+  $("voiceNote").textContent = Recognition && canSpeak ? "(needs a microphone)" : canSpeak ? "(this browser cannot recognise speech: you will hear the questions and type your replies)" : "(not available in this browser)";
+  if (!canSpeak) { document.querySelector('input[value="text"]').checked = true; document.querySelector('input[value="voice"]').disabled = true; }
+  $("agree").addEventListener("change", (e) => { $("start").disabled = !e.target.checked; });
+
+  let ws, t0, mode, playing = null, pendingTurn = null, listening = null, recognizer = null;
+  const now = () => Math.round(performance.now() - t0);
+  const status = (text, warn) => { $("status").textContent = text; $("status").className = warn ? "warn" : ""; };
+  const say = (who, text) => {
+    const div = document.createElement("div");
+    div.className = "turn " + (who === "Interviewer" ? "iv" : "me");
+    const w = document.createElement("span"); w.className = "who"; w.textContent = who;
+    div.append(w, document.createTextNode(text));
+    $("log").append(div); div.scrollIntoView({ block: "end" });
+  };
+
+  for (const k of "123456789*0#") {
+    const b = document.createElement("button"); b.type = "button"; b.textContent = k; b.setAttribute("aria-label", "Key " + k);
+    b.addEventListener("click", () => pressKey(k)); $("keys").append(b);
+  }
+
+  // Speak one line; resolves with whether it finished or was cut off.
+  function speakLine(line) {
+    return new Promise((resolve) => {
+      const startedMs = now();
+      const finish = (completed) => { playing = null; resolve({ lineId: line.id, startedMs, endedMs: Math.max(now(), startedMs + 1), completed }); };
+      say("Interviewer", line.text);
+      if (mode !== "voice") { playing = { stop: () => finish(false) }; const t = setTimeout(() => finish(true), 120); playing.stop = () => { clearTimeout(t); finish(false); }; return; }
+      const u = new SpeechSynthesisUtterance(line.text);
+      let cut = false;
+      u.onend = () => finish(!cut); u.onerror = () => finish(!cut);
+      playing = { stop: () => { cut = true; speechSynthesis.cancel(); } };
+      speechSynthesis.speak(u);
+    });
+  }
+
+  async function onSpeak(lines) {
+    status("The interviewer is speaking…"); $("interrupt").hidden = false;
+    const played = [];
+    for (const line of lines) {
+      if (pendingTurn) break;
+      const p = await speakLine(line); played.push(p);
+      if (!p.completed) break;
+    }
+    $("interrupt").hidden = true;
+    ws.send(JSON.stringify({ type: "played", played }));
+  }
+
+  function sendTurn(turn) {
+    if (listening) { clearTimeout(listening.timer); listening = null; }
+    if (recognizer) { try { recognizer.abort(); } catch {} recognizer = null; }
+    ws.send(JSON.stringify({ type: "turn", ...turn }));
+    status("");
+  }
+
+  function giveTurn(turn) {
+    if (turn.kind === "speech") say("You", turn.text); else if (turn.kind === "keys") say("You", "[keypad " + turn.digits + "]");
+    if (listening) sendTurn(turn);
+    else { pendingTurn = turn; if (playing) playing.stop(); }
+  }
+
+  let keyBuffer = "", keyTimer = null, keyStart = 0;
+  function pressKey(k) {
+    if (!ws) return;
+    if (!keyBuffer) keyStart = now();
+    keyBuffer += k; clearTimeout(keyTimer);
+    const flush = () => { const digits = keyBuffer; keyBuffer = ""; giveTurn({ kind: "keys", digits, startedMs: keyStart, endedMs: now() }); };
+    if (k === "#" || k === "*") flush(); else keyTimer = setTimeout(flush, 1500);
+  }
+
+  function onListen(waitMs) {
+    if (pendingTurn) { const t = pendingTurn; pendingTurn = null; ws.send(JSON.stringify({ type: "turn", ...t })); return; }
+    listening = { timer: setTimeout(() => sendTurn({ kind: "silence", startedMs: now(), endedMs: now() }), waitMs + (mode === "voice" ? 0 : 60000)) };
+    status(mode === "voice" && Recognition ? "Your turn: speak now, or type." : "Your turn: type your reply.");
+    $("typed").focus();
+    if (mode !== "voice" || !Recognition) return;
+    const r = new Recognition(); recognizer = r;
+    r.lang = "en-US"; r.interimResults = true; r.maxAlternatives = 1;
+    let startedMs = null;
+    r.onspeechstart = () => { startedMs = now(); if (listening) { clearTimeout(listening.timer); listening.timer = setTimeout(() => sendTurn({ kind: "silence", startedMs: now(), endedMs: now() }), 20000); } };
+    r.onresult = (e) => {
+      const res = e.results[e.results.length - 1];
+      if (startedMs === null) startedMs = now();
+      if (res.isFinal && res[0].transcript.trim()) { recognizer = null; giveTurn({ kind: "speech", text: res[0].transcript.trim(), startedMs, endedMs: now() }); }
+      else status("Hearing: " + res[0].transcript);
+    };
+    r.onerror = (e) => { if (e.error === "not-allowed" || e.error === "service-not-allowed") status("The microphone is blocked. You can type your replies instead.", true); };
+    try { r.start(); } catch {}
+  }
+
+  function onEnded(msg) {
+    $("call").querySelector("form").hidden = true; $("keys").hidden = true; $("hint").hidden = true; status("The interview has ended.");
+    const words = { complete: "The interview was completed.", breakoff: "The interview stopped part-way; the answers given were kept.", consent_declined: "You did not agree to take part, so no question was asked.", opt_out: "You asked to be removed, so the call ended at once and the number would never be called again.", callback: "You asked to be called another time." };
+    $("outcome").textContent = (words[msg.outcome] || "") + " Answers recorded: " + msg.answered + ". Flagged for a person to check: " + msg.review.length + ".";
+    for (const row of msg.trail) {
+      const tr = document.createElement("tr");
+      for (const cell of [row.question, row.said, row.readAs, row.by, row.decision]) { const td = document.createElement("td"); td.textContent = cell; tr.append(td); }
+      $("trail").append(tr);
+    }
+    $("result").hidden = false; $("result").scrollIntoView();
+  }
+
+  $("reply").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const text = $("typed").value.trim(); if (!text || !ws) return;
+    $("typed").value = "";
+    giveTurn({ kind: "speech", text, startedMs: now(), endedMs: now() });
+  });
+  $("interrupt").addEventListener("click", () => { if (playing) playing.stop(); });
+
+  $("start").addEventListener("click", () => {
+    mode = document.querySelector('input[name="mode"]:checked').value;
+    $("gate").hidden = true; $("call").hidden = false; t0 = performance.now();
+    if (mode === "voice") speechSynthesis.cancel();
+    ws = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/demo/ws");
+    ws.onmessage = (ev) => {
+      const msg = JSON.parse(ev.data);
+      if (msg.type === "speak") onSpeak(msg.lines);
+      else if (msg.type === "listen") onListen(msg.waitMs);
+      else if (msg.type === "ended") onEnded(msg);
+      else if (msg.type === "refused") status(msg.reason, true);
+    };
+    ws.onclose = () => { if ($("result").hidden && !$("status").textContent.startsWith("Too many")) status("The connection closed.", true); };
+  });
+})();
+</script>
+</body>
+</html>
