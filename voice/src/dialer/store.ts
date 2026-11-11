@@ -199,8 +199,8 @@ export class Store {
       for (;;) {
         const rows = await tx.query(
           `select * from cases where campaign_id = $1 and status = 'pending' and consent is not null
-             and (next_attempt_at is null or next_attempt_at <= $2) and id > $3
-           order by id limit 50 for update skip locked`,
+             and (next_attempt_at is null or next_attempt_at <= $2) and phone > $3
+           order by phone limit 50 for update skip locked`,
           [campaignId, now.toISOString(), after],
         );
         if (rows.length === 0) return null;
@@ -215,7 +215,7 @@ export class Store {
           await tx.query("insert into attempts (id, case_id, number, transport, started_at) values ($1,$2,$3,$4,$5)", [attempt.id, c.id, number, transport, now.toISOString()]);
           return { campaign, case: { ...c, status: "in_call", attempts: number }, attempt };
         }
-        after = rows[rows.length - 1]!.id as string;
+        after = rows[rows.length - 1]!.phone as string;
       }
     });
   }
@@ -270,7 +270,7 @@ export class Store {
   }
 
   async listCases(campaignId: string): Promise<Case[]> {
-    return (await this.sql.query("select * from cases where campaign_id = $1 order by id", [campaignId])).map(toCase);
+    return (await this.sql.query("select * from cases where campaign_id = $1 order by phone", [campaignId])).map(toCase);
   }
 
   async listAttempts(campaignId: string): Promise<Attempt[]> {
