@@ -104,12 +104,28 @@ dialog has a Timezone option; choosing UTC there should fix it (not tried). An i
 "tries to detect" it; writing it from our side is untested. Verify one or the other the next
 time results are imported (after the first real call). **The Qualtrics check is complete.**
 
-**Waiting on the operator (asked 2026-11-11):** Telnyx. Asked whether they already have a
-Telnyx account with a phone number. The call path has only ever run against a simulated
-carrier; what the server needs is listed at the top of `voice/src/server/index.ts` and in
-`voice/docs/what-needs-you.md` §H (Telnyx API key, connection id, from-number, public key;
-a database URL; a campaign; `DIAL_ALLOWLIST` with their own number). The deploy job does not
-yet hand those to the server.
+**First real call, in progress (2026-11-11).** The operator has a Telnyx account with a
+number. Built for it (nothing run live yet): `voice-deploy.yml` tasks `look-at-telnyx`
+(read-only listing via `voice/scripts/telnyx-look.ts`), `set-up-call` (one-contact campaign
+from secrets; rehearsed on a local Postgres with a made-up number) and `stop-calls`; the
+deploy task now hands the server the Telnyx keys, `VOICE_DATABASE_URL` (as `DATABASE_URL`),
+`MY_PHONE_NUMBER` (as `DIAL_ALLOWLIST`), `PUBLIC_BASE_URL` and `TTS_VENDOR=deepgram`.
+Repository secrets still needed, in the order to ask for them, one per turn:
+1. `TELNYX_API_KEY` (**asked; waiting**). Then run `look-at-telnyx` and read what is there
+   before asking for anything else: the number may be in use by the operator's other project
+   (`phone_map`); do not have them re-point an application or number that is in use. A new
+   Voice API application with webhook `https://verity-voice-demo.fly.dev/telnyx/webhook`
+   (API v2) and an outbound voice profile allowing the US is the safe route.
+2. `TELNYX_CONNECTION_ID` (that application's ID), `TELNYX_FROM_NUMBER`, `TELNYX_PUBLIC_KEY`.
+3. `VOICE_DATABASE_URL`: a new Neon project (the Neon connector can create it; the operator
+   still has to copy the connection string into the secret, since secrets cannot be set from
+   here).
+4. `MY_PHONE_NUMBER`.
+Then `set-up-call`, then `deploy` (the call is placed at server start, 9am to 8pm in the
+phone's time zone; tell the operator before deploying). The server renders every line with
+the voice before the first call. Expect fixes: see the open points at the top of
+`voice/src/telephony/telnyx.ts`. After the call: `stop-calls`, then import the call's
+results into Qualtrics (and settle the time-zone point above).
 
 **Next, in this order (one per turn)**
 

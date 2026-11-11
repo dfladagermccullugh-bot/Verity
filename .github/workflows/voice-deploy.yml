@@ -9,9 +9,20 @@
 #   ANTHROPIC_API_KEY                      natural replies are read by Claude (otherwise by rules only)
 # With none set, the demo uses the browser's built-in speech and understands exact answers only.
 #
-# Two tasks deploy nothing:
+# Real phone calls need more, all as repository secrets, and are placed only to the one number
+# in MY_PHONE_NUMBER (the server refuses every other number):
+#   TELNYX_API_KEY, TELNYX_PUBLIC_KEY, TELNYX_CONNECTION_ID, TELNYX_FROM_NUMBER
+#   VOICE_DATABASE_URL   the Verity Voice database (not the old Verity one)
+#   MY_PHONE_NUMBER      the operator's own phone
+# The server starts calling when all of these are set AND the task set-up-call has been run.
+#
+# Tasks other than deploy:
 #   compare-voices   runs the voice comparison against the live vendors and keeps the audio
 #   measure-model    scores the language model's reading of the labelled replies (a few cents)
+#   look-at-telnyx   lists what is on the Telnyx account; changes nothing
+#   set-up-call      creates a one-person campaign (MY_PHONE_NUMBER) and tells the server to run
+#                    it; the call is placed at the next deploy, inside calling hours
+#   stop-calls       tells the server to place no calls, and restarts it
 name: voice-deploy
 
 on:
@@ -22,10 +33,13 @@ on:
         required: true
         default: "verity-voice-demo"
       task:
-        description: "deploy the server; or compare-voices / measure-model (live checks; they deploy nothing)"
+        description: "deploy the server, or one of the other tasks described at the top of this file"
         type: choice
-        options: [deploy, compare-voices, measure-model]
+        options: [deploy, compare-voices, measure-model, look-at-telnyx, set-up-call, stop-calls]
         default: deploy
+      timezone:
+        description: "set-up-call only: the time zone of the phone being called (calls are placed 9am to 8pm there)"
+        default: "America/Los_Angeles"
 
 permissions:
   contents: read
@@ -83,8 +97,81 @@ jobs:
       - name: Read the labelled replies with the model and score it
         run: npm run -s eval -- --live --wrong | tee -a "$GITHUB_STEP_SUMMARY"
 
+  look-at-telnyx:
+    if: inputs.task == 'look-at-telnyx'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: voice
+    env:
+      TELNYX_API_KEY: ${{ secrets.TELNYX_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - name: List what is on the Telnyx account (read-only)
+        run: npx tsx scripts/telnyx-look.ts "https://$APP.fly.dev" | tee -a "$GITHUB_STEP_SUMMARY"
+        env:
+          APP: ${{ inputs.app }}
+
+  set-up-call:
+    if: inputs.task == 'set-up-call'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: voice
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      DATABASE_URL: ${{ secrets.VOICE_DATABASE_URL }}
+      MY_PHONE_NUMBER: ${{ secrets.MY_PHONE_NUMBER }}
+      APP: ${{ inputs.app }}
+      ZONE: ${{ inputs.timezone }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - run: npm ci
+      - name: Check what is needed is present
+        run: |
+          for name in FLY_API_TOKEN DATABASE_URL MY_PHONE_NUMBER; do
+            if [ -z "${!name}" ]; then echo "A repository secret is missing (${name/DATABASE_URL/VOICE_DATABASE_URL})."; exit 1; fi
+          done
+      - name: Create a campaign of one person and start it
+        run: |
+          # One contact: the operator's own phone, with their own request as the consent on file.
+          printf 'phone,timezone,external_ref,consent_source,consent_at,consent_method,consent_scope\n%s,%s,operator-test,"The operator asked for a test call to their own phone",%s,written,"Test calls of the Verity Voice survey"\n' "$MY_PHONE_NUMBER" "$ZONE" "$(date -u +%FT%TZ)" > "$RUNNER_TEMP/contacts.csv"
+          npm run -s verity -- campaign create --qsf fixtures/qualtrics/library-test.qsf --contacts "$RUNNER_TEMP/contacts.csv" --name "Test call $(date -u +%F)" --sponsor "Verity Voice, as a test" --topic "your local public library" --minutes 3 | tee create.log
+          rm -f "$RUNNER_TEMP/contacts.csv"
+          id=$(sed -n 's/^Created campaign \([^ ]*\) as a draft.*/\1/p' create.log)
+          if [ -z "$id" ]; then echo "The campaign was not created."; exit 1; fi
+          if ! grep -q "1 added, 0 without consent" create.log; then echo "The contact was not accepted (see above)."; exit 1; fi
+          npm run -s verity -- campaign start "$id"
+          flyctl secrets set --stage --app "$APP" "DIAL_CAMPAIGN_ID=$id"
+          echo "Campaign $id is ready. The server will call at its next deploy, between 9am and 8pm $ZONE." | tee -a "$GITHUB_STEP_SUMMARY"
+
+  stop-calls:
+    if: inputs.task == 'stop-calls'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      APP: ${{ inputs.app }}
+    steps:
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: Tell the server to place no calls, and restart it
+        run: |
+          flyctl secrets unset --app "$APP" DIAL_CAMPAIGN_ID || true
+          sleep 20
+          curl -fsS -m 20 "https://$APP.fly.dev/health" && echo
+
   deploy:
-    if: inputs.task != 'compare-voices' && inputs.task != 'measure-model'
+    if: inputs.task == 'deploy'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     defaults:
@@ -114,11 +201,30 @@ jobs:
           CARTESIA_API_KEY: ${{ secrets.CARTESIA_API_KEY }}
           CARTESIA_VOICE_ID: ${{ secrets.CARTESIA_VOICE_ID }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          TELNYX_API_KEY: ${{ secrets.TELNYX_API_KEY }}
+          TELNYX_PUBLIC_KEY: ${{ secrets.TELNYX_PUBLIC_KEY }}
+          TELNYX_CONNECTION_ID: ${{ secrets.TELNYX_CONNECTION_ID }}
+          TELNYX_FROM_NUMBER: ${{ secrets.TELNYX_FROM_NUMBER }}
+          DATABASE_URL: ${{ secrets.VOICE_DATABASE_URL }}
+          MY_PHONE_NUMBER: ${{ secrets.MY_PHONE_NUMBER }}
         run: |
           : > keys.env
-          for name in DEEPGRAM_API_KEY CARTESIA_API_KEY CARTESIA_VOICE_ID ANTHROPIC_API_KEY; do
+          for name in DEEPGRAM_API_KEY CARTESIA_API_KEY CARTESIA_VOICE_ID ANTHROPIC_API_KEY TELNYX_API_KEY TELNYX_PUBLIC_KEY TELNYX_CONNECTION_ID DATABASE_URL; do
             if [ -n "${!name}" ]; then printf '%s=%s\n' "$name" "${!name}" >> keys.env; echo "$name: set, handing it to the server."; else echo "$name: not set in this repository's secrets."; fi
           done
+          # Phone numbers are written the one way the server accepts: +1 and ten digits.
+          plus1() { local d; d=$(printf '%s' "$1" | tr -cd '0-9'); [ ${#d} -eq 10 ] && d="1$d"; if [ ${#d} -eq 11 ] && [ "${d:0:1}" = "1" ]; then printf '+%s' "$d"; fi; }
+          for pair in TELNYX_FROM_NUMBER:TELNYX_FROM_NUMBER MY_PHONE_NUMBER:DIAL_ALLOWLIST; do
+            from=${pair%%:*}; to=${pair##*:}
+            if [ -z "${!from}" ]; then echo "$from: not set in this repository's secrets."; continue; fi
+            n=$(plus1 "${!from}")
+            if [ -z "$n" ]; then echo "$from is not a US phone number (ten digits, with or without +1)."; exit 1; fi
+            echo "::add-mask::$n"
+            printf '%s=%s\n' "$to" "$n" >> keys.env; echo "$from: set, handing it to the server as $to."
+          done
+          # Not secrets, but the server reads them the same way.
+          printf 'PUBLIC_BASE_URL=https://%s.fly.dev\n' "$APP" >> keys.env
+          if [ -z "$CARTESIA_API_KEY" ] || [ -z "$CARTESIA_VOICE_ID" ]; then printf 'TTS_VENDOR=deepgram\n' >> keys.env; fi
           if [ -s keys.env ]; then flyctl secrets import --stage --app "$APP" < keys.env; fi
           rm -f keys.env
       - name: Deploy
