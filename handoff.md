@@ -91,10 +91,14 @@ It found a real reader bug: Qualtrics writes a map whose codes run 0, 1, 2, … 
 options". Fixed (`mapOf` in `qsf.ts`); the export now reads to the same questionnaire as the
 hand-written file apart from name and ID (tested). Display logic and embedded data came
 through Qualtrics intact. Qualtrics also adds `PL` and `PROJ` entries; the reader ignores them.
-**Waiting on the operator** for step 3: publish the survey, then Data & Analysis → Export &
-Import → Import data with `library-test-expected-import.csv` (sent to them in chat); two
-responses should appear. This answers the open question of whether a free account can import
-responses. Then step 4 (export the data as CSV with numeric values, upload it here).
+Step 3 done: Qualtrics reported "Import complete. 2 of 2 responses were successfully
+imported." on the free-trial account, so the open question (can a free account import
+responses?) is answered yes. Not yet seen: whether the values landed in the right fields.
+**Waiting on the operator** for step 4: Data & Analysis → Export & Import → Export data →
+CSV with "Use numeric values", and upload the file here. Then: save it as
+`fixtures/qualtrics/library-test-numeric.csv`, compare every field with
+`library-test-expected-import.csv` (answers, `vv_mode`, `vv_case_id`, dates, the skipped
+questions left empty for response B), and fix the writer if anything moved.
 
 **Next, in this order (one per turn)**
 
