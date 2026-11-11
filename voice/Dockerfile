@@ -4,8 +4,9 @@ FROM node:22-slim
 WORKDIR /app
 ENV NODE_ENV=production
 COPY package.json package-lock.json ./
-# tsx runs the TypeScript sources directly; there is no separate build step to drift from them.
-RUN npm ci --omit=dev && npm install --no-save tsx@^4
+# tsx (a regular dependency) runs the TypeScript sources directly; there is no separate build
+# step to drift from them.
+RUN npm ci --omit=dev
 COPY src ./src
 COPY fixtures ./fixtures
 USER node
