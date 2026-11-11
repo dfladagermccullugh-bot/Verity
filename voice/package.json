@@ -13,8 +13,15 @@
     "test:watch": "vitest",
     "verity": "tsx src/cli.ts"
   },
+  "dependencies": {
+    "@fastify/websocket": "^11.3.7",
+    "fastify": "^5.12.8",
+    "libphonenumber-js": "^1.13.16",
+    "ws": "^8.22.2"
+  },
   "devDependencies": {
     "@types/node": "^22.20.5",
+    "@types/ws": "^8.18.2",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vitest": "^5.1.0"
