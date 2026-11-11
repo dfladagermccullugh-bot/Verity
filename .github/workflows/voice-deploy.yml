@@ -27,6 +27,7 @@
 #   set-up-call      creates a one-person campaign (MY_PHONE_NUMBER) and tells the server to run
 #                    it; the call is placed at the next deploy, inside calling hours
 #   stop-calls       tells the server to place no calls, and restarts it
+#   server-log       shows the server's recent log and health; changes nothing
 name: voice-deploy
 
 on:
@@ -39,7 +40,7 @@ on:
       task:
         description: "deploy the server, or one of the other tasks described at the top of this file"
         type: choice
-        options: [deploy, compare-voices, measure-model, look-at-telnyx, set-up-telnyx, set-up-call, stop-calls]
+        options: [deploy, compare-voices, measure-model, look-at-telnyx, set-up-telnyx, set-up-call, stop-calls, server-log]
         default: deploy
       timezone:
         description: "set-up-call only: the time zone of the phone being called (calls are placed 9am to 8pm there)"
@@ -194,6 +195,21 @@ jobs:
           flyctl secrets unset --app "$APP" DIAL_CAMPAIGN_ID || true
           sleep 20
           curl -fsS -m 20 "https://$APP.fly.dev/health" && echo
+
+  server-log:
+    if: inputs.task == 'server-log'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      APP: ${{ inputs.app }}
+    steps:
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: The server's recent log
+        run: |
+          timeout 25 flyctl logs --app "$APP" --no-tail | tail -n 200 || true
+          echo "----- health -----"
+          curl -sS -m 15 "https://$APP.fly.dev/health" || true
 
   deploy:
     if: inputs.task == 'deploy'
