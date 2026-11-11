@@ -54,11 +54,13 @@ Secrets go into GitHub or Fly.io secret settings, never into chat.
    real sound (six pitch bands per side; `ribbon.follow`). Without keys nothing changes: the
    browser's own speech is used. Detail in history.md.
 
-**Waiting on the operator (asked 2026-11-11):** create a Deepgram account and add the
-repository secret `DEEPGRAM_API_KEY` (steps: `voice/docs/what-needs-you.md` §D). When they
-say it is done: run voice-deploy (task `deploy`) on this branch, read the job's server log for
-"Demo voice: deepgram/…", then run it with task `compare-voices` and read its output (first
-live use of the adapters; fix what it finds). Then ask them to try the page.
+**Deepgram is live (2026-11-11).** The operator added the repository secret
+`DEEPGRAM_API_KEY`. The `compare-voices` task passed on its first live run (37 lines rendered
+with `aura-2-thalia-en`; heard back 98.6% correctly; 24 kHz page WAV correct; streaming
+recogniser heard the test line exactly, with speech-start and end-of-utterance events). The
+demo is deployed from this branch and its log reads "Demo voice: deepgram/aura-2-thalia-en/page.
+Demo hearing: deepgram/nova-3." **Waiting on the operator** to try it in a real browser with a
+real microphone and loudspeakers (never done) and say what is wrong.
 
 **Next, in this order (one per turn)**
 

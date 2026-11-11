@@ -98,7 +98,7 @@ npm test
 Stated plainly, because the difference matters:
 
 - **No real phone call has been placed.** The Telnyx path runs end to end against a simulated carrier, built from Telnyx's documentation. The first live call will find things.
-- **No real speech has been recognised or produced by a vendor.** The Deepgram and Cartesia adapters are written from their API references and tested with stand-ins. That includes the demo page's server voice and hearing (recordings played in the page, the microphone sent to the server): run end to end in a headless browser against stand-ins only, never with a real voice, a real recogniser, a real microphone or loudspeakers.
+- **Deepgram has been run live once, by a machine only** (2026-11-11): its voice rendered the script and its recogniser heard that audio back. The Cartesia adapter is written from its API reference and tested with stand-ins. The demo page's server voice and hearing (recordings played in the page, the microphone sent to the server) have run end to end in a headless browser against stand-ins only: never with a person's voice, a real microphone or loudspeakers.
 - **The language model has not been run live.** Its adapter is type-checked against the real SDK and tested with a stand-in; its accuracy on the labelled replies is unmeasured.
 - **Nothing has been through a live Qualtrics account.** The response file follows the layout of genuine exports; whether a free account can import it is the open question in `docs/qualtrics-test-survey.md`. The test survey file is hand-written.
 - **The labelled replies are hand-written**, not real respondents, and there has been no pilot. Nothing here measures mode effects or real-world accuracy yet.
