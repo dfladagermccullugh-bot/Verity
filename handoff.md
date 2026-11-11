@@ -130,10 +130,23 @@ server and the CLI run the migrations themselves).
 it is only the phone that receives the test call, any phone they can answer). `set-up-call`
 ran (2026-11-11 03:42 UTC): a one-contact campaign is running in the new database and
 `DIAL_CAMPAIGN_ID` is staged on Fly. **Nothing has been deployed since, so nothing dials yet.**
-**Waiting on the operator's go** to run task `deploy`, which starts the server with calling on:
-it rings their phone within a few minutes if it is between 9am and 8pm Pacific, otherwise at
-9am. After the call: read the deploy job's server log / run `look`-style checks, run
-`stop-calls`, fix what the call showed.
+**First real call placed, 2026-11-11 03:46 UTC (7:46pm Pacific).** What it proved: Telnyx
+accepted a call from the "verity-voice" application using the number attached to phone-map
+as caller ID; the webhooks arrived and passed the signature check (public key read from the
+account); the server rendered 36 lines with Deepgram first; the operator's phone logged a
+missed call from …8345. What happened: the phone did not ring (it sent the unknown caller to
+voicemail), Telnyx's detection said "machine", and the server hung up after 7 seconds without
+leaving a message, as designed (outcome `answering_machine`). **No audio has yet been played
+to, or heard from, a person on a call.** `stop-calls` was run afterwards. The case's own retry
+would be 26 hours later; each new try needs `set-up-call` (a fresh campaign) and `deploy`.
+Mistake to remember: the server printed the allowed number in full and the `server-log` task
+copied it into an Actions log. That run's log was deleted; the server now prints the last four
+digits and the log tasks mask numbers. Never print the number. Second mistake: a commit was
+pushed with failing tests because the test command's exit status was hidden by a pipe; fixed
+in the next commit. Run `npm test` on its own line and read the result before committing.
+Carrier events are now traced one line each (`trace` in `TelnyxConfig`) for the next try.
+**Waiting on the operator** to let calls from …8345 ring (save it as a contact, or turn off
+silencing of unknown callers), then say go.
 Then `set-up-call`, then `deploy` (the call is placed at server start, 9am to 8pm in the
 phone's time zone; tell the operator before deploying). The server renders every line with
 the voice before the first call. Expect fixes: see the open points at the top of

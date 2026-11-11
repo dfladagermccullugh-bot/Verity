@@ -88,6 +88,8 @@ export interface TelnyxConfig {
   stt: SttFactory;
   /** Where operational errors go. Defaults to console.error. */
   log?: (message: string) => void;
+  /** Where each call's progress goes, one line per carrier event, with no phone numbers. Off unless given. */
+  trace?: (message: string) => void;
 }
 
 export interface TelnyxWebhook {
@@ -198,7 +200,7 @@ export class TelnyxCallSession extends CallSession {
   handleWebhook(eventType: string, payload: Record<string, unknown>): void {
     // One line per carrier event, so a call's progress can be read from the server log. No phone numbers.
     const detail = eventType === "call.machine.detection.ended" ? ` result=${String(payload.result)}` : eventType === "call.hangup" ? ` cause=${String(payload.hangup_cause ?? "?")} source=${String(payload.hangup_source ?? "?")}` : "";
-    this.carrier.log(`[telnyx ${this.token.slice(0, 6)}] ${eventType}${detail}`);
+    this.carrier.trace(`[telnyx ${this.token.slice(0, 6)}] ${eventType}${detail}`);
     switch (eventType) {
       case "call.answered":
         // Webhooks can be delivered twice.
@@ -357,6 +359,10 @@ export class TelnyxProvider implements TelephonyProvider {
 
   log(message: string): void {
     (this.cfg.log ?? console.error)(message);
+  }
+
+  trace(message: string): void {
+    this.cfg.trace?.(message);
   }
 
   /** True when `signed` (a webhook's raw body, or a stream URL) carries a genuine Telnyx signature. */

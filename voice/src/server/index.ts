@@ -76,6 +76,7 @@ if (dialing) {
     allowedCountries: ["US"],
     stt: deepgramStt({ apiKey: env.DEEPGRAM_API_KEY! }),
     log: (m) => console.log(m),
+    trace: (m) => console.log(m),
   });
   options.telnyx = telnyx;
 }
