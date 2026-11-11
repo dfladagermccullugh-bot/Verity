@@ -1,149 +1,249 @@
-# Verity
+# Verity Voice
 
-> **New work lives in [`voice/`](voice/README.md): Verity Voice**, AI voice survey interviewers
-> on top of Qualtrics. This page describes the original Verity web app, which is unchanged.
+**AI voice interviewers for phone surveys, built to work with Qualtrics.**
 
-A constrained-interview tool that turns a one-sentence idea into a structured PRD. The invitee answers only yes, no, or done. The model does the asking.
+A researcher builds a survey in Qualtrics as usual. Verity Voice phones people who have
+agreed to be called, asks the questions aloud, and hands the answers back as a file that
+Qualtrics imports. Qualtrics stays the system of record.
 
-Live: invite-only. See *Try it* below.
+> **Status: working prototype.** The whole path has run end to end on a test survey, and
+> the first real phone calls have been placed to the developer's own phone. It has not yet
+> interviewed a real respondent. See [What works today](#what-works-today).
 
-## Problem
-
-Most AI brainstorming tools hand the user a blank text box. That works for people who already know what they want. For everyone else — a stakeholder with a half-formed idea, a designer who can describe a feeling but not a spec — the blank box is the bottleneck. Typing is slow, it forces premature commitment, and a long-form answer to a vague prompt usually produces a long-form mess.
-
-The interesting question is not "how do we get better answers from the user?" It is "how little do we need from the user to extract a coherent product brief?"
-
-## Approach
-
-Reduce the user's surface area to three buttons. Require the model to ask exactly one yes/no question per turn. Reject any output that isn't a single, jargon-free, non-leading question and force a regeneration. When the model decides it has enough signal — and a content-validity coverage gate agrees enough topics have been explored — it emits a PRD. A reviewer model then flags any gaps it sees, and a human operator decides whether one more round of questions is worth it — but the person on the other end still only ever taps yes, no, or done.
-
-Two design bets sit underneath that:
-
-1. **Constraint as interface.** A yes/no answer is one bit of information, but a well-targeted one from the right branch of a decision tree is worth a paragraph of vague prose. The model picks the next question; the user reacts. The interaction is faster, lower-stakes, and more honest — people commit to opinions they would have hedged on in writing.
-
-2. **Hard guardrails, not soft prompting.** The system prompt asks for good behavior; the code enforces it. Every generated question passes through two deterministic checks before the user ever sees it: the [output guard](src/lib/guard.ts) (rejects multi-line output, batched questions, technology jargon, missing question marks) and the [anti-leading check](src/lib/anti-leading.ts) (rejects questions that telegraph the "expected" answer — tag questions like "…, right?", loaded openers like "Obviously…", and "don't you think…" phrasing). A failure regenerates the question; after repeated failures the engine forces the PRD-write path. The model is never trusted to follow the rules on its own — and because both checks are plain code, not extra model calls, they add no waiting time for the user.
+<br>
 
 ## How it works
 
-```
-seed (one sentence)
-    │
-    ▼
-┌──────────────────────────────────────────────────────────────┐
-│  interview engine  (one ROUND)                               │
-│                                                              │
-│  ┌────────┐   ┌───────┐   ┌──────────────┐   ┌───────────┐  │
-│  │ model  │──▶│ guard │──▶│ anti-leading │──▶│ persist   │  │
-│  │ call   │   │       │   │   check      │   │ turn      │  │
-│  └────────┘   └───┬───┘   └──────┬───────┘   │ + metadata│  │
-│       ▲ reject ───┴──────────────┘           └───────────┘  │
-│       └── regenerate                                         │
-│                                                              │
-│  on done / 40-turn ceiling / (model-stop AND coverage met):  │
-│     force PRD → freeze PRD + methodology + analysis (v1)      │
-│     → email → critic records an advisory verdict             │
-│     → session → "awaiting review"                            │
-└───────────────────────────┬──────────────────────────────────┘
-              operator decides in admin
-                    ▼        ▼
-            mark complete   open another round (v2, v3, …)
-          (link → "done")  (person resumes it by reopening their link)
+```mermaid
+flowchart LR
+    Q1[("Qualtrics<br/>survey")] -->|".qsf file"| R["Read and check<br/>the survey"]
+    R --> S["Fixed spoken<br/>script"]
+    S --> D["Place the calls"]
+    C["Contacts<br/>with consent on file"] --> D
+    D <-->|"phone"| P(["Respondents"])
+    D --> A["Answers and<br/>audit trail"]
+    A -->|".csv file"| Q2[("Qualtrics<br/>results")]
 ```
 
-An admin issues a single-use invite. The invitee writes one seed sentence, then answers yes/no questions until the model has enough or the invitee taps *I'm done*. A PRD and two companion documents are generated, stored, and emailed. A reviewer model then checks the transcript for gaps and records an **advisory verdict**; the session moves to *awaiting review*, and the operator decides in the admin whether to open a **follow-up round** or mark the session complete. The invitee meets any next round simply by reopening their link — there is nothing to remember and nothing new to learn.
+1. **Import.** Export the survey from Qualtrics and load it with a contact list.
+   Verity Voice reports whether the survey can be run by phone, and what to change if not.
+2. **Call.** It phones each person, inside calling hours, and conducts the interview.
+3. **Export.** It writes a response file. Import it into Qualtrics and the answers sit
+   beside your web responses, marked as collected by voice.
 
-Key files:
+<br>
 
-- [src/lib/interview-engine.ts](src/lib/interview-engine.ts) — the re-entrant engine: `submitAnswer` claims the displayed turn, `advance` idempotently produces the next turn or finalizes the round (each write a short locked transaction), `openFollowupRound` (operator-initiated next round); also the recovery path for interrupted sessions
-- [src/lib/interview-policy.ts](src/lib/interview-policy.ts) — the generation policy shared with the canary: guard + anti-leading retries with a corrective message, coverage nudge, 40-turn ceiling, validated PRD forcing
-- [src/lib/lifecycle.ts](src/lib/lifecycle.ts) — every status / reason / answer value, the transition table, and the derived respondent and operator views
-- [src/lib/guard.ts](src/lib/guard.ts) — output classifier; the form check between the model and the user
-- [src/lib/anti-leading.ts](src/lib/anti-leading.ts) — rejects leading/loaded question phrasing
-- [src/lib/coverage.ts](src/lib/coverage.ts) — content-validity gate; blocks a model-initiated stop until enough topics are covered
-- [src/lib/dimensions.ts](src/lib/dimensions.ts) — tags each question with the topic it covers
-- [src/lib/analysis.ts](src/lib/analysis.ts) — computes the per-round quality report
-- [src/lib/critic.ts](src/lib/critic.ts) — the between-round reviewer; advisory only (records a verdict, the operator opens/closes rounds)
-- [src/lib/seed-quality.ts](src/lib/seed-quality.ts) — flags a weak starting sentence for the operator
-- [src/lib/skill/idea-seeding-agent.md](src/lib/skill/idea-seeding-agent.md) — system prompt, bundled at build time
-- [src/app/i/[token]/q/interview.tsx](src/app/i/[token]/q/interview.tsx) — client card; masks model latency with a cycling word
+## What happens on a call
 
-Failure handling:
+```mermaid
+sequenceDiagram
+    participant P as Respondent
+    participant I as Interviewer
+    participant M as Language model
 
-- *Bad or leading format.* The guard or anti-leading check rejects, and the retry tells the model why. After repeated failures the round ends as `guard_exhausted` and the PRD is requested.
-- *No termination.* A 40-turn ceiling short-circuits to PRD generation.
-- *PRD refusal.* The forcer re-asks for the marked PRD; an unmarked last attempt is accepted only if it has the PRD's sections. Otherwise the round ends as `prd_failed` with no PRD — arbitrary text is never stored as one — and the operator decides what next.
-- *Interrupted step.* A model error or timeout between an answer and the next question leaves nothing half-written: reopening the link (or *Resume* in admin) picks the session up where it stopped. Duplicate clicks, tabs and devices are serialized per session.
-- *Reviewer failure.* If the between-round reviewer errors or returns anything malformed, the verdict stays empty ("not assessed") rather than reading as "no further round needed", and the operator still decides.
-- *Latency feel.* Optimistic card transitions and a cycling loading word turn the wait into motion.
+    I->>P: Places the call
+    P->>I: "Hello?"
+    I->>P: Who is calling, that it is an AI,<br/>what the survey is, how to stop
+    I->>P: "Do you agree to take part?"
+    P->>I: "Yes"
 
-## Result
+    loop Each question
+        I->>P: The question, word for word
+        P->>I: A reply in their own words
+        opt The rules cannot read the reply
+            I->>M: What did they mean?
+            M-->>I: A reading, and the words it rests on
+        end
+        Note over I: Checked in code, then recorded.<br/>If unsure, it asks again.
+    end
 
-A finished round produces:
+    I->>P: Thanks and goodbye
+```
 
-- A PRD in markdown, clean enough for an AI coding agent to consume directly. When a session runs multiple rounds, each round produces a new **version** (v1, v2, …) so the brief's evolution is itself a record.
-- A companion **methodology document** naming the model, the system-prompt SHA-256 fingerprint, the sampling parameters, the human-oversight protocol, and a note that questions are adaptively tailored — frozen at the moment that version was produced.
-- A companion **analysis document** with backend quality signals about that round (more below). It is never shown to the respondent.
-- A persisted turn log in Postgres: the seed, every question, every answer, the construct-validity probe, and per-question metadata (which topic the question covered, how often it had to be regenerated, whether it was rewritten for leading phrasing, and timing/device paradata).
+The interviewer speaks only from a script fixed before the first call: the survey's own
+wording, plus a short set of call-handling lines. A language model is used for one job,
+reading what the respondent said, and its reading counts only if it names a real answer
+option and the words it relied on are in the transcript.
 
-All three documents share the session ID in their filenames and headers so they stay linked if separated in transit.
+<br>
 
-## Survey methodology
+## Safeguards
 
-Verity is, in effect, a one-person survey run by an AI — so it is built to the standards of real survey research rather than treating "an AI asked some questions" as good enough. Two bodies of work ground the design.
+Each of these is code with a test, not a setting that can be switched off.
 
-### AAPOR — responsible AI integration
+| Rule | What it means |
+|---|---|
+| **Consent on file** | Nobody is called without a record of when and how they agreed. The database itself refuses the call. |
+| **AI disclosure** | The first sentence says the caller is an automated AI interviewer. |
+| **Informed agreement** | Agreement is not asked for or accepted until the whole introduction has been heard. |
+| **Calling hours** | 9am to 8pm in the respondent's own time zone. |
+| **Opt-out** | "Remove me" ends the call at once and the number is never called again. |
+| **No voicemail messages** | A machine is hung up on. |
+| **Dial limit** | The server calls only numbers on an explicit allow-list. |
+| **Audit trail** | Every line played, every reply heard, every reading and every decision is logged. |
 
-Verity sits in the highest-risk quadrant of the [AAPOR Task Force on Responsible AI Integration in Survey Research (2026)](https://aapor.org/wp-content/uploads/2026/05/Responsible-AI-Integration-In-Survey-Research.pdf) taxonomy — both an AI Interviewer and an AI Analyst. Three recommendations are implemented as runtime behavior:
+<br>
 
-1. **Required Disclosures, as a companion document (§5).** Each round emits `prd-<id>.md`, `methodology-<id>.md`, and `analysis-<id>.md`. The methodology lists tasks performed by AI, a plain-language role description, human oversight, N=1 respondent, model id, system-prompt fingerprint, statefulness, sampling parameters, the adaptive-tailoring caveat, and a pointer to the analysis companion. Provenance is frozen per version. See [src/lib/disclosure.ts](src/lib/disclosure.ts).
+## What works today
 
-2. **Pre-flight construct-validity probe (§4.3.1).** Before the first question, a separate model call restates the seed's goal, the decision the PRD must support, its unit of analysis, and its in/out-of-bounds examples. Persisted on the session, surfaced to the reviewer, log-only — not fed back into the interview prompt, so brief-vs-interview drift remains auditable. See [src/lib/construct-brief.ts](src/lib/construct-brief.ts).
+| Part | Status | Detail |
+|---|---|---|
+| Reading a Qualtrics survey | **Checked live** | Qualtrics' own export of the test survey is read correctly. |
+| Returning results to Qualtrics | **Checked live** | A Qualtrics account imported test responses; every value landed in the right field. |
+| Speaking and hearing | **Checked live** | Deepgram voice and speech recognition. |
+| Reading natural answers | **Measured once** | Claude Haiku on 298 hand-written replies: 96% read acceptably, none recorded wrongly without re-asking. |
+| Phone calls | **Early** | Two real calls through Telnyx to the developer's own phone. Connecting works; the conversation needed fixes, which are made but not yet retried. |
+| Many calls at once | **Simulated only** | 200 people, 40 calls at a time, against a simulated phone carrier. |
+| Real respondents | **Not yet** | No pilot has been run. The consent wording has had no legal review. |
 
-3. **Continuous reliability monitoring (§4.1.3, §4.2.4).** A fixed set of five seeds with deterministic answer scripts replays through the engine weekly. Turn count, guard-reject rate, mean question length, PRD heading presence, and termination path are diffed against a committed baseline. Drift opens a GitHub Issue. The canary uses the same model id as production so silent provider-side changes show up as drift. See [src/lib/canaries/](src/lib/canaries/) and [.github/workflows/canary.yml](.github/workflows/canary.yml).
+The detailed, dated record is in [`voice/README.md`](voice/README.md#what-has-not-been-verified).
 
-### Measurement quality (from *Survey Methodology*, Groves et al.)
+<br>
 
-A yes/no interview is easy to get wrong in ways that quietly corrupt the result. These controls borrow directly from the survey-methodology literature and run entirely on the backend — the person's experience never changes:
+## Screenshots
 
-- **Asking well.** One question at a time, in plain language, with no leading phrasing — the comprehension and measurement-error basics. The guard and the anti-leading check enforce them mechanically.
-- **Topic coverage.** Every question is tagged with which of ten topics it covers (problem, primary user, core jobs, inputs, outputs, platform & context, data sensitivity, scale, integrations, success signal), producing a map of what got explored and what didn't. See [src/lib/dimensions.ts](src/lib/dimensions.ts).
-- **A quality report per round** ([src/lib/analysis.ts](src/lib/analysis.ts)), so each PRD comes with a sense of how much to trust it:
-  - **Yes-drift (acquiescence).** Yes/no buttons quietly nudge people toward "yes." Verity measures how lopsided the answers are and how long the longest run of identical answers is, and flags a session that skews too far.
-  - **Answer speed.** Very fast taps can mean the person isn't really reading; these are counted.
-  - **Asking the same thing twice (triangulation).** When two questions land on the same topic, their answers are compared; agreement is a small reliability signal, disagreement is flagged.
-  - **Coverage and leading-rate** roll up from the per-question tags above.
-- **A second opinion between rounds.** After each round, a reviewer model reads the whole transcript and the PRD and records whether anything important is still missing or ambiguous — a content-adequacy check, kept advisory; the human operator uses it to decide whether to open a focused follow-up round. See [src/lib/critic.ts](src/lib/critic.ts).
-- **Paradata.** Behavioral side-data captured without asking anything extra: how long each answer took, the device class, where a session broke off. Useful for judging answer quality after the fact.
-- **A weak starting sentence is flagged.** A vague, two-ideas-in-one, or loaded seed is caught up front and noted for the operator — without blocking the person. See [src/lib/seed-quality.ts](src/lib/seed-quality.ts).
+The product interface is not built yet. These are placeholders for it.
 
-**What Verity deliberately leaves out.** Verity talks to one named person about one idea (N=1). The half of survey methodology about generalizing to a population — sampling, weighting, coverage, representativeness — does not apply and is intentionally not implemented; claiming otherwise would be window dressing.
+| Campaign overview | Live calls | Results and export |
+|:---:|:---:|:---:|
+| _Screenshot to come_ | _Screenshot to come_ | _Screenshot to come_ |
 
-## Admin & output
+<!--
+When the screens exist, save them under docs/images/ and replace the row above:
 
-The operator signs in to a registry of all sessions. Each session opens to the latest PRD plus its full version history (with a simple line-level diff between consecutive versions so you can see what each round changed), the construct brief, any seed warnings, and the per-round analysis. The PRD, methodology, and analysis are each downloadable as markdown, and a single export produces a training-data JSON of every session broken down into rounds and turns, with all per-question metadata and the computed analysis included. Each finished round also emails the operator the PRD with the methodology and analysis attached.
+| ![Campaign overview](docs/images/campaign-overview.png) | ![Live calls](docs/images/live-calls.png) | ![Results and export](docs/images/results-export.png) |
+-->
+
+A plain test page exists for trying an interview by voice in a browser. It is a
+development tool, not the product interface.
+
+<br>
 
 ## Try it
 
-Verity is invite-only by design — single-use tokens, no public signup. The token lives in a durable link: a session that runs multiple rounds is picked up again simply by reopening that same link. Reach out and I will issue you a token.
+Needs Node 22.13 or newer. Everything below runs on your own machine with no accounts or keys.
 
-## Stack
-
-Next.js 14 (App Router) with server actions, React 18, TypeScript. Postgres via Drizzle ORM ([schema](src/lib/db/schema.ts): `invites`, `sessions`, `rounds`, `turns`). Anthropic SDK for model calls (model id from `ANTHROPIC_MODEL`, default `claude-sonnet-4-6`). iron-session for admin auth, Resend for transactional email. Tailwind styled in the **Warm Paper Calm** design language ([design.md](design.md)) — a warm off-white paper canvas, near-black Inter type with tight negative tracking, a single confident blue accent reserved for actions, soft rounded surfaces and barely-there layered shadows, with light and dark themes. Framer Motion drives the interview card. Deployed on Vercel. Interaction and
-accessibility are governed by a companion [UX/UI source of truth](ux-source-of-truth.md)
-(the Laws of UX — target sizes, focus, motion, error handling, ethics), with the
-running gap analysis in [ux-audit.md](ux-audit.md).
-
-## Running locally
-
-```
-cp .env.example .env.local      # Postgres URL, Anthropic key, Resend key, session secret
-npm install
-npm run db:migrate
-npm run dev
+```bash
+cd voice
+npm ci
 ```
 
-`npm test` runs vitest. `npm run typecheck` runs tsc. `npm run canary` replays the reliability seeds against the live model and requires `ANTHROPIC_API_KEY`.
+Check whether a survey is ready for the phone:
 
-## Deploys
+```bash
+npm run verity -- check fixtures/qualtrics/library-test.qsf
+```
 
-Vercel runs `npm run vercel-build`, which applies pending Drizzle migrations before building (`drizzle-kit migrate && next build`). The schema travels with the code on every deploy. `DATABASE_URL` must be available at build time, not just runtime.
+Be interviewed in the terminal, and get the Qualtrics response file:
+
+```bash
+npm run verity -- interview fixtures/qualtrics/library-test.qsf --out responses.csv
+```
+
+Run a simulated campaign of 60 contacts and read its report:
+
+```bash
+npm run verity -- campaign sample --out sample-campaign
+```
+
+Or read the results without running anything:
+[sample calls](voice/docs/sample-calls.md) ·
+[sample campaign report](voice/docs/sample-campaign-report.md) ·
+[sample response file](voice/docs/sample-campaign-responses.csv)
+
+<br>
+
+## Repository layout
+
+```
+voice/                    Verity Voice
+  src/qualtrics/          reads survey files, writes the response file
+  src/engine/             survey logic: skips, display rules, resuming
+  src/script/             the fixed spoken script
+  src/interviewer/        the interviewer: introduction, consent, reading answers
+  src/voice/              speaking, listening, turn-taking
+  src/telephony/          phone carrier, audio, speech recognition
+  src/dialer/             contacts, consent, calling hours, campaigns
+  src/quality/            outcome rates and answer-quality signals
+  src/report/             survey readiness, call and campaign reports
+  src/server/             web server and the browser test page
+  eval/                   labelled replies, scoring, voice comparison
+  test/                   automated tests
+  docs/                   samples, pilot plan, set-up checklist
+
+src/                      the original Verity web app (see below)
+docs/                     write-up of the original web app
+.github/workflows/        tests, deployment, scheduled checks
+```
+
+<br>
+
+## Built with
+
+| | |
+|---|---|
+| **Language** | TypeScript on Node 22 |
+| **Survey platform** | Qualtrics (survey files in, response files out) |
+| **Phone carrier** | Telnyx |
+| **Speech** | Deepgram: Nova 3 for hearing, Aura 2 for the voice |
+| **Language model** | Claude Haiku, for reading answers only |
+| **Database** | Postgres |
+| **Hosting** | Fly.io, deployed by GitHub Actions |
+
+<br>
+
+## Tests
+
+```bash
+cd voice
+npm test
+```
+
+368 automated tests. Among them:
+
+- **Nothing off-script is spoken.** Hundreds of random simulated calls, with a hostile
+  stand-in for the language model, never play a line outside the fixed script.
+- **Calling rules hold.** Across 5,000 random situations, never a call without consent,
+  to a do-not-call number, or outside calling hours.
+- **No answer is lost.** 200 people at 40 calls at a time: nobody on two calls, nothing
+  lost or duplicated.
+- **Real calls are replayed.** The faults found on the first answered phone call are kept
+  as tests.
+
+<br>
+
+## Where it is going
+
+- **More natural conversation.** Repeating a question or its answer options whenever
+  asked, and understanding everyday replies such as "sure", while keeping every survey
+  question word for word.
+- **Choosing the voice** by comparing providers side by side.
+- **A product interface** for importing a survey and contacts, watching calls, and
+  exporting results. Today this is done from the command line.
+- **A first pilot** with real respondents, after legal review of the consent wording.
+
+<br>
+
+## More to read
+
+| Document | What it covers |
+|---|---|
+| [`voice/README.md`](voice/README.md) | Verity Voice in detail, including what has and has not been verified |
+| [`voice-interviewer-plan.md`](voice-interviewer-plan.md) | The plan and the decisions behind it |
+| [`voice/docs/what-needs-you.md`](voice/docs/what-needs-you.md) | Accounts and keys needed to run it for real |
+| [`voice/docs/pilot-kit.md`](voice/docs/pilot-kit.md) | The study that would produce real accuracy numbers |
+
+<br>
+
+## The original Verity web app
+
+This repository began as Verity, a web app that turns a one-sentence idea into a product
+brief by asking yes-or-no questions. That app still lives at the repository root,
+unchanged and separate from Verity Voice: no code is shared, and each uses its own
+database. Its write-up is in [`docs/verity-web-app.md`](docs/verity-web-app.md).
+
+<br>
+
+## Licence
+
+[Apache 2.0](LICENSE)

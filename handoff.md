@@ -85,7 +85,8 @@ is marked "my reading" is mine and unconfirmed.
   about manner, and callers must still be told it is an AI (my caution; also a legal one).
 - Likely quick wins inside the present design, worth doing first because they are cheap
   and address failures 1 to 3 directly: yes/no synonyms ("sure", "okay", "yeah", "go
-  ahead") in the rules; a less cautious classifier prompt (the live measurement already
+  ahead") in the rules (reproduced locally with no model: "sure" to the two-more-questions
+  item is "unclear" three times, then recorded as no answer); a less cautious classifier prompt (the live measurement already
   showed it calls plain answers unclear) and a look at the 0.85 acceptance bar; a separate
   "say the options again" reply that does not use up repeats; no cap, or a much higher one,
   on repeats (`DEFAULT_POLICY.maxRepeats` is 2). Check each against what they actually said
@@ -167,6 +168,11 @@ workflow file cannot be started until it is on `main`, so new jobs go in this fi
 - `main` carries all of this work: the operator asked for it to be pushed there at the end
   of the session (2026-11-11). A push to `main` redeploys the legacy app on Vercel; Verity
   Voice does not run on Vercel.
+
+**The root README was rewritten (2026-11-11)** as an overview led by Verity Voice; the old
+root README is now `docs/verity-web-app.md`. The operator's instruction: **do not show the
+demo page in the README or present it as the product**; "this is not the product interface
+that we're going to be using". Screenshot placeholders are there for the real interface.
 
 **Mistakes made this session; do not repeat them.**
 - The server printed the operator's number in full and a log job copied it into an Actions

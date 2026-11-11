@@ -84,7 +84,7 @@ npm test
 
 ## How it is checked
 
-342 automated tests. Among them:
+368 automated tests. Among them:
 
 - **Nothing off-script can be spoken**: 400 random simulated calls with a hostile stand-in for the model, and 300 random spoken calls, never play a line outside the fixed list or ask a question without consent.
 - **Calling rules**: across 5,000 random situations, never a call without valid consent, to a do-not-call number, or outside calling hours. The database triggers are tested by trying to break them directly.
@@ -102,8 +102,8 @@ Stated plainly, because the difference matters:
 - **The language model has been measured once, on hand-written replies only** (2026-11-11, `claude-haiku-5-5`, 298 labelled replies): 96.3% read as an acceptable label; of the 167 the rules left to the model, 93.4% right; no wrong answer would have been recorded without a probe; 20 right answers were probed anyway. Its misses were cautious ones (a clear answer such as "monthly" or "around 40" called unclear, then re-asked). It has not read a real caller's words.
 - **Qualtrics has been through one round trip, on a small test survey only** (2026-11-11, a free-trial account): it imported the test survey file, its own export of that survey is read correctly (after one reader fix), it imported two test responses, and its export shows every value in the right field. Not yet done: a survey a researcher built in Qualtrics, results from a real call, and interview times, which Qualtrics reads in the time zone chosen at import (ours are UTC; choose UTC there).
 - **The labelled replies are hand-written**, not real respondents, and there has been no pilot. Nothing here measures mode effects or real-world accuracy yet.
-- **The voice comparison has not been run**, and only one recogniser adapter exists.
-- **The container image has not been built** and nothing is deployed.
+- **The voice comparison has been run with one voice only** (Deepgram, 2026-11-11), so nothing has been compared yet, and only one recogniser adapter exists.
+- **The server is deployed as a test page only** (Fly.io). It has carried two phone calls; it has never run a campaign.
 - **Not legal advice.** The consent wording has had no legal review. The server will not dial any number that is not explicitly allowed.
 
 What each of these needs is in [`docs/what-needs-you.md`](docs/what-needs-you.md); the study that
