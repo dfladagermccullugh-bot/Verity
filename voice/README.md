@@ -69,6 +69,14 @@ fixtures/         test survey and expected response file (made-up answers only)
 docs/             what still needs the operator; the test-survey specification
 ```
 
+## Measuring how well answers are read
+
+`eval/dataset.ts` holds about 300 hand-labelled replies. `npm run eval` scores the rules alone
+(free); `npm run eval -- --live` adds the Claude classifier (needs `ANTHROPIC_API_KEY`). The
+number to watch is "wrong answers that would be recorded without a probe". Rules alone: 130
+of 298 replies decided, all correctly, none wrongly recorded. **The live model has not been
+run yet**: no key exists in the build environment.
+
 ## Not built yet
 
 - Saving calls to a database, the live language-model classifier and its labelled

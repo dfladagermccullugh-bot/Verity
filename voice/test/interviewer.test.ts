@@ -274,11 +274,10 @@ describe("probing", () => {
     const c = await call(mumbler());
     expect(c.interviewer.state.outcome).toBe("complete");
     const answers = c.interviewer.state.interview.answers;
-    // Open question takes any words; the rest are coded "no answer".
-    expect(Object.entries(answers).filter(([, a]) => a.kind === "nonresponse").map(([k]) => k)).toEqual(["QID2", "QID5", "QID6", "QID7", "QID9"]);
-    expect(answers.QID8).toEqual({ kind: "text", value: "mmm hmm well" });
-    expect(c.interviewer.state.review).toEqual(["QID2", "QID5", "QID6", "QID7", "QID9"]);
-    expect(saidIds(c).filter((id) => id === "p.probe_unclear")).toHaveLength(10);
+    // Noises are not an answer to anything, including the open question.
+    expect(Object.entries(answers).filter(([, a]) => a.kind === "nonresponse").map(([k]) => k)).toEqual(["QID2", "QID5", "QID6", "QID7", "QID8", "QID9"]);
+    expect(c.interviewer.state.review).toEqual(["QID2", "QID5", "QID6", "QID7", "QID8", "QID9"]);
+    expect(saidIds(c).filter((id) => id === "p.probe_unclear")).toHaveLength(12);
   });
 });
 

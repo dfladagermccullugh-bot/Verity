@@ -10,6 +10,7 @@
 import type { Answer, Item } from "../instrument/types.js";
 import { validateAnswer } from "../engine/flow.js";
 import { readTypedAnswer } from "../engine/typed-answer.js";
+import { isYesNo } from "../script/script.js";
 
 export type Intent = "answer" | "yes" | "no" | "repeat" | "opt_out" | "stop" | "callback" | "question" | "unclear";
 
@@ -53,7 +54,7 @@ function norm(s: string): string {
 
 // Opt-out is matched generously: a false match ends one call, a miss keeps calling someone who said no.
 const OPT_OUT = /\b(remove me|take me off|stop calling|do not call|don't call|dont call|never call|unsubscribe|off (?:your|the|this) list)\b/;
-const STOP = /^(stop|stop please|please stop|i (?:want|need|have) to stop|end the call|hang up|i have to go|i've got to go|i need to go|goodbye|bye)$/;
+const STOP = /^(?:(?:please\s+)?stop(?:\s+please)?|i (?:want|need|have) to stop|end the call|hang up|i(?: have|'ve got| need) to go|goodbye|bye)(?:\s+(?:now|please))?$/;
 const REPEAT = new RegExp(
   "^(?:(?:sorry|pardon|excuse me|um|uh|oh|wait|hang on)\\s+)*" +
     "(?:(?:(?:can|could|would|will) you\\s+)?(?:please\\s+)?(?:repeat|say)(?:\\s+(?:that|it|this|the question|the options|the choices|them))?(?:\\s+again)?(?:\\s+for me)?" +
@@ -62,8 +63,11 @@ const REPEAT = new RegExp(
     "(?:\\s+please)?$",
 );
 const CALLBACK = /\b(call (?:me )?back|call (?:me )?later|another time|not a good time|bad time|busy right now)\b/;
-const YES = /^(yes|yeah|yep|yup|sure|ok|okay|i agree|i do|that's fine|that is fine|go ahead|yes please|yes i agree|yes i do)$/;
-const NO = /^(no|nope|no thanks|no thank you|i don't|i do not|i don't agree|i do not agree|not interested|i'm not interested)$/;
+const YES = /^(?:(?:yes|yeah|yep|yup|sure|ok|okay|all right|alright|fine by me|i agree|i do|that's fine|that is fine|go ahead|yes please|yes i agree|yes i do)(?:[ ,]+(?:sure|go ahead|okay|ok|i agree|that's fine))?)$/;
+const NO = /^(?:no|nope|nah|no thanks|no thank you|i don't|i do not|i don't agree|i do not agree|i don't want to|not interested|i'm not interested|absolutely not|definitely not)$/;
+/** Whole-utterance yes and no, for survey questions whose only options are Yes and No. */
+const PLAIN_YES = /^(?:yes|yeah|yep|yup|uh huh|yes yes|yes i have|yes i did|yes i do|i have yes|i did yes)$/;
+const PLAIN_NO = /^(?:no|nope|nah|no no|no no no|no i haven't|no i have not|no i didn't|no i don't)$/;
 
 function rule(intent: Intent, utterance: string, answer?: Answer): Classification {
   const c: Classification = { intent, confidence: 1, evidence: utterance.trim(), by: "rule" };
@@ -82,6 +86,12 @@ export function classifyByRule(req: ModelRequest): Classification | null {
     if (reading.kind === "answer" && reading.answer.kind !== "text" && validateAnswer(req.item, reading.answer) === null) {
       return rule("answer", req.utterance, reading.answer);
     }
+    const choices = req.item.choices ?? [];
+    if (req.item.kind === "single" && isYesNo(choices) && (PLAIN_YES.test(text) || PLAIN_NO.test(text))) {
+      const want = PLAIN_YES.test(text) ? "yes" : "no";
+      const choice = choices.find((c) => c.label.trim().toLowerCase() === want)!;
+      return rule("answer", req.utterance, { kind: "choice", code: choice.code });
+    }
   }
   if (STOP.test(text)) return rule("stop", req.utterance);
   if (CALLBACK.test(text)) return rule("callback", req.utterance);
@@ -91,8 +101,11 @@ export function classifyByRule(req: ModelRequest): Classification | null {
     if (NO.test(text)) return rule("no", req.utterance);
     return null;
   }
-  // An open question takes the respondent's own words as the answer.
-  if (req.item?.kind === "text") return rule("answer", req.utterance, { kind: "text", value: req.utterance.trim() });
+  // An open question takes the respondent's own words as the answer (but not a noise or a question back).
+  if (req.item?.kind === "text") {
+    const reading = readTypedAnswer(req.item, req.utterance);
+    if (reading.kind === "answer") return rule("answer", req.utterance, reading.answer);
+  }
   return null;
 }
 

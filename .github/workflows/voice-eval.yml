@@ -1,0 +1,50 @@
+# Weekly check of answer reading against the labelled replies, using the live model.
+#
+# Schedule-only (it spends a little API credit). Exit code 10 from the eval means the model's
+# readings fell below the bar; only that opens an issue. A crash exits with another code and
+# must never read as a drop in quality.
+#
+# The bar below is provisional until the first live run has set a baseline. When it is changed,
+# the commit message must say why (same rule as the legacy canary: never rebaseline silently).
+name: voice-eval
+
+on:
+  schedule:
+    - cron: "17 14 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: voice
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: voice/package-lock.json
+      - run: npm ci
+      - name: Run the evaluation
+        id: eval
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          set +e
+          npm run -s eval -- --live --min-accuracy 0.90 --max-false-accepts 3 | tee eval-report.md
+          code=${PIPESTATUS[0]}
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          cat eval-report.md >> "$GITHUB_STEP_SUMMARY"
+          if [ "$code" != "0" ] && [ "$code" != "10" ]; then exit "$code"; fi
+      - name: Open an issue when readings fall below the bar
+        if: steps.eval.outputs.code == '10'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh issue create --repo "$GITHUB_REPOSITORY" --title "Voice eval below the bar ($(date -u +%F))" --body-file eval-report.md

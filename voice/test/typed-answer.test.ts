@@ -34,8 +34,23 @@ describe("rule-based reading of typed answers", () => {
 
   it("reads numbers and open answers", () => {
     expect(answer("QID6", "12")).toEqual({ kind: "number", value: 12 });
-    expect(answer("QID6", "twelve")).toBe("unclear");
+    expect(answer("QID6", "twelve")).toEqual({ kind: "number", value: 12 });
+    expect(answer("QID6", "none")).toEqual({ kind: "number", value: 0 });
+    expect(answer("QID6", "a fair few")).toBe("unclear");
+    expect(answer("QID8", "um")).toBe("unclear");
+    expect(answer("QID8", "what do you mean by change?")).toBe("unclear");
     expect(answer("QID8", "  Longer weekend hours ")).toEqual({ kind: "text", value: "Longer weekend hours" });
+  });
+
+  it("understands a position in the list, and number words on a number scale", () => {
+    expect(answer("QID3", "option three")).toEqual({ kind: "choice", code: "3" });
+    expect(answer("QID3", "the last one")).toEqual({ kind: "choice", code: "5" });
+    expect(answer("QID3", "the second option")).toEqual({ kind: "choice", code: "2" });
+    expect(answer("QID3", "number nine")).toBe("unclear");
+    expect(answer("QID5", "eight")).toEqual({ kind: "choice", code: "8" });
+    expect(answer("QID5", "number 6")).toEqual({ kind: "choice", code: "6" });
+    expect(answer("QID5", "eleven")).toBe("unclear");
+    expect(answer("QID5", "the last one")).toBe("unclear");
   });
 
   it("never guesses", () => {

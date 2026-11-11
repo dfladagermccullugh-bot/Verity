@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "verity": "tsx src/cli.ts"
+    "verity": "tsx src/cli.ts",
+    "eval": "tsx eval/run.ts"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.16",
@@ -21,6 +22,8 @@
     "vitest": "^5.1.0"
   },
   "dependencies": {
-    "postgres": "^4.1.0"
+    "@anthropic-ai/sdk": "^1.8.0",
+    "postgres": "^4.1.0",
+    "zod": "^4.6.7"
   }
 }
