@@ -74,7 +74,12 @@ replies): 96.3% acceptable; model-decided 167, 93.4% right; 0 wrong answers reco
 a probe; 20 right answers probed anyway. All 11 misses were on the cautious side: plain
 answers called unclear ("monthly", "once every two weeks", "around 40", self-corrections
 like "five, no, six"), so the caller is re-asked. Worth a prompt revision later (bump
-`CLASSIFIER_PROMPT_VERSION`, re-measure); not blocking. The demo server now has the key.
+`CLASSIFIER_PROMPT_VERSION`, re-measure); not blocking. The demo server now has the key (its health check reports
+`claude-haiku-5-5/prompt-v1`).
+
+**Waiting on the operator (asked 2026-11-11):** Qualtrics, step 1 of
+`voice/docs/qualtrics-test-survey.md` only: import `library-test.qsf` into their Qualtrics
+account and say what happened. Then steps 2 to 5, one per turn.
 
 **Next, in this order (one per turn)**
 

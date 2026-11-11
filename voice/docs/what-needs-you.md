@@ -7,9 +7,9 @@ needs a login, a payment, or a decision only you can make. Nothing below is urge
 |---|---|---|---|
 | **B** | Change the leaked database password | Needs your Neon and Vercel logins | 10 min, **before the repo is made public** |
 | **C** | Qualtrics import check | Needs your Qualtrics login | 10 min |
-| **E** | Turn on the language model | Needs an Anthropic API key in the server's settings | 5 min |
-| **F** | Put the demo online | Needs your Fly.io login | 15 min |
-| **D** | Give the demo a real voice and real hearing | Needs a Deepgram account | 10 min |
+| ~~E~~ | Turn on the language model | **Done 2026-11-11** (key added; measured; on in the demo) | — |
+| ~~F~~ | Put the demo online | **Done 2026-11-11**: <https://verity-voice-demo.fly.dev> | — |
+| ~~D~~ | Give the demo a real voice and real hearing | **Done 2026-11-11** (Deepgram) | — |
 | **G** | Compare the voices | Needs a Cartesia account as well | 15 min |
 | **H** | First real phone call, to your own phone | Needs your Telnyx and Deepgram keys | 30 min |
 | **I** | Call anyone other than yourself | Needs a lawyer's review of the consent wording | — |
