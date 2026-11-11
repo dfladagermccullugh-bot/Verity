@@ -121,12 +121,14 @@ from the existing number as caller ID while it stays attached to phone-map (so a
 calling back reaches phone-map). Whether Telnyx lets an application call from a number
 attached to another application is **unverified**; the first call will show. The deploy task
 reads the connection ID, from-number and public key from the account itself.
-**Waiting on the operator (asked 2026-11-11):** a yes to creating that application on their
-Telnyx account (I had told them the first look would change nothing). On yes: run
-`set-up-telnyx`. Still needed after that, one per turn:
-1. `VOICE_DATABASE_URL`: a new Neon project (the Neon connector can create it; the operator
-   still has to copy the connection string into the secret, since secrets cannot be set from
-   here).
+The operator said yes; `set-up-telnyx` created the application "verity-voice"
+(id 3090548507606517423, webhook at this server, API v2, "Default" profile). phone-map was
+not touched. A Neon project for Verity Voice was created with the Neon connector:
+`verity-voice`, id `cold-wildflower-22977142`, aws-us-east-1, Postgres 17, empty (the
+server and the CLI run the migrations themselves).
+Still needed, one per turn:
+1. `VOICE_DATABASE_URL` (**asked; waiting**): the operator copies that project's connection
+   string (pooling off: postgres.js prepares statements) into the repository secret.
 2. `MY_PHONE_NUMBER`.
 Then `set-up-call`, then `deploy` (the call is placed at server start, 9am to 8pm in the
 phone's time zone; tell the operator before deploying). The server renders every line with
