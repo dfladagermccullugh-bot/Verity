@@ -20,6 +20,66 @@ Integration in Survey Research (2026)*. Verity sits in the highest-risk AAPOR
 quadrant — it is both AI Interviewer and AI Analyst — and treats that as a
 design constraint, not a disclaimer.
 
+## Start here next session (written 2026-11-11)
+
+The operator is being walked through getting Verity Voice fully running, **one step at a
+time** (their instruction: give one thing, wait until it is done, then the next). They are
+not deeply technical and want short, plain replies. Prefer routes that need no installs on
+their computer: GitHub Actions, and the Fly.io / Neon / Vercel dashboards in a browser.
+Secrets go into GitHub or Fly.io secret settings, never into chat.
+
+**Where the walkthrough stands**
+
+1. Done: the browser demo is online at https://verity-voice-demo.fly.dev. It is deployed by
+   `.github/workflows/voice-deploy.yml` (manual: Actions tab, or `run_workflow` with input
+   `app: verity-voice-demo`). The repo secret `FLY_API_TOKEN` is set.
+2. Done: the operator tried the demo. Verdict: it works, but is "very rudimentary" and
+   "not at all what we want". Three things they named, plus unspecified others:
+   - **Interface.** They sent a reference: `voice/docs/design/interface-reference.webp`.
+     A calm, cream full-screen page: brand top-left with a thin rule and "LIVE SESSION"
+     top-right; large serif headline "Space to speak." with "A conversation, taking shape.";
+     a big iridescent ribbon (teal for the human, through lilac, to amber for the agent)
+     as the centrepiece; small-caps "AGENT" label over the current question as a large
+     serif quotation; a pill with microphone, pause and hang-up; a timer bottom-left;
+     "Listening •••" bottom-right; a "Human / Agent" colour legend. No chat bubbles.
+   - **Real voices.** The demo uses the browser's built-in speech. They want a real voice
+     provider (Deepgram, Cartesia, others compared on merit; carrier stays Telnyx).
+   - **A good model** switched on for reading answers (no API key is set on the server yet).
+   - They also said there are "a lot of things I kind of don't agree with". Not yet
+     specified. Ask, one at a time; do not guess.
+
+**Next, in this order (one per turn)**
+
+- Rebuild `voice/src/server/demo.html` to the reference. Keep: AI disclosure and consent
+  before anything starts; typed and keypad input as an accessible alternative (tucked
+  away, not removed); the "how your answers were read" table at the end. Keep the strings
+  `test/server.test.ts` checks, and update `scripts/demo-check.cjs` (it drives the page by
+  element ids). Check it with that script at desktop and phone sizes and look at the
+  screenshots before deploying.
+- Real voices in the browser demo. Needs new server work: serve vendor-rendered audio
+  for each line (the `SpeechStore` exists; phone format is 8 kHz, the browser wants better)
+  and stream the microphone to the server for recognition. Keys as Fly.io secrets, set in
+  the Fly.io dashboard (app `verity-voice-demo` → Secrets). Adapters in `src/voice/tts.ts`
+  have never run against a live account.
+- `ANTHROPIC_API_KEY` as a Fly.io secret, then `npm run eval -- --live` once to measure.
+- Still open from before: rotate the legacy Neon password, the Qualtrics import check,
+  first real phone call. See `voice/docs/what-needs-you.md`.
+
+**Things learned the hard way this session**
+
+- Anything the server needs at run time must be under `dependencies`: with
+  `NODE_ENV=production`, npm skips `devDependencies` even when asked for by name (`tsx`).
+  Rehearse image steps locally with `NODE_ENV=production` exported for every command.
+- A Fly.io release does not restart a machine that is stopped (for example after a crash
+  loop); the deploy job now starts machines explicitly, and `auto_start_machines` is on.
+- `flyctl deploy` reported success while the server was down; trust the job's final
+  "Check the server answers" step, not the deploy step.
+- This container cannot reach `*.fly.dev`; verify the live site through the deploy job.
+- The reference image carries the name "human / loop". Do not adopt it as the product name
+  without asking: there is an existing AI company called Humanloop.
+- `main` now carries all of this work (the operator asked for it to be pushed to `main`,
+  which redeploys the unchanged legacy app on Vercel). Verity Voice does not run on Vercel.
+
 ## Verity Voice — new product (started 2026-11-10)
 
 AI voice survey interviewers on top of Qualtrics. Plan and phase status table:
