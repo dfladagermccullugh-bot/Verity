@@ -62,18 +62,29 @@ demo is deployed from this branch and its log reads "Demo voice: deepgram/aura-2
 Demo hearing: deepgram/nova-3." **Waiting on the operator** to try it in a real browser with a
 real microphone and loudspeakers (never done) and say what is wrong.
 
+**Operator's direction (2026-11-11, after hearing the Deepgram voice):** the focus is voice
+through calling. The ribbon is parked: they want it to become "its own independent voice
+thing" later, and it need not be worked on now (they did not report whether it moved with
+the sound; do not build on it). Order they gave: hook up the models, then Qualtrics, then
+Telnyx.
+
+**Waiting on the operator (asked 2026-11-11):** add the repository secret
+`ANTHROPIC_API_KEY` (checked: it is not set). When done: run voice-deploy with task
+`measure-model` on this branch (scores the classifier live, `claude-haiku-5-5` by default;
+never run live before), fix what it finds, then task `deploy` (the deploy job now hands the
+key to the server) and confirm the log reads "Answer reading: claude-haiku-5-5/…".
+
 **Next, in this order (one per turn)**
 
-- After Deepgram works: Cartesia key + voice id (§G) so the voices can be compared; the
-  operator chooses by listening. Other vendors "compared on merit" need new adapters.
+- Language model live (above).
+- Cartesia key + voice id (`what-needs-you.md` §G) so the voices can be compared by
+  listening; other vendors the operator has named (Fish Audio) have no adapter yet. They
+  also named OpenRouter and Hugging Face keys; nothing uses them. Ask before building.
+- Qualtrics: the import check (§C) needs their Qualtrics login.
+- Telnyx: first real call to their own phone (§H).
 - Cutting in by voice (`DEMO_BARGE_IN=1`) is off: untested echo risk through loudspeakers.
-  Try it with the operator once the basic path works.
-- `ANTHROPIC_API_KEY` for the demo server (not yet passed by the deploy job, on purpose: it
-  makes a public page spend money per visitor; add it as its own step), then
-  `npm run eval -- --live` once to measure.
 - Ask the operator what else they do not agree with (they said "a lot"; unspecified).
-- Still open from before: rotate the legacy Neon password, the Qualtrics import check,
-  first real phone call. See `voice/docs/what-needs-you.md`.
+- Still open from before: rotate the legacy Neon password.
 
 **Checking the demo page** (the page is read once at server start, so restart after edits)
 
