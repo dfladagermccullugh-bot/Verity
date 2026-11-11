@@ -5,6 +5,36 @@ completed to-dos, they land here so the handoff stays lean. Newest first.
 
 ---
 
+## 2026-11-11 — Verity Voice: browser demo rebuilt to the operator's reference
+
+The first demo page (a card with chat bubbles) was replaced after the operator called it
+"very rudimentary". Reference image: `voice/docs/design/interface-reference.webp`.
+
+- **Page (`voice/src/server/demo.html`, still one file, no build step):** cream full-screen
+  layout; brand top-left with a rule and a session state top-right; serif headline; a looped
+  ribbon drawn on a canvas (teal on the human side, lilac, amber on the agent side; the side
+  whose turn it is stirs; still under reduced-motion; fewer pieces on slow devices); the line
+  being spoken as a large quotation under an "AGENT" label, earlier lines of the same turn
+  smaller above it; a pill with microphone, pause, keyboard and hang-up; timer; status with
+  dots; Human / Agent key. Dark mode follows the device.
+- **Kept:** AI disclosure and consent before anything starts; typed replies and the phone
+  keypad (behind the keyboard button; the typed box shows by itself in read-and-type mode or
+  when the microphone is off or blocked); the "how your answers were read" table (stacked on
+  phones); a full transcript (in the keyboard panel).
+- **New behaviour:** pause (stops the voice and the clock; the interrupted line is said again
+  from its start on resume, so no line is reported as half heard); microphone on/off during the
+  interview; a blocked microphone falls back to typing; recognition restarts if the browser
+  stops it early; hang-up. Hang-up is a new message (`{type:"hangup"}`) handled in
+  `browser-channel.ts`: the interview ends as a hang-up, the connection stays open, and the
+  page still receives how the answers so far were read.
+- **Removed:** chat bubbles, the Interrupt button (typing or the keypad still cuts in).
+- **Typeface:** Newsreader (SIL Open Font License) is committed under
+  `voice/src/server/assets/` and served at `/assets/newsreader.woff2`; the page requests
+  nothing from any other site (a test checks this).
+- **Checked:** typecheck; 343 tests; `scripts/demo-check.cjs` at 1440×960, 1100×700 (dark) and
+  390×780 with screenshots reviewed; `scripts/demo-voice-check.cjs` (stand-in speech). Not
+  checked: real speech in a real browser, a screen reader, real phones.
+
 ## 2026-11-10 — State machines: inventory, fixes, migration 0006 (PR #48)
 
 Implemented every phase of the former `state-machine-plan.md` (moved here; the

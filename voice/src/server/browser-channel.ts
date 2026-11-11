@@ -2,6 +2,8 @@
  * A browser tab as a voice channel. The page speaks each line with the browser's own speech
  * synthesis and reports what it played; it listens with the browser's speech recognition (or a
  * typed box, or an on-screen keypad) and reports each turn. The server decides everything else.
+ * The page's hang-up button sends "hangup": the interview ends as it does when a caller hangs
+ * up, but the connection stays open so the page can still be told how the answers were read.
  *
  * The page is an untrusted client: every message from it is checked before use.
  */
@@ -23,6 +25,8 @@ const num = (v: unknown): number | null => (typeof v === "number" && Number.isFi
 
 export class BrowserChannel implements VoiceChannel {
   private closed = false;
+  /** The visitor pressed hang up: nothing more is asked of the page. */
+  private hungUp = false;
   private waiting: { type: "played" | "turn"; resolve: (msg: Record<string, unknown> | null) => void } | null = null;
   private lastMs = 0;
 
@@ -36,6 +40,13 @@ export class BrowserChannel implements VoiceChannel {
       }
       if (typeof msg !== "object" || msg === null) return;
       const m = msg as Record<string, unknown>;
+      if (m.type === "hangup") {
+        this.hungUp = true;
+        const w = this.waiting;
+        this.waiting = null;
+        w?.resolve(null);
+        return;
+      }
       if (this.waiting && m.type === this.waiting.type) {
         const w = this.waiting;
         this.waiting = null;
@@ -51,7 +62,7 @@ export class BrowserChannel implements VoiceChannel {
   }
 
   private request(payload: object, reply: "played" | "turn"): Promise<Record<string, unknown> | null> {
-    if (this.closed) return Promise.resolve(null);
+    if (this.closed || this.hungUp) return Promise.resolve(null);
     return new Promise((resolve) => {
       this.waiting = { type: reply, resolve };
       this.socket.send(JSON.stringify(payload));

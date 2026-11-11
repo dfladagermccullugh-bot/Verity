@@ -4,7 +4,7 @@ Lean, session-to-session working memory. Keep this under ~5k tokens. When an
 item goes stale or a to-do is done, move it to [history.md](history.md) and
 trim it from here.
 
-_Last updated: 2026-11-10 (state-machine work shipped, PR #48: re-entrant claim-then-advance engine, guard/protocol fixes, guarded migration `0006`, canary repaired + 14 false drift issues closed, respondent/operator flow fixes. Verified by typecheck + **270 tests** + build + PGlite/PG16 integration + Playwright client check; **live QA with a real DB + model still pending**. Detail in history.md; what remains is in [state-machine-plan.md](state-machine-plan.md).)_
+_Last updated: 2026-11-11 (Verity Voice demo page rebuilt, see "Start here"). Legacy app: 2026-11-10 (state-machine work shipped, PR #48: re-entrant claim-then-advance engine, guard/protocol fixes, guarded migration `0006`, canary repaired + 14 false drift issues closed, respondent/operator flow fixes. Verified by typecheck + **270 tests** + build + PGlite/PG16 integration + Playwright client check; **live QA with a real DB + model still pending**. Detail in history.md; what remains is in [state-machine-plan.md](state-machine-plan.md).)_
 
 ## What Verity is
 
@@ -32,38 +32,40 @@ Secrets go into GitHub or Fly.io secret settings, never into chat.
 
 1. Done: the browser demo is online at https://verity-voice-demo.fly.dev. It is deployed by
    `.github/workflows/voice-deploy.yml` (manual: Actions tab, or `run_workflow` with input
-   `app: verity-voice-demo`). The repo secret `FLY_API_TOKEN` is set.
-2. Done: the operator tried the demo. Verdict: it works, but is "very rudimentary" and
-   "not at all what we want". Three things they named, plus unspecified others:
-   - **Interface.** They sent a reference: `voice/docs/design/interface-reference.webp`.
-     A calm, cream full-screen page: brand top-left with a thin rule and "LIVE SESSION"
-     top-right; large serif headline "Space to speak." with "A conversation, taking shape.";
-     a big iridescent ribbon (teal for the human, through lilac, to amber for the agent)
-     as the centrepiece; small-caps "AGENT" label over the current question as a large
-     serif quotation; a pill with microphone, pause and hang-up; a timer bottom-left;
-     "Listening •••" bottom-right; a "Human / Agent" colour legend. No chat bubbles.
-   - **Real voices.** The demo uses the browser's built-in speech. They want a real voice
-     provider (Deepgram, Cartesia, others compared on merit; carrier stays Telnyx).
-   - **A good model** switched on for reading answers (no API key is set on the server yet).
-   - They also said there are "a lot of things I kind of don't agree with". Not yet
-     specified. Ask, one at a time; do not guess.
+   `app: verity-voice-demo`; it deploys the branch it is run on). The repo secret
+   `FLY_API_TOKEN` is set.
+2. Done: the operator tried the first demo. Verdict: "very rudimentary", "not at all what we
+   want". They named three things (interface, real voices, a good model) and said there are
+   "a lot of things I kind of don't agree with", not yet specified. Ask, one at a time; do
+   not guess.
+3. Done (2026-11-11, second session): `voice/src/server/demo.html` rebuilt to the operator's
+   reference (`voice/docs/design/interface-reference.webp`). Detail in history.md. **The
+   operator has not yet said whether it is what they want; ask before building on it.**
+   Open choices made without asking, to confirm: the brand reads "verity / voice" (the
+   reference's "human / loop" was not adopted); the headline copy is the reference's
+   ("Space to speak. / A conversation, taking shape."); a fourth pill button (keyboard)
+   opens the keypad, typed reply and transcript; dark mode follows the device.
 
 **Next, in this order (one per turn)**
 
-- Rebuild `voice/src/server/demo.html` to the reference. Keep: AI disclosure and consent
-  before anything starts; typed and keypad input as an accessible alternative (tucked
-  away, not removed); the "how your answers were read" table at the end. Keep the strings
-  `test/server.test.ts` checks, and update `scripts/demo-check.cjs` (it drives the page by
-  element ids). Check it with that script at desktop and phone sizes and look at the
-  screenshots before deploying.
 - Real voices in the browser demo. Needs new server work: serve vendor-rendered audio
   for each line (the `SpeechStore` exists; phone format is 8 kHz, the browser wants better)
   and stream the microphone to the server for recognition. Keys as Fly.io secrets, set in
   the Fly.io dashboard (app `verity-voice-demo` → Secrets). Adapters in `src/voice/tts.ts`
-  have never run against a live account.
+  have never run against a live account. The ribbon already has a hook for sound level
+  (`ribbon.voice(on)`); with real audio, drive it from the actual level.
 - `ANTHROPIC_API_KEY` as a Fly.io secret, then `npm run eval -- --live` once to measure.
 - Still open from before: rotate the legacy Neon password, the Qualtrics import check,
   first real phone call. See `voice/docs/what-needs-you.md`.
+
+**Checking the demo page** (the page is read once at server start, so restart after edits)
+
+- `cd voice && PORT=3311 HOST=127.0.0.1 npx tsx src/server/index.ts`, then
+  `node scripts/demo-check.cjs http://127.0.0.1:3311 <dir>` (read-and-type mode, three
+  screen sizes, one dark; saves screenshots; follows `<body data-phase>`) and
+  `node scripts/demo-voice-check.cjs http://127.0.0.1:3311 <dir>` (speak-and-listen logic
+  with stand-ins for the browser's speech features). Look at the screenshots.
+- Real speech in a real browser has still only been tried by the operator, on the old page.
 
 **Things learned the hard way this session**
 
@@ -88,7 +90,7 @@ AI voice survey interviewers on top of Qualtrics. Plan and phase status table:
 own Postgres schema). The web app described in the rest of this file is now the **legacy
 app**: unchanged at the root (its `tsconfig.json` excludes `voice/`), to be switched off later.
 
-- **State (2026-11-11):** all code that needs no account login is built; 342 tests
+- **State (2026-11-11):** all code that needs no account login is built; 343 tests
   (`cd voice && npm test`); database tests also pass on real Postgres 16
   (`TEST_DATABASE_URL=… npx vitest run test/dialer-store.test.ts`).
 - **Never run live:** Telnyx calls, Deepgram/Cartesia speech, the Claude classifier, a

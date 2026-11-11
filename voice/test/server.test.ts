@@ -22,7 +22,7 @@ async function start(opts: Partial<Parameters<typeof buildApp>[0]> = {}): Promis
 }
 
 /** A page stand-in: plays every line "in full", answers from a table keyed by the last line heard. */
-function visitor(host: string, replies: Record<string, string | { keys: string } | null>, opts: { cutAt?: string } = {}): Promise<{ ended: any; spoken: string[]; refused?: string }> {
+function visitor(host: string, replies: Record<string, string | { keys: string } | "hangup" | null>, opts: { cutAt?: string } = {}): Promise<{ ended: any; spoken: string[]; refused?: string }> {
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(`ws://${host}/demo/ws`);
     const spoken: string[] = [];
@@ -46,6 +46,7 @@ function visitor(host: string, replies: Record<string, string | { keys: string }
         const r = replies[last];
         clock += 800;
         if (r === null) return ws.close();
+        if (r === "hangup") return ws.send(JSON.stringify({ type: "hangup" }));
         if (r === undefined) ws.send(JSON.stringify({ type: "turn", kind: "silence", startedMs: clock, endedMs: clock }));
         else if (typeof r === "string") ws.send(JSON.stringify({ type: "turn", kind: "speech", text: r, startedMs: clock, endedMs: (clock += 500) }));
         else ws.send(JSON.stringify({ type: "turn", kind: "keys", digits: r.keys, startedMs: clock, endedMs: clock }));
@@ -63,6 +64,11 @@ describe("the demo server", () => {
     const page = await (await fetch(`http://${host}/`)).text();
     expect(page).toContain("automated AI interviewer, not a person");
     expect(page).toContain("This demo stores nothing you say");
+    // The page asks no other site for anything: its typeface comes from this server.
+    expect(page).not.toMatch(/(src|href)="https?:/);
+    const font = await fetch(`http://${host}/assets/newsreader.woff2`);
+    expect(font.headers.get("content-type")).toBe("font/woff2");
+    expect(Buffer.from(await font.arrayBuffer()).subarray(0, 4).toString()).toBe("wOF2");
     expect(await (await fetch(`http://${host}/health`)).json()).toEqual({ ok: true, demoSessions: 0, model: null, carrier: null });
     expect(await (await fetch(`http://${host}/demo/info`)).json()).toMatchObject({ survey: "Library test", model: null });
   });
@@ -96,6 +102,17 @@ describe("the demo server", () => {
     expect(optOut.spoken.at(-1)).toBe("p.opt_out_done");
     const left = await visitor(host, { ...REPLIES, "q.QID5.options": null });
     expect(left.ended).toBeNull();
+    expect(await (await fetch(`http://${host}/health`)).json()).toMatchObject({ demoSessions: 0 });
+  });
+
+  it("the page's hang-up button ends the interview and still returns how the answers so far were read", async () => {
+    const host = await start();
+    const partWay = await visitor(host, { ...REPLIES, "q.QID4.row.1": "hangup" });
+    expect(partWay.ended).toMatchObject({ type: "ended", outcome: "breakoff", answered: 2 });
+    expect(partWay.ended.trail.map((t: any) => t.readAs)).toEqual(["Yes", "About once a month"]);
+    expect(partWay.spoken.at(-1)).toBe("q.QID4.row.1");
+    const beforeConsent = await visitor(host, { "p.consent_ask": "hangup" });
+    expect(beforeConsent.ended).toMatchObject({ outcome: "consent_declined", answered: 0, trail: [] });
     expect(await (await fetch(`http://${host}/health`)).json()).toMatchObject({ demoSessions: 0 });
   });
 

@@ -31,6 +31,8 @@ export interface AppOptions {
 }
 
 const PAGE = readFileSync(new URL("./demo.html", import.meta.url), "utf8");
+// The page's serif typeface (Newsreader, SIL Open Font License), served from here so the page asks no other site for anything.
+const FONT = readFileSync(new URL("./assets/newsreader-latin.woff2", import.meta.url));
 
 export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
   const app = Fastify({ logger: false, trustProxy: true });
@@ -45,6 +47,7 @@ export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
 
   app.get("/health", async () => ({ ok: true, demoSessions: active, model: opts.model?.id ?? null, carrier: opts.telnyx ? "telnyx" : null }));
   app.get("/", async (_req, reply) => reply.type("text/html; charset=utf-8").header("Cache-Control", "no-store").send(PAGE));
+  app.get("/assets/newsreader.woff2", async (_req, reply) => reply.type("font/woff2").header("Cache-Control", "public, max-age=604800").send(FONT));
   app.get("/demo/info", async () => ({ survey: opts.demoInstrument.name, script: table.hash.slice(0, 12), model: opts.model?.id ?? null }));
 
   app.get("/demo/ws", { websocket: true }, (socket, req) => {

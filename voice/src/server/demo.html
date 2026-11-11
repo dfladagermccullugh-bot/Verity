@@ -2,193 +2,595 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Verity Voice demo</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Verity Voice</title>
+<link rel="preload" href="/assets/newsreader.woff2" as="font" type="font/woff2" crossorigin>
 <style>
-  :root { --bg: #f7f5f0; --card: #fffdf9; --ink: #1f2428; --muted: #5d6670; --line: #ddd6c8; --accent: #1f5f8b; --accent-ink: #fff; --warn: #8a4b00; --them: #eaf2f8; --me: #efeadd; }
-  @media (prefers-color-scheme: dark) { :root { --bg: #15181b; --card: #1d2125; --ink: #e8e6e1; --muted: #a2abb3; --line: #353b41; --accent: #6fb1dc; --accent-ink: #10202c; --warn: #e0a44f; --them: #1d2c38; --me: #2a2a25; } }
+  @font-face { font-family: "Newsreader"; src: url("/assets/newsreader.woff2") format("woff2"); font-weight: 200 800; font-display: swap; }
+  :root {
+    --paper: #faf6f1; --raised: #fffdfa; --ink: #24211e; --soft: #6b645c; --rule: #ddd5ca;
+    --human: #3f9c94; --agent: #d99a3f; --warn: #8a4b00; --focus: #1f6f8b;
+    --lift: 0 1px 0 rgba(255,255,255,.9) inset, 0 14px 28px -16px rgba(70,50,30,.38), 0 2px 6px rgba(70,50,30,.07);
+    --serif: "Newsreader", "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --paper: #181614; --raised: #221f1c; --ink: #ede8e0; --soft: #a79f94; --rule: #3a342e; --human: #6cc4bb; --agent: #e9b566; --warn: #e6a955; --focus: #7cc3dc;
+      --lift: 0 1px 0 rgba(255,255,255,.05) inset, 0 14px 28px -16px rgba(0,0,0,.7), 0 2px 6px rgba(0,0,0,.3); }
+  }
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
-  main { max-width: 720px; margin: 0 auto; padding: 24px 16px 64px; }
-  h1 { font-size: 1.5rem; margin: 0 0 4px; } h2 { font-size: 1.1rem; margin: 24px 0 8px; }
-  p { margin: 8px 0; } .muted { color: var(--muted); font-size: 0.92rem; }
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin-top: 16px; }
-  button { font: inherit; padding: 10px 16px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--ink); cursor: pointer; min-height: 44px; }
-  button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
-  button:disabled { opacity: 0.5; cursor: default; } button:focus-visible, input:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
-  label { display: flex; gap: 8px; align-items: flex-start; margin: 8px 0; }
-  #log { display: flex; flex-direction: column; gap: 8px; max-height: 46vh; overflow-y: auto; padding: 4px; }
-  .turn { padding: 8px 12px; border-radius: 10px; max-width: 88%; } .turn.iv { background: var(--them); align-self: flex-start; } .turn.me { background: var(--me); align-self: flex-end; }
-  .turn .who { display: block; font-size: 0.75rem; color: var(--muted); }
-  #status { min-height: 1.5em; font-weight: 600; margin: 12px 0 8px; } #status.warn { color: var(--warn); }
-  form { display: flex; gap: 8px; } input[type=text] { flex: 1; min-width: 0; font: inherit; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--ink); min-height: 44px; }
-  #keys { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin-top: 8px; } #keys button { padding: 6px; }
-  .scroll { overflow-x: auto; } table { border-collapse: collapse; width: 100%; font-size: 0.9rem; } th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--paper); color: var(--ink); font: 16px/1.5 var(--sans); }
   [hidden] { display: none !important; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  button, input { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  button:disabled { cursor: default; opacity: .4; }
+  :focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
+  .caps { font: 500 .76rem/1.2 var(--sans); letter-spacing: .3em; text-transform: uppercase; color: var(--soft); margin: 0; }
+
+  .page { min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; max-width: 1640px; margin: 0 auto; padding: 0 clamp(18px, 3.2vw, 48px); padding-left: max(clamp(18px, 3.2vw, 48px), env(safe-area-inset-left)); padding-right: max(clamp(18px, 3.2vw, 48px), env(safe-area-inset-right)); }
+  .top { display: flex; align-items: center; gap: clamp(14px, 3vw, 44px); padding-top: 18px; }
+  .brand { font: 400 clamp(1.3rem, 1.1rem + .6vw, 1.7rem)/1 var(--serif); letter-spacing: -.01em; white-space: nowrap; }
+  .top .line { flex: 1; height: 1px; background: var(--rule); }
+  .live { display: flex; align-items: center; gap: .9em; white-space: nowrap; }
+  .live i { width: .6em; height: .6em; border-radius: 50%; background: var(--soft); }
+  body[data-live] .live i { background: var(--human); animation: pulse 2.4s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: .35; } }
+
+  main { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+  .hero { padding-top: clamp(14px, 3vh, 34px); }
+  h1 { font: 400 clamp(2.1rem, 1.3rem + 3vw, 3.5rem)/1.04 var(--serif); letter-spacing: -.02em; margin: 0; }
+  .hero p { font: 400 clamp(1.05rem, .9rem + .7vw, 1.5rem)/1.3 var(--serif); color: var(--soft); margin: .35em 0 0; }
+  .stage { position: relative; flex: 1 1 0; display: flex; flex-direction: column; }
+  .ribbon { position: relative; flex: 1 1 0; min-height: clamp(140px, 24vh, 300px); }
+  .ribbon canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+  @media (min-width: 820px) and (min-height: 640px) {
+    .hero { position: absolute; z-index: 1; pointer-events: none; }
+    .ribbon { min-height: clamp(240px, 36vh, 420px); }
+  }
+  body[data-phase="ended"] .stage { flex: 0 0 auto; }
+  body[data-phase="ended"] .ribbon { flex: 0 0 auto; height: clamp(140px, 24vh, 230px); min-height: 0; }
+
+  /* Before anything starts: who is speaking, what happens to the audio, and a choice. */
+  #gate { width: 100%; max-width: 37rem; margin: 0 auto; padding: 4px 0 30px; }
+  #gate .lead { font: 400 clamp(1.2rem, 1.05rem + .6vw, 1.45rem)/1.35 var(--serif); margin: .5em 0 .5em; }
+  #gate .lead strong { font-weight: 600; }
+  .fine { color: var(--soft); font-size: .92rem; margin: .5em 0; }
+  fieldset { border: 0; padding: 0; margin: 18px 0 0; min-width: 0; }
+  .modes { display: flex; flex-wrap: wrap; gap: 8px; }
+  .modes label { position: relative; }
+  .modes input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+  .modes span { display: block; padding: 11px 20px; min-height: 46px; border: 1px solid var(--rule); border-radius: 999px; background: var(--raised); }
+  .modes input:checked + span { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+  .modes input:focus-visible + span { outline: 2px solid var(--focus); outline-offset: 3px; }
+  .modes input:disabled + span { opacity: .45; }
+  .agree { display: flex; gap: 12px; align-items: flex-start; margin: 18px 0; }
+  .agree input { width: 22px; height: 22px; margin: 1px 0 0; accent-color: var(--ink); flex: none; }
+  .go { border: 1px solid var(--ink); background: var(--ink); color: var(--paper); border-radius: 999px; padding: 12px 28px; min-height: 48px; font-weight: 500; }
+  .go.quiet { background: none; color: var(--ink); border-color: var(--rule); }
+
+  /* The interview: one question at a time, as a quotation. */
+  #call { text-align: center; padding-top: 6px; }
+  #context p { font: 400 1.04rem/1.45 var(--serif); color: var(--soft); max-width: 46rem; margin: 0 auto .3em; text-wrap: pretty; }
+  #context:not(:empty) { margin-top: 12px; }
+  blockquote { font: 400 clamp(1.5rem, 1.1rem + 1.9vw, 2.5rem)/1.2 var(--serif); letter-spacing: -.012em; margin: .35em auto 0; max-width: 52rem; min-height: 1.2em; text-wrap: balance; quotes: "\201C" "\201D"; }
+  blockquote[data-size="m"] { font-size: clamp(1.3rem, 1.05rem + 1.1vw, 1.85rem); }
+  blockquote[data-size="l"] { font-size: clamp(1.14rem, 1rem + .6vw, 1.45rem); line-height: 1.32; }
+  blockquote:not(:empty)::before { content: open-quote; } blockquote:not(:empty)::after { content: close-quote; }
+  .in { animation: rise .5s ease both; }
+  @keyframes rise { from { opacity: 0; transform: translateY(6px); } }
+  #you { margin: 14px auto 0; max-width: 40rem; font: 400 1.04rem/1.4 var(--serif); color: var(--soft); }
+  #you b { font: 500 .72rem/1 var(--sans); letter-spacing: .24em; text-transform: uppercase; color: var(--human); margin-right: .8em; }
+  #notice { color: var(--warn); font-weight: 600; margin: 12px auto 0; max-width: 40rem; }
+  #notice:empty { display: none; }
+  #reply { display: flex; gap: 8px; max-width: 34rem; margin: 16px auto 0; }
+  #typed { flex: 1; min-width: 0; min-height: 48px; padding: 10px 20px; border: 1px solid var(--rule); border-radius: 999px; background: var(--raised); }
+  #typed:focus-visible { outline-offset: 0; }
+  #typed::placeholder { color: var(--soft); opacity: 1; }
+  #reply button { flex: none; width: 48px; height: 48px; padding: 0; border-radius: 50%; border: 0; background: var(--ink); color: var(--paper); display: grid; place-items: center; }
+
+  .bar { position: relative; display: grid; grid-template-columns: 1fr auto 1fr; align-items: end; gap: 12px; padding: 22px 0 22px; }
+  #timer { justify-self: start; font-size: 1.05rem; letter-spacing: .1em; font-variant-numeric: tabular-nums; }
+  #status { justify-self: end; display: flex; align-items: center; gap: .9em; color: var(--soft); font-size: 1.05rem; letter-spacing: .06em; }
+  .dots { display: flex; gap: 5px; } .dots i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; animation: dot 1.4s ease-in-out infinite; }
+  .dots i:nth-child(2) { animation-delay: .2s; } .dots i:nth-child(3) { animation-delay: .4s; }
+  @keyframes dot { 0%, 80%, 100% { opacity: .3; } 40% { opacity: 1; } }
+  body[data-phase="typing"] .dots, body[data-paused] .dots, body[data-phase="ended"] .dots { display: none; }
+  .pill { display: flex; align-items: center; padding: 6px 12px; border: 1px solid var(--rule); border-radius: 999px; background: var(--raised); box-shadow: var(--lift); }
+  .pill button { position: relative; width: clamp(54px, 15vw, 88px); height: 60px; padding: 0; border: 0; border-radius: 999px; background: none; display: grid; place-items: center; }
+  .pill button + button { margin-left: 9px; }
+  .pill button + button::before { content: ""; position: absolute; left: -5px; top: 12px; bottom: 12px; width: 1px; background: var(--rule); }
+  .pill button:hover:not(:disabled) svg { transform: scale(1.08); }
+  .pill svg { width: 30px; height: 30px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; transition: transform .15s; }
+  .pill .on, .pill [aria-pressed="true"] .off { display: none; } .pill [aria-pressed="true"] .on { display: block; }
+  #mic[aria-pressed="false"] { color: var(--soft); }
+  #more[aria-expanded="true"] { color: var(--human); }
+
+  /* Other ways to answer, and the full transcript: out of the way, never removed. */
+  #sheet { max-width: 34rem; margin: 12px auto 0; text-align: left; padding: 16px 18px; border: 1px solid var(--rule); border-radius: 22px; background: var(--raised); }
+  #keys { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+  #keys button { min-height: 46px; padding: 0; border: 1px solid var(--rule); border-radius: 14px; background: none; font: 400 1.3rem/1 var(--serif); }
+  #keys button:active { background: var(--rule); }
+  #sheet .fine { margin: 10px 0 0; }
+  details { margin-top: 10px; border-top: 1px solid var(--rule); padding-top: 8px; }
+  #log { max-height: 38vh; overflow: auto; }
+  summary { cursor: pointer; padding: 4px 0; }
+  #log { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+  .turn { font: 400 1rem/1.4 var(--serif); margin: 0; }
+  .turn .who { display: block; font: 500 .68rem/1.4 var(--sans); letter-spacing: .2em; text-transform: uppercase; color: var(--agent); }
+  .turn.me .who { color: var(--human); }
+
+  #result { width: 100%; max-width: 62rem; margin: 0 auto; padding: 4px 0 34px; }
+  #result h2 { font: 400 clamp(1.7rem, 1.3rem + 1.6vw, 2.4rem)/1.15 var(--serif); letter-spacing: -.015em; margin: .3em 0 .3em; }
+  #result h2:focus { outline: none; }
+  #outcome { font: 400 1.15rem/1.45 var(--serif); margin: 0 0 14px; }
+  table { border-collapse: collapse; width: 100%; font: 400 1.02rem/1.4 var(--serif); }
+  th { font: 500 .7rem/1.3 var(--sans); letter-spacing: .2em; text-transform: uppercase; color: var(--soft); }
+  th, td { text-align: left; padding: 10px 14px 10px 0; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  @media (max-width: 700px) {
+    thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+    tr { display: block; padding: 12px 0; border-bottom: 1px solid var(--rule); }
+    td { display: grid; grid-template-columns: 7.2rem 1fr; gap: 10px; padding: 2px 0; border: 0; }
+    td::before { content: attr(data-label); font: 500 .68rem/1.9 var(--sans); letter-spacing: .16em; text-transform: uppercase; color: var(--soft); }
+  }
+
+  .legend { display: flex; gap: 34px; padding: 18px 0 max(22px, env(safe-area-inset-bottom)); border-top: 1px solid var(--rule); font: 400 1.05rem/1 var(--serif); color: var(--soft); }
+  .legend span { display: flex; align-items: center; gap: 10px; }
+  .legend i { width: 12px; height: 12px; border-radius: 50%; }
+  @media (max-width: 640px) {
+    .live.caps { letter-spacing: .2em; font-size: .68rem; }
+    .bar { grid-template-columns: 1fr 1fr; padding-top: 16px; row-gap: 14px; }
+    .pill { grid-column: 1 / -1; justify-self: center; order: -1; }
+    #timer, #status { font-size: .95rem; }
+  }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 </style>
 </head>
-<body>
-<main>
-  <h1>Verity Voice demo</h1>
-  <p class="muted">An AI interviewer asks a short survey about public libraries, word for word, and shows how it read each answer.</p>
+<body data-phase="gate">
+<div class="page">
+  <header class="top">
+    <span class="brand" aria-label="Verity Voice">verity / voice</span>
+    <span class="line" aria-hidden="true"></span>
+    <span class="live caps"><i aria-hidden="true"></i><span id="live">AI interviewer · demo</span></span>
+  </header>
 
-  <section class="card" id="gate">
-    <h2>Before you start</h2>
-    <p>You will talk to an <strong>automated AI interviewer, not a person</strong>. It takes about three minutes. You can stop at any time.</p>
-    <p>If you use your voice, your browser turns your speech into text; in Chrome that means your audio is sent to Google. This demo stores nothing you say: when you close the page it is gone.</p>
-    <label><input type="radio" name="mode" value="voice" checked> <span>Speak and listen <span class="muted" id="voiceNote"></span></span></label>
-    <label><input type="radio" name="mode" value="text"> <span>Read and type instead</span></label>
-    <label><input type="checkbox" id="agree"> <span>I understand, and I want to try the demo.</span></label>
-    <p><button class="primary" id="start" disabled>Start the interview</button></p>
-  </section>
+  <main>
+    <div class="stage">
+      <div class="hero">
+        <h1>Space to speak.</h1>
+        <p>A conversation, taking shape.</p>
+      </div>
+      <div class="ribbon"><canvas id="ribbon" aria-hidden="true"></canvas></div>
+    </div>
 
-  <section class="card" id="call" hidden>
-    <div id="log" aria-live="polite" aria-label="Conversation"></div>
-    <div id="status" role="status"></div>
-    <form id="reply">
-      <input type="text" id="typed" autocomplete="off" maxlength="500" aria-label="Type your reply" placeholder="Type a reply, or speak when it is your turn">
-      <button class="primary" type="submit">Send</button>
-      <button type="button" id="interrupt" hidden>Interrupt</button>
-    </form>
-    <div id="keys" aria-label="Phone keypad"></div>
-    <p class="muted" id="hint">The keypad works like a phone's: press the number of an option, or a number followed by #. Say "stop" to end, or "remove me" to see how opting out works.</p>
-  </section>
+    <section id="gate" aria-labelledby="gateTitle">
+      <h2 class="caps" id="gateTitle">Before you start</h2>
+      <p class="lead">You will talk to an <strong>automated AI interviewer, not a person</strong>. It asks a short survey about public libraries, word for word, and then shows how it read each answer. It takes about three minutes. You can stop at any time.</p>
+      <p class="fine">If you use your voice, your browser turns your speech into text; in Chrome that means your audio is sent to Google. This demo stores nothing you say: when you close the page it is gone.</p>
+      <fieldset>
+        <legend class="sr">How would you like to take part?</legend>
+        <div class="modes">
+          <label><input type="radio" name="mode" value="voice" checked><span>Speak and listen</span></label>
+          <label><input type="radio" name="mode" value="text"><span>Read and type instead</span></label>
+        </div>
+        <p class="fine" id="voiceNote"></p>
+      </fieldset>
+      <label class="agree"><input type="checkbox" id="agree"> <span>I understand, and I want to try the demo.</span></label>
+      <button class="go" id="start" disabled>Start the interview</button>
+      <noscript><p class="fine">This demo needs JavaScript.</p></noscript>
+    </section>
 
-  <section class="card" id="result" hidden>
-    <h2>How your answers were read</h2>
-    <p id="outcome"></p>
-    <div class="scroll"><table><thead><tr><th>Question</th><th>You said</th><th>Read as</th><th>Decided by</th><th>Decision</th></tr></thead><tbody id="trail"></tbody></table></div>
-    <p class="muted">"rule" means an exact match, with no AI involved. "model" means a language model read the reply, and its reading was checked in code before it counted. Nothing from this interview was stored.</p>
-    <p><button onclick="location.reload()">Start again</button></p>
-  </section>
-</main>
+    <section id="call" aria-label="Interview" hidden>
+      <p class="caps">Agent</p>
+      <div id="said">
+        <div id="context"></div>
+        <blockquote id="quote"></blockquote>
+      </div>
+      <p id="you" hidden><b id="youLabel">You said</b><span id="youText"></span></p>
+      <p id="notice" role="alert"></p>
+      <form id="reply" hidden>
+        <input type="text" id="typed" autocomplete="off" maxlength="500" aria-label="Type your reply" placeholder="Type your reply">
+        <button type="submit" aria-label="Send"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg></button>
+      </form>
+      <div id="sheet" hidden>
+        <div id="keys" role="group" aria-label="Phone keypad"></div>
+        <p class="fine" id="hint">The keypad works like a phone's: press the number of an option, or a number followed by #. Say or type "stop" to end, or "remove me" to see how opting out works.</p>
+        <details><summary class="caps">Transcript</summary><div id="log" tabindex="0" role="log" aria-label="Transcript"></div></details>
+      </div>
+      <p hidden id="again"><button class="go quiet" type="button" onclick="location.reload()">Start again</button></p>
+
+      <div class="bar">
+        <span id="timer" aria-label="Time in the interview">00:00</span>
+        <div class="pill" role="group" aria-label="Interview controls">
+          <button type="button" id="mic" aria-pressed="false" aria-label="Microphone">
+            <svg class="on" viewBox="0 0 32 32" aria-hidden="true"><rect x="12" y="4" width="8" height="15" rx="4"/><path d="M8 15a8 8 0 0 0 16 0M16 23v4M12 27h8"/></svg>
+            <svg class="off" viewBox="0 0 32 32" aria-hidden="true"><rect x="12" y="4" width="8" height="15" rx="4"/><path d="M8 15a8 8 0 0 0 16 0M16 23v4M12 27h8M5 5l22 22"/></svg>
+          </button>
+          <button type="button" id="pause" aria-pressed="false" aria-label="Pause">
+            <svg class="off" viewBox="0 0 32 32" aria-hidden="true"><path d="M12 8v16M20 8v16" stroke-width="2.4"/></svg>
+            <svg class="on" viewBox="0 0 32 32" aria-hidden="true"><path d="M11 7.5v17l14-8.5z"/></svg>
+          </button>
+          <button type="button" id="more" aria-expanded="false" aria-controls="sheet" aria-label="Type or use the keypad; transcript">
+            <svg viewBox="0 0 32 32" aria-hidden="true"><rect x="4" y="8" width="24" height="16" rx="3.5"/><path d="M9 13h.01M13.6 13h.01M18.3 13h.01M23 13h.01M9 17h.01M23 17h.01M12.5 20h7"/></svg>
+          </button>
+          <button type="button" id="hang" aria-label="End the interview">
+            <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M5.5 19.5c-.6-2.2.3-4 2.3-5 5-2.400 11.400-2.400 16.400 0 2 1 2.900 2.800 2.300 5l-.3 1-4.700-1.200v-2.600c-3.600-1.100-7.400-1.100-11 0v2.600L5.800 20.500z"/></svg>
+          </button>
+        </div>
+        <span id="status" role="status"><span id="statusText"></span><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span></span>
+      </div>
+    </section>
+
+    <section id="result" aria-labelledby="resultTitle" hidden>
+      <h2 id="resultTitle" tabindex="-1">How your answers were read</h2>
+      <p id="outcome"></p>
+      <table id="trailTable"><thead><tr><th>Question</th><th>You said</th><th>Read as</th><th>Decided by</th><th>Decision</th></tr></thead><tbody id="trail"></tbody></table>
+      <p class="fine">"rule" means an exact match, with no AI involved. "model" means a language model read the reply, and its reading was checked in code before it counted. Nothing from this interview was stored.</p>
+      <p><button class="go quiet" type="button" onclick="location.reload()">Start again</button></p>
+    </section>
+  </main>
+
+  <footer class="legend" aria-label="Colour key">
+    <span><i style="background: var(--human)"></i>Human</span>
+    <span><i style="background: var(--agent)"></i>Agent</span>
+  </footer>
+</div>
 <script>
 (() => {
   const $ = (id) => document.getElementById(id);
+
+  // The ribbon: a looped band drawn on a canvas. The left side (teal) stirs when the person is
+  // speaking, the right side (amber) when the interviewer is. It is decoration: every state it
+  // shows is also written in words on the page.
+  const ribbon = (() => {
+    const cv = $("ribbon"), g = cv.getContext("2d");
+    const still = matchMedia("(prefers-reduced-motion: reduce)"), dark = matchMedia("(prefers-color-scheme: dark)");
+    const MAX = 360, TAU = Math.PI * 2;
+    // Three sheets following the same loop, each a little apart from the others and turning at its own pace.
+    const LAYERS = [
+      { twist: 2, width: 0.25, phase: 0.9, alpha: 0.54, drift: 0.1, reach: 1 },
+      { twist: 2, width: 0.2, phase: 2.6, alpha: 0.5, drift: -0.07, reach: 0.9 },
+      { twist: 4, width: 0.16, phase: 4.3, alpha: 0.46, drift: 0.05, reach: 1.08 },
+    ];
+    const MOODS = { gate: [0.3, 0.3, 0.55], speaking: [0.08, 1, 1], listening: [0.5, 0.08, 0.8], typing: [0.3, 0.1, 0.6], thinking: [0.25, 0.25, 0.9], paused: [0, 0, 0.05], ended: [0.15, 0.15, 0.4] };
+    const now = { h: 0.3, a: 0.3, s: 0.55 }, to = { h: 0.3, a: 0.3, s: 0.55 };
+    const ax = new Float32Array(MAX + 1), ay = new Float32Array(MAX + 1), bx = new Float32Array(MAX + 1), by = new Float32Array(MAX + 1), face = new Float32Array(MAX + 1), glint = new Float32Array(MAX + 1);
+    let w = 0, h = 0, d = 1, time = 40, prev = 0, queued = false, n = MAX, cost = 0;
+
+    // One strip of a sheet between two fractions of its width (0 is one edge, 1 the other).
+    function strip(i, from, upto) {
+      const j = i + 1;
+      g.beginPath();
+      g.moveTo(ax[i] + (bx[i] - ax[i]) * from, ay[i] + (by[i] - ay[i]) * from); g.lineTo(ax[j] + (bx[j] - ax[j]) * from, ay[j] + (by[j] - ay[j]) * from);
+      g.lineTo(ax[j] + (bx[j] - ax[j]) * upto, ay[j] + (by[j] - ay[j]) * upto); g.lineTo(ax[i] + (bx[i] - ax[i]) * upto, ay[i] + (by[i] - ay[i]) * upto);
+      g.fill();
+    }
+
+    function draw() {
+      g.clearRect(0, 0, w, h);
+      if (!w || !h) return;
+      const scale = Math.min(w / 2.8, h / 1.62), cx = w / 2, cy = h * 0.5;
+      const night = dark.matches;
+      // A soft shadow on the "table" under the ribbon.
+      g.save(); g.translate(cx, cy + scale * 0.74); g.scale(1, 0.055);
+      const sh = g.createRadialGradient(0, 0, 0, 0, 0, scale * 1.25);
+      sh.addColorStop(0, night ? "rgba(0,0,0,.55)" : "rgba(96,72,48,.22)"); sh.addColorStop(1, "rgba(96,72,48,0)");
+      g.fillStyle = sh; g.beginPath(); g.arc(0, 0, scale * 1.25, 0, TAU); g.fill(); g.restore();
+      // Colour follows position: teal on the left, through lilac, to amber on the right.
+      const span = (stops) => { const lg = g.createLinearGradient(cx - scale * 1.25, 0, cx + scale * 1.25, 0); stops.forEach((c, i) => lg.addColorStop(i / (stops.length - 1), c)); return lg; };
+      const body = span(night ? ["#4fd3c4", "#7fb6e6", "#b493f2", "#f08fb4", "#f7b256"] : ["#4dbdb0", "#86b9dd", "#b08fe2", "#eea3bd", "#f3a94f"]);
+      const sheen = span(["#8fe6ff", "#f4b6ff", "#fff0b0"]);
+      const yaw = 0.07 * Math.sin(time * 0.17), cyw = Math.cos(yaw), syw = Math.sin(yaw), ct = Math.cos(0.42), st = Math.sin(0.42);
+      g.lineCap = "round";
+      for (const L of LAYERS) {
+        for (let i = 0; i <= n; i++) {
+          const t = (i / n) * TAU;
+          // Centre line: a figure of eight whose two strands pass one behind the other.
+          let x = L.reach * Math.sin(t), y = L.reach * 0.4 * Math.sin(2 * t) + 0.05 * Math.sin(3 * t + time * 0.5 + L.phase), z = 0.46 * Math.cos(t) + 0.07 * Math.cos(2 * t + time * 0.35 + L.phase);
+          let tx = Math.cos(t), ty = 0.8 * Math.cos(2 * t), tz = -0.46 * Math.sin(t);
+          let m = Math.hypot(tx, ty, tz); tx /= m; ty /= m; tz /= m;
+          // A frame around the centre line, and the sheet's width turning inside it.
+          let nx = -tz * tx, ny = -tz * ty, nz = 1 - tz * tz; m = Math.hypot(nx, ny, nz); nx /= m; ny /= m; nz /= m;
+          const ux = ty * nz - tz * ny, uy = tz * nx - tx * nz, uz = tx * ny - ty * nx;
+          const phi = (L.twist * t) / 2 + L.phase + time * L.drift, c = Math.cos(phi), s = Math.sin(phi);
+          let wx = c * nx + s * ux, wy = c * ny + s * uy, wz = c * nz + s * uz;
+          const stir = now.h * Math.min(1, Math.max(0, 0.5 - x * 0.9)) + now.a * Math.min(1, Math.max(0, 0.5 + x * 0.9));
+          const half = L.width * (0.78 + 0.22 * Math.sin(2 * t + L.phase * 1.7 + time * 0.23)) * (1 + 0.2 * stir + 0.22 * stir * Math.sin(11 * t - time * 4.2 + L.phase));
+          // Turn the whole figure a little so its depth shows, then put it on the screen.
+          let q = x * cyw + z * syw; z = -x * syw + z * cyw; x = q; q = y * ct - z * st; z = y * st + z * ct; y = q;
+          q = wx * cyw + wz * syw; wz = -wx * syw + wz * cyw; wx = q; q = wy * ct - wz * st; wz = wy * st + wz * ct; wy = q;
+          q = tx * cyw + tz * syw; tz = -tx * syw + tz * cyw; tx = q; q = ty * ct - tz * st; tz = ty * st + tz * ct; ty = q;
+          const px = ty * wz - tz * wy, py = tz * wx - tx * wz, pz = tx * wy - ty * wx;
+          face[i] = Math.abs(pz); glint[i] = Math.pow(Math.abs(-0.36 * px + 0.56 * py + 0.75 * pz), 9);
+          let p = (3.6 / (3.6 - (z + wz * half))) * scale; ax[i] = cx + (x + wx * half) * p; ay[i] = cy - (y + wy * half) * p;
+          p = (3.6 / (3.6 - (z - wz * half))) * scale; bx[i] = cx + (x - wx * half) * p; by[i] = cy - (y - wy * half) * p;
+        }
+        // The sheet itself: denser towards its two edges, like glass seen at an angle.
+        g.fillStyle = body;
+        for (let i = 0; i < n; i++) {
+          const a = L.alpha * (0.3 + 0.6 * (1 - (face[i] + face[i + 1]) / 2));
+          g.globalAlpha = a; strip(i, 0, 1);
+          g.globalAlpha = a * 0.8; strip(i, 0, 0.2); strip(i, 0.8, 1);
+        }
+        // Light catching it: a broad sheen where it faces the light, and fine lines across it.
+        g.fillStyle = "#fff"; g.strokeStyle = "#fff"; g.lineWidth = Math.max(0.6, d * 0.55);
+        for (let i = 0; i < n; i++) {
+          const k = (glint[i] + glint[i + 1]) / 2;
+          if (k > 0.03) { g.globalAlpha = k * (night ? 0.3 : 0.62); strip(i, 0.08, 0.92); }
+          if (i % 2 === 0) { g.globalAlpha = (night ? 0.4 : 0.8) * (0.1 + 0.4 * glint[i]); g.beginPath(); g.moveTo(ax[i], ay[i]); g.lineTo(bx[i], by[i]); g.stroke(); }
+        }
+        g.lineWidth = Math.max(1, d * 0.9);
+        g.strokeStyle = body; g.globalAlpha = 0.7; g.beginPath(); for (let i = 0; i <= n; i++) g.lineTo(ax[i], ay[i]); g.stroke();
+        g.strokeStyle = sheen; g.globalAlpha = night ? 0.5 : 0.75; g.beginPath(); for (let i = 0; i <= n; i++) g.lineTo(bx[i], by[i]); g.stroke();
+      }
+      g.globalAlpha = 1;
+    }
+
+    function frame(ts) {
+      queued = false;
+      const dt = Math.min((ts - prev) / 1000 || 0, 0.05); prev = ts;
+      const k = still.matches ? 1 : 1 - Math.exp(-dt * 3);
+      now.h += (to.h - now.h) * k; now.a += (to.a - now.a) * k; now.s += (to.s - now.s) * k;
+      time += dt * now.s;
+      // On a slow device, draw the ribbon with fewer pieces rather than drop frames.
+      const began = performance.now(); draw(); cost += (performance.now() - began - cost) * 0.1;
+      if (cost > 11 && n > 120) { n = Math.max(120, Math.round(n * 0.8)); cost = 0; }
+      if (!still.matches) wake();
+    }
+    function wake() { if (!queued) { queued = true; requestAnimationFrame(frame); } }
+    function size() {
+      const r = cv.getBoundingClientRect(); d = Math.min(window.devicePixelRatio || 1, 2);
+      const nw = Math.round(r.width * d), nh = Math.round(r.height * d);
+      if (nw !== w || nh !== h) { w = cv.width = nw; h = cv.height = nh; }
+      draw(); wake();
+    }
+    new ResizeObserver(size).observe(cv);
+    still.addEventListener("change", wake); dark.addEventListener("change", wake);
+    return {
+      mood(name) { const m = MOODS[name] || MOODS.gate; to.h = m[0]; to.a = m[1]; to.s = m[2]; wake(); },
+      // The person has started or stopped making sound.
+      voice(on) { to.h = on ? 1 : MOODS.listening[0]; wake(); },
+    };
+  })();
+
   const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   const canSpeak = "speechSynthesis" in window;
-  $("voiceNote").textContent = Recognition && canSpeak ? "(needs a microphone)" : canSpeak ? "(this browser cannot recognise speech: you will hear the questions and type your replies)" : "(not available in this browser)";
+  $("voiceNote").textContent = Recognition && canSpeak ? "Speaking needs a microphone. You can switch to typing at any time." : canSpeak ? "This browser cannot recognise speech: you will hear the questions and type your replies." : "This browser cannot speak aloud, so the demo is read-and-type here.";
   if (!canSpeak) { document.querySelector('input[value="text"]').checked = true; document.querySelector('input[value="voice"]').disabled = true; }
   $("agree").addEventListener("change", (e) => { $("start").disabled = !e.target.checked; });
 
-  let ws, t0, mode, playing = null, pendingTurn = null, listening = null, recognizer = null;
-  const now = () => Math.round(performance.now() - t0);
-  const status = (text, warn) => { $("status").textContent = text; $("status").className = warn ? "warn" : ""; };
-  const say = (who, text) => {
-    const div = document.createElement("div");
-    div.className = "turn " + (who === "Interviewer" ? "iv" : "me");
+  let ws = null, t0 = 0, aloud = false, micOn = false, phase = "gate", over = false;
+  let paused = false, pausedAt = 0, pausedTotal = 0;
+  let playing = null, pendingTurn = null, listening = null, recognizer = null, listenWait = 0, batch = [];
+  // Milliseconds of interview so far. The clock stands still while the interview is paused.
+  const now = () => Math.round((paused ? pausedAt : performance.now()) - t0 - pausedTotal);
+  const send = (msg) => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(msg)); };
+  const WORDS = { speaking: "Speaking", listening: "Listening", typing: "Your turn", thinking: "One moment", ended: "Ended" };
+
+  function setPhase(p) {
+    phase = p; document.body.dataset.phase = p;
+    $("statusText").textContent = paused ? "Paused" : WORDS[p] || "";
+    ribbon.mood(paused ? "paused" : p);
+  }
+  const notice = (text) => { $("notice").textContent = text; };
+  // Every line also goes into the transcript, which sits behind the keyboard button.
+  function say(who, text) {
+    const p = document.createElement("p"); p.className = "turn " + (who === "Agent" ? "iv" : "me");
     const w = document.createElement("span"); w.className = "who"; w.textContent = who;
-    div.append(w, document.createTextNode(text));
-    $("log").append(div); div.scrollIntoView({ block: "end" });
-  };
+    p.append(w, document.createTextNode(text)); $("log").append(p);
+  }
+  function heard(text, interim) { $("youLabel").textContent = interim ? "Hearing" : "You said"; $("youText").textContent = text; $("you").hidden = false; }
+  // The line being spoken is the quotation; earlier lines of the same turn stay above it, smaller.
+  function render() {
+    $("context").replaceChildren(...batch.slice(0, -1).map((line) => { const p = document.createElement("p"); p.textContent = line.text; return p; }));
+    const q = $("quote"), text = batch.length ? batch[batch.length - 1].text : "";
+    q.textContent = text; q.dataset.size = text.length > 110 ? "l" : text.length > 58 ? "m" : "s";
+    q.classList.remove("in"); void q.offsetWidth; q.classList.add("in");
+  }
+  function showReply() { $("reply").hidden = micOn && $("sheet").hidden; }
 
   for (const k of "123456789*0#") {
     const b = document.createElement("button"); b.type = "button"; b.textContent = k; b.setAttribute("aria-label", "Key " + k);
     b.addEventListener("click", () => pressKey(k)); $("keys").append(b);
   }
 
-  // Speak one line; resolves with whether it finished or was cut off.
+  // Speak one line; resolves with whether it finished or was cut off. Pausing stops the voice;
+  // resuming says the line again from its start, so a line is never reported as heard in part.
   function speakLine(line) {
     return new Promise((resolve) => {
       const startedMs = now();
-      const finish = (completed) => { playing = null; resolve({ lineId: line.id, startedMs, endedMs: Math.max(now(), startedMs + 1), completed }); };
-      say("Interviewer", line.text);
-      if (mode !== "voice") { playing = { stop: () => finish(false) }; const t = setTimeout(() => finish(true), 120); playing.stop = () => { clearTimeout(t); finish(false); }; return; }
-      const u = new SpeechSynthesisUtterance(line.text);
-      let cut = false;
-      u.onend = () => finish(!cut); u.onerror = () => finish(!cut);
-      playing = { stop: () => { cut = true; speechSynthesis.cancel(); } };
-      speechSynthesis.speak(u);
+      let done = false, timer = null, current = null;
+      const finish = (completed) => { if (done) return; done = true; clearTimeout(timer); current = null; playing = null; resolve({ lineId: line.id, startedMs, endedMs: Math.max(now(), startedMs + 1), completed }); };
+      const begin = () => {
+        if (paused || done) return;
+        if (!aloud) { timer = setTimeout(() => finish(true), 260); return; }
+        const u = new SpeechSynthesisUtterance(line.text); current = u;
+        u.onend = u.onerror = () => { if (current === u) finish(true); };
+        speechSynthesis.speak(u);
+      };
+      const hush = () => { clearTimeout(timer); current = null; if (aloud) speechSynthesis.cancel(); };
+      playing = { stop: () => { hush(); finish(false); }, pause: hush, resume: begin };
+      batch.push(line); render(); say("Agent", line.text);
+      begin();
     });
   }
 
   async function onSpeak(lines) {
-    status("The interviewer is speaking…"); $("interrupt").hidden = false;
+    batch = []; setPhase("speaking");
     const played = [];
     for (const line of lines) {
-      if (pendingTurn) break;
+      if (pendingTurn || over) break;
       const p = await speakLine(line); played.push(p);
       if (!p.completed) break;
     }
-    $("interrupt").hidden = true;
-    ws.send(JSON.stringify({ type: "played", played }));
+    send({ type: "played", played });
   }
 
+  function stopRecognizer() { const r = recognizer; recognizer = null; if (r) { try { r.abort(); } catch {} } }
   function sendTurn(turn) {
     if (listening) { clearTimeout(listening.timer); listening = null; }
-    if (recognizer) { try { recognizer.abort(); } catch {} recognizer = null; }
-    ws.send(JSON.stringify({ type: "turn", ...turn }));
-    status("");
+    stopRecognizer();
+    send({ type: "turn", ...turn });
+    setPhase("thinking");
   }
-
   function giveTurn(turn) {
-    if (turn.kind === "speech") say("You", turn.text); else if (turn.kind === "keys") say("You", "[keypad " + turn.digits + "]");
+    if (!ws || over) return;
+    if (paused) setPaused(false);
+    notice("");
+    if (turn.kind === "speech") { say("You", turn.text); heard(turn.text, false); }
+    else if (turn.kind === "keys") { say("You", "[keypad " + turn.digits + "]"); heard("keypad " + turn.digits, false); }
     if (listening) sendTurn(turn);
     else { pendingTurn = turn; if (playing) playing.stop(); }
   }
 
   let keyBuffer = "", keyTimer = null, keyStart = 0;
   function pressKey(k) {
-    if (!ws) return;
+    if (!ws || over) return;
     if (!keyBuffer) keyStart = now();
     keyBuffer += k; clearTimeout(keyTimer);
     const flush = () => { const digits = keyBuffer; keyBuffer = ""; giveTurn({ kind: "keys", digits, startedMs: keyStart, endedMs: now() }); };
     if (k === "#" || k === "*") flush(); else keyTimer = setTimeout(flush, 1500);
   }
 
+  const silence = () => sendTurn({ kind: "silence", startedMs: now(), endedMs: now() });
   function onListen(waitMs) {
-    if (pendingTurn) { const t = pendingTurn; pendingTurn = null; ws.send(JSON.stringify({ type: "turn", ...t })); return; }
-    listening = { timer: setTimeout(() => sendTurn({ kind: "silence", startedMs: now(), endedMs: now() }), waitMs + (mode === "voice" ? 0 : 60000)) };
-    status(mode === "voice" && Recognition ? "Your turn: speak now, or type." : "Your turn: type your reply.");
-    $("typed").focus();
-    if (mode !== "voice" || !Recognition) return;
+    if (over) return;
+    if (pendingTurn) { const t = pendingTurn; pendingTurn = null; send({ type: "turn", ...t }); setPhase("thinking"); return; }
+    listenWait = waitMs; $("you").hidden = true;
+    startListening();
+  }
+  // Wait for a reply: by microphone when it is on, otherwise typed (with a longer wait, since typing is slower).
+  function startListening() {
+    const byVoice = micOn && !!Recognition;
+    listening = { timer: paused ? null : setTimeout(silence, listenWait + (byVoice ? 0 : 60000)) };
+    setPhase(byVoice ? "listening" : "typing");
+    showReply();
+    if (paused) return;
+    if (!byVoice) { $("typed").focus({ preventScroll: true }); return; }
     const r = new Recognition(); recognizer = r;
     r.lang = "en-US"; r.interimResults = true; r.maxAlternatives = 1;
     let startedMs = null;
-    r.onspeechstart = () => { startedMs = now(); if (listening) { clearTimeout(listening.timer); listening.timer = setTimeout(() => sendTurn({ kind: "silence", startedMs: now(), endedMs: now() }), 20000); } };
+    r.onspeechstart = () => { if (recognizer !== r) return; startedMs = now(); ribbon.voice(true); if (listening) { clearTimeout(listening.timer); listening.timer = setTimeout(silence, 20000); } };
+    r.onspeechend = () => { if (recognizer === r) ribbon.voice(false); };
     r.onresult = (e) => {
-      const res = e.results[e.results.length - 1];
+      if (recognizer !== r) return;
+      const res = e.results[e.results.length - 1], text = res[0].transcript.trim();
       if (startedMs === null) startedMs = now();
-      if (res.isFinal && res[0].transcript.trim()) { recognizer = null; giveTurn({ kind: "speech", text: res[0].transcript.trim(), startedMs, endedMs: now() }); }
-      else status("Hearing: " + res[0].transcript);
+      if (res.isFinal && text) { recognizer = null; giveTurn({ kind: "speech", text, startedMs, endedMs: now() }); }
+      else if (text) heard(text, true);
     };
-    r.onerror = (e) => { if (e.error === "not-allowed" || e.error === "service-not-allowed") status("The microphone is blocked. You can type your replies instead.", true); };
+    r.onerror = (e) => {
+      if (recognizer !== r || (e.error !== "not-allowed" && e.error !== "service-not-allowed" && e.error !== "audio-capture")) return;
+      setMic(false); notice("The microphone is not available. You can type your replies instead.");
+    };
+    // The browser stops listening by itself after a few quiet seconds; keep going until the wait is over.
+    r.onend = () => { if (recognizer === r && listening && !paused) { try { r.start(); } catch {} } };
     try { r.start(); } catch {}
   }
+  function restartListening() { if (!listening) return; clearTimeout(listening.timer); stopRecognizer(); listening = null; startListening(); }
 
+  function setMic(on) {
+    micOn = on && !!Recognition;
+    $("mic").setAttribute("aria-pressed", String(micOn));
+    showReply();
+    if (!paused) restartListening();
+  }
+  function setPaused(p) {
+    if (p === paused || !ws || over || phase === "ended") return;
+    if (p) {
+      pausedAt = performance.now(); paused = true;
+      if (playing) playing.pause();
+      if (listening) { clearTimeout(listening.timer); stopRecognizer(); }
+    } else {
+      pausedTotal += performance.now() - pausedAt; paused = false;
+      if (playing) playing.resume(); else restartListening();
+    }
+    $("pause").setAttribute("aria-pressed", String(paused));
+    if (paused) document.body.dataset.paused = ""; else delete document.body.dataset.paused;
+    setPhase(phase);
+  }
+  function setSheet(open) {
+    $("sheet").hidden = !open; $("more").setAttribute("aria-expanded", String(open));
+    showReply();
+    if (open) $("typed").focus({ preventScroll: true });
+  }
+  // Hanging up ends the interview at once; the server still sends back how the answers so far were read.
+  function hangUp() {
+    if (!ws || over) return;
+    if (paused) setPaused(false);
+    over = true;
+    if (listening) { clearTimeout(listening.timer); listening = null; }
+    stopRecognizer(); clearTimeout(keyTimer);
+    send({ type: "hangup" });
+    if (playing) playing.stop();
+    setPhase("thinking");
+  }
+
+  function endCall(label) {
+    over = true; delete document.body.dataset.live; $("live").textContent = label;
+    clearInterval(tick); setPhase("ended"); setSheet(false);
+    for (const id of ["mic", "pause", "more", "hang"]) $(id).disabled = true;
+    $("reply").hidden = true;
+  }
   function onEnded(msg) {
-    $("call").querySelector("form").hidden = true; $("keys").hidden = true; $("hint").hidden = true; status("The interview has ended.");
+    if (aloud) speechSynthesis.cancel();
+    endCall("Session ended");
     const words = { complete: "The interview was completed.", breakoff: "The interview stopped part-way; the answers given were kept.", consent_declined: "You did not agree to take part, so no question was asked.", opt_out: "You asked to be removed, so the call ended at once and the number would never be called again.", callback: "You asked to be called another time." };
     $("outcome").textContent = (words[msg.outcome] || "") + " Answers recorded: " + msg.answered + ". Flagged for a person to check: " + msg.review.length + ".";
+    const labels = ["Question", "You said", "Read as", "Decided by", "Decision"];
     for (const row of msg.trail) {
       const tr = document.createElement("tr");
-      for (const cell of [row.question, row.said, row.readAs, row.by, row.decision]) { const td = document.createElement("td"); td.textContent = cell; tr.append(td); }
+      [row.question, row.said, row.readAs, row.by, row.decision].forEach((cell, i) => { const td = document.createElement("td"); td.dataset.label = labels[i]; td.textContent = cell; tr.append(td); });
       $("trail").append(tr);
     }
-    $("result").hidden = false; $("result").scrollIntoView();
+    $("trailTable").hidden = msg.trail.length === 0;
+    $("call").hidden = true; $("result").hidden = false;
+    $("resultTitle").focus({ preventScroll: true }); $("result").scrollIntoView({ block: "nearest" });
   }
 
   $("reply").addEventListener("submit", (e) => {
     e.preventDefault();
-    const text = $("typed").value.trim(); if (!text || !ws) return;
+    const text = $("typed").value.trim(); if (!text || !ws || over) return;
     $("typed").value = "";
     giveTurn({ kind: "speech", text, startedMs: now(), endedMs: now() });
   });
-  $("interrupt").addEventListener("click", () => { if (playing) playing.stop(); });
+  $("mic").addEventListener("click", () => setMic(!micOn));
+  $("pause").addEventListener("click", () => setPaused(!paused));
+  $("more").addEventListener("click", () => setSheet($("sheet").hidden));
+  $("hang").addEventListener("click", hangUp);
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("sheet").hidden) { setSheet(false); $("more").focus(); } });
 
+  let tick = null;
   $("start").addEventListener("click", () => {
-    mode = document.querySelector('input[name="mode"]:checked').value;
+    const mode = document.querySelector('input[name="mode"]:checked').value;
+    aloud = mode === "voice" && canSpeak; micOn = mode === "voice" && !!Recognition;
     $("gate").hidden = true; $("call").hidden = false; t0 = performance.now();
-    if (mode === "voice") speechSynthesis.cancel();
+    $("live").textContent = "Live session"; document.body.dataset.live = "";
+    $("mic").setAttribute("aria-pressed", String(micOn)); $("mic").disabled = !Recognition;
+    if (!Recognition) $("mic").title = "This browser cannot recognise speech";
+    // With a voice reading the lines aloud, a screen reader should not read them a second time.
+    $("said").setAttribute("aria-live", aloud ? "off" : "polite");
+    showReply(); setPhase("thinking");
+    tick = setInterval(() => { const s = Math.floor(now() / 1000); $("timer").textContent = String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0"); }, 250);
+    if (aloud) speechSynthesis.cancel();
+    let refused = false;
     ws = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/demo/ws");
     ws.onmessage = (ev) => {
       const msg = JSON.parse(ev.data);
       if (msg.type === "speak") onSpeak(msg.lines);
       else if (msg.type === "listen") onListen(msg.waitMs);
       else if (msg.type === "ended") onEnded(msg);
-      else if (msg.type === "refused") status(msg.reason, true);
+      else if (msg.type === "refused") { refused = true; notice(msg.reason); }
     };
-    ws.onclose = () => { if ($("result").hidden && !$("status").textContent.startsWith("Too many")) status("The connection closed.", true); };
+    ws.onclose = () => {
+      if (!$("result").hidden) return;
+      if (playing) playing.stop();
+      if (listening) { clearTimeout(listening.timer); listening = null; }
+      stopRecognizer();
+      endCall("Disconnected"); if (!refused) notice("The connection closed."); $("again").hidden = false;
+    };
   });
 })();
 </script>
