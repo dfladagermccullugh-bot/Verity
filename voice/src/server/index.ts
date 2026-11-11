@@ -98,7 +98,7 @@ if (!dialing) {
   // Render every line before the first call, so no respondent waits on the voice vendor.
   const rendered = await speech.prerender(buildSpeechTable(buildScript(campaign.instrument), buildProtocol(campaign.wording)));
   console.log(`Rendered ${rendered.lines} lines (${rendered.seconds} s of audio) with ${voice.id}.`);
-  console.log(`Calling for campaign "${campaign.name}". May dial: ${allow.kind === "campaign" ? "everyone in the campaign with consent on file" : allow.numbers.join(", ")}.`);
+  console.log(`Calling for campaign "${campaign.name}". May dial: ${allow.kind === "campaign" ? "everyone in the campaign with consent on file" : allow.numbers.map((n) => `the number ending ${n.slice(-4)}`).join(", ")}.`);
   const controller = new AbortController();
   process.on("SIGTERM", () => controller.abort());
   process.on("SIGINT", () => controller.abort());

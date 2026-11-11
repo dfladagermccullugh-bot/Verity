@@ -196,6 +196,9 @@ export class TelnyxCallSession extends CallSession {
   }
 
   handleWebhook(eventType: string, payload: Record<string, unknown>): void {
+    // One line per carrier event, so a call's progress can be read from the server log. No phone numbers.
+    const detail = eventType === "call.machine.detection.ended" ? ` result=${String(payload.result)}` : eventType === "call.hangup" ? ` cause=${String(payload.hangup_cause ?? "?")} source=${String(payload.hangup_source ?? "?")}` : "";
+    this.carrier.log(`[telnyx ${this.token.slice(0, 6)}] ${eventType}${detail}`);
     switch (eventType) {
       case "call.answered":
         // Webhooks can be delivered twice.

@@ -207,7 +207,8 @@ jobs:
       - uses: superfly/flyctl-actions/setup-flyctl@master
       - name: The server's recent log
         run: |
-          timeout 25 flyctl logs --app "$APP" --no-tail | tail -n 200 || true
+          # Phone numbers are shown by their last four digits only.
+          (timeout 25 flyctl logs --app "$APP" --no-tail || true) | tail -n 200 | sed -E 's/\+?1?[0-9]{6}([0-9]{4})\b/…\1/g'
           echo "----- health -----"
           curl -sS -m 15 "https://$APP.fly.dev/health" || true
 
@@ -294,6 +295,6 @@ jobs:
           flyctl status --app "$APP" || true
           flyctl checks list --app "$APP" || true
           echo "----- server log -----"
-          timeout 25 flyctl logs --app "$APP" --no-tail | tail -n 80 || true
+          (timeout 25 flyctl logs --app "$APP" --no-tail || true) | tail -n 80 | sed -E 's/\+?1?[0-9]{6}([0-9]{4})\b/…\1/g'
           echo "----- health -----"
           curl -sS -m 15 -i "https://$APP.fly.dev/health" || true
