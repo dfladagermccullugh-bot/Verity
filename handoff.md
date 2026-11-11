@@ -68,15 +68,16 @@ thing" later, and it need not be worked on now (they did not report whether it m
 the sound; do not build on it). Order they gave: hook up the models, then Qualtrics, then
 Telnyx.
 
-**Waiting on the operator (asked 2026-11-11):** add the repository secret
-`ANTHROPIC_API_KEY` (checked: it is not set). When done: run voice-deploy with task
-`measure-model` on this branch (scores the classifier live, `claude-haiku-5-5` by default;
-never run live before), fix what it finds, then task `deploy` (the deploy job now hands the
-key to the server) and confirm the log reads "Answer reading: claude-haiku-5-5/…".
+**The language model is live (2026-11-11).** The operator added `ANTHROPIC_API_KEY`. First
+live measurement (task `measure-model`, `claude-haiku-5-5/prompt-v1`, 298 hand-written
+replies): 96.3% acceptable; model-decided 167, 93.4% right; 0 wrong answers recorded without
+a probe; 20 right answers probed anyway. All 11 misses were on the cautious side: plain
+answers called unclear ("monthly", "once every two weeks", "around 40", self-corrections
+like "five, no, six"), so the caller is re-asked. Worth a prompt revision later (bump
+`CLASSIFIER_PROMPT_VERSION`, re-measure); not blocking. The demo server now has the key.
 
 **Next, in this order (one per turn)**
 
-- Language model live (above).
 - Cartesia key + voice id (`what-needs-you.md` §G) so the voices can be compared by
   listening; other vendors the operator has named (Fish Audio) have no adapter yet. They
   also named OpenRouter and Hugging Face keys; nothing uses them. Ask before building.
