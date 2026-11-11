@@ -8,7 +8,8 @@ import fastifyWebsocket from "@fastify/websocket";
 import Fastify, { type FastifyInstance } from "fastify";
 import type { Instrument } from "../instrument/types.js";
 import type { ModelClassifier } from "../interviewer/classify.js";
-import { Interviewer, type AuditEvent } from "../interviewer/interviewer.js";
+import { Interviewer } from "../interviewer/interviewer.js";
+import { trail } from "../report/trail.js";
 import { buildProtocol, buildSpeechTable, type CampaignWording } from "../interviewer/protocol.js";
 import { buildScript } from "../script/script.js";
 import { registerTelnyxRoutes } from "../telephony/telnyx-routes.js";
@@ -30,23 +31,6 @@ export interface AppOptions {
 }
 
 const PAGE = readFileSync(new URL("./demo.html", import.meta.url), "utf8");
-
-/** A readable account of how each answer was reached, for the page to show after the call. */
-export function trail(instrument: Instrument, log: AuditEvent[]): { question: string; said: string; readAs: string; by: string; confidence: number; decision: string }[] {
-  const out = [];
-  for (let i = 0; i < log.length; i++) {
-    const e = log[i]!;
-    if (e.type !== "classified" || e.expecting !== "answer") continue;
-    const heard = log.slice(0, i).reverse().find((x) => x.type === "heard");
-    const decision = log.slice(i + 1).find((x) => x.type === "decision");
-    const item = instrument.items.find((it) => it.id === e.slot?.split("#")[0]);
-    const row = e.slot?.includes("#") ? item?.rows?.find((r) => r.code === e.slot!.split("#")[1])?.label : undefined;
-    const a = e.classification.answer;
-    const readAs = e.classification.intent !== "answer" || !a ? e.classification.intent.replace("_", " ") : a.kind === "choice" ? (item?.choices?.find((c) => c.code === a.code)?.label ?? a.code) : a.kind === "number" ? String(a.value) : a.kind === "text" ? "their own words" : a.reason.replace("_", " ");
-    out.push({ question: row ?? item?.text ?? e.slot ?? "", said: heard?.type === "heard" ? heard.text : "", readAs, by: e.classification.by, confidence: e.classification.confidence, decision: decision?.type === "decision" ? decision.detail : "" });
-  }
-  return out;
-}
 
 export async function buildApp(opts: AppOptions): Promise<FastifyInstance> {
   const app = Fastify({ logger: false, trustProxy: true });

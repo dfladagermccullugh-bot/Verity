@@ -315,6 +315,46 @@ export class Store {
     return records;
   }
 
+  /**
+   * Retention: remove respondents' own words from calls that ended before the cutoff. What was
+   * asked, how each reply was coded and all timings stay; transcripts, the evidence quoted from
+   * them and open-ended answers are replaced by a marker. Coded answers are untouched. Run it
+   * only after the responses have been imported into the survey platform, which keeps the record.
+   */
+  async removeOldWords(campaignId: string, cutoff: Date, now: Date): Promise<{ cases: number; events: number }> {
+    const marker = "[removed after the retention period]";
+    return this.sql.tx(async (tx) => {
+      const due = await tx.query<{ id: string; interview: unknown }>(
+        `select c.id, c.interview from cases c where c.campaign_id = $1 and c.status = 'final' and c.words_removed_at is null
+           and not exists (select 1 from attempts a where a.case_id = c.id and (a.ended_at is null or a.ended_at >= $2))
+           and exists (select 1 from attempts a where a.case_id = c.id) for update`,
+        [campaignId, cutoff.toISOString()],
+      );
+      if (due.length === 0) return { cases: 0, events: 0 };
+      await tx.query("select set_config('verity.retention', 'on', true)");
+      let events = 0;
+      for (const c of due) {
+        const heard = await tx.query(
+          `update audit_events e set body = jsonb_set(e.body, '{text}', to_jsonb($2::text))
+             from attempts a where a.id = e.attempt_id and a.case_id = $1 and e.body->>'type' = 'heard' returning e.seq`,
+          [c.id, marker],
+        );
+        const classified = await tx.query(
+          `update audit_events e set body = jsonb_set(e.body, '{classification,evidence}', to_jsonb($2::text))
+             from attempts a where a.id = e.attempt_id and a.case_id = $1 and e.body->>'type' = 'classified' returning e.seq`,
+          [c.id, marker],
+        );
+        events += heard.length + classified.length;
+        // Open-ended answers are also the respondent's words.
+        const interview = asJson<InterviewState>(c.interview);
+        for (const [slot, a] of Object.entries(interview.answers)) if (a.kind === "text") interview.answers[slot] = { kind: "text", value: marker };
+        await tx.query("update cases set interview = $2::text::jsonb, words_removed_at = $3, updated_at = $3 where id = $1", [c.id, JSON.stringify(interview), now.toISOString()]);
+      }
+      await tx.query("select set_config('verity.retention', '', true)");
+      return { cases: due.length, events };
+    });
+  }
+
   async doNotCallList(): Promise<{ phone: string; reason: string; source: string; addedAt: Date }[]> {
     return (await this.sql.query("select * from do_not_call order by added_at, phone")).map((r: Row) => ({ phone: r.phone, reason: r.reason, source: r.source, addedAt: asDate(r.added_at)! }));
   }

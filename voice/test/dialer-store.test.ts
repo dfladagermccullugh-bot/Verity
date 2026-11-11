@@ -34,7 +34,7 @@ describe("migrations", () => {
   it("apply once and are safe to run again", async () => {
     const sql = await testDb();
     expect(await migrate(sql)).toEqual([]);
-    expect((await sql.query("select name from schema_migrations")).length).toBe(2);
+    expect((await sql.query("select name from schema_migrations")).length).toBe(3);
   });
 
   it("keeps function bodies whole when splitting statements", () => {
@@ -136,6 +136,39 @@ describe("the database enforces the rules by itself", () => {
     await expect(sql.query("delete from audit_events")).rejects.toThrow(/append-only/);
     await expect(sql.query("delete from do_not_call")).rejects.toThrow(/append-only/);
     expect((await store.doNotCallList()).map((d) => d.phone)).toEqual([phone(1)]);
+  });
+});
+
+describe("retention", () => {
+  it("removes respondents' words from old calls and nothing else", async () => {
+    const { sql, store, campaign } = await setup([person(1), person(2)]);
+    let clock = NOON_ET.getTime();
+    await runCampaign(store, campaign.id, { transport: "simulator", connect: talkTo(cooperative(SPOKEN_A)), now: () => new Date((clock += 60_000)), maxAttempts: 1, concurrency: 1 });
+    const later = new Date(NOON_ET.getTime() + 40 * 86_400_000);
+    await runCampaign(store, campaign.id, { transport: "simulator", connect: talkTo(cooperative(SPOKEN_A)), now: () => later });
+    const cutoff = new Date(NOON_ET.getTime() + 30 * 86_400_000);
+    expect(await store.removeOldWords(campaign.id, cutoff, later)).toMatchObject({ cases: 1 });
+    expect(await store.removeOldWords(campaign.id, cutoff, later)).toEqual({ cases: 0, events: 0 });
+
+    const [oldCase, newCase] = await store.listCases(campaign.id);
+    expect(oldCase!.interview.answers.QID8).toEqual({ kind: "text", value: "[removed after the retention period]" });
+    expect({ ...oldCase!.interview.answers, QID8: RESPONSE_A.QID8 }).toEqual(RESPONSE_A);
+    expect(newCase!.interview.answers).toEqual(RESPONSE_A);
+
+    const attempts = await store.listAttempts(campaign.id);
+    const oldLog = await store.auditFor(attempts.find((a) => a.caseId === oldCase!.id)!.id);
+    const newLog = await store.auditFor(attempts.find((a) => a.caseId === newCase!.id)!.id);
+    expect(oldLog.filter((e) => e.type === "heard").every((e) => e.text === "[removed after the retention period]")).toBe(true);
+    expect(oldLog.filter((e) => e.type === "classified").every((e) => e.classification.evidence === "[removed after the retention period]")).toBe(true);
+    // Everything that is not the respondent's words is unchanged: same events, same wording asked, same codes.
+    const strip = (log: typeof oldLog) => log.map((e) => (e.type === "heard" ? { ...e, text: "" } : e.type === "classified" ? { ...e, classification: { ...e.classification, evidence: "" } } : e));
+    expect(strip(oldLog)).toEqual(strip(newLog));
+    expect(newLog.some((e) => e.type === "heard" && e.text === "Longer weekend hours")).toBe(true);
+
+    // The log is still closed to everything else, including a caller who sets the flag but changes more than words.
+    await expect(sql.query("update audit_events set body = '{}'")).rejects.toThrow(/append-only/);
+    await expect(sql.tx(async (tx) => { await tx.query("select set_config('verity.retention', 'on', true)"); await tx.query("delete from audit_events"); })).rejects.toThrow(/append-only/);
+    await expect(sql.tx(async (tx) => { await tx.query("select set_config('verity.retention', 'on', true)"); await tx.query(`update audit_events set body = '{"type":"say"}' where body->>'type' = 'heard'`); })).rejects.toThrow(/append-only/);
   });
 });
 
