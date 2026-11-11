@@ -100,18 +100,9 @@ export const DISPOSITIONS = {
 export type DispositionCode = keyof typeof DISPOSITIONS;
 
 /** How one call attempt ended, as the product records it. */
-export type AttemptOutcome =
-  | "complete"
-  | "breakoff"
-  | "consent_declined"
-  | "opt_out"
-  | "callback"
-  | "no_answer"
-  | "busy"
-  | "answering_machine"
-  | "invalid_number"
-  | "carrier_error"
-  | "not_dialed";
+// One definition for the whole product: the dialer decides these, this module interprets them.
+export type { AttemptOutcome } from "../dialer/rules.js";
+import type { AttemptOutcome } from "../dialer/rules.js";
 
 export interface Attempt {
   outcome: AttemptOutcome;
