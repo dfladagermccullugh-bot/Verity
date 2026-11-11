@@ -75,6 +75,12 @@ describe("Deepgram listener", () => {
     expect(request!.headers.authorization).toBe("Token test-key");
   });
 
+  it("for a web page's microphone, asks for 16-bit sound and that the audio is not kept for training", async () => {
+    stt = deepgramStt({ apiKey: "test-key", url, optOut: true })({ encoding: "linear16", sampleRate: 16000 });
+    await connected;
+    expect(Object.fromEntries(new URL(request!.url!, "ws://x").searchParams)).toMatchObject({ encoding: "linear16", sample_rate: "16000", mip_opt_out: "true" });
+  });
+
   it("uses the model it is configured with", async () => {
     open("nova-2-phonecall");
     await connected;

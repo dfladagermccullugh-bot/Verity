@@ -7,6 +7,13 @@
  *   PORT, HOST            where to listen (default 3000, 0.0.0.0)
  *   DEMO_QSF              survey file the demo runs (default: the Library test)
  *   ANTHROPIC_API_KEY     read natural replies with Claude (demo and calls)
+ *   DEEPGRAM_API_KEY      the demo hears through Deepgram, and speaks with Deepgram's voice
+ *   CARTESIA_API_KEY + CARTESIA_VOICE_ID   the demo speaks with Cartesia's voice instead
+ *                         (TTS_VENDOR=deepgram keeps Deepgram's voice when both are set)
+ *   DEMO_BARGE_IN=1       let the visitor's voice stop a line that is playing (try with headphones first)
+ *
+ * Which voice the demo uses when both are set is a placeholder, not a judgement: the voice is to
+ * be chosen by the comparison (`npm run bakeoff`) and by listening.
  *
  * Real phone calls need ALL of the following; if any is missing the server places no calls:
  *
@@ -47,6 +54,11 @@ if (!read.instrument) {
 }
 const options: AppOptions = { demoInstrument: read.instrument };
 if (env.ANTHROPIC_API_KEY) options.model = claudeClassifier();
+if (env.CARTESIA_API_KEY && env.CARTESIA_VOICE_ID && env.TTS_VENDOR !== "deepgram") options.demoVoice = cartesiaVoice({ apiKey: env.CARTESIA_API_KEY, voiceId: env.CARTESIA_VOICE_ID, output: "page" });
+else if (env.DEEPGRAM_API_KEY) options.demoVoice = deepgramVoice({ apiKey: env.DEEPGRAM_API_KEY, output: "page" });
+if (env.DEEPGRAM_API_KEY) options.demoStt = { id: "deepgram/nova-3", open: deepgramStt({ apiKey: env.DEEPGRAM_API_KEY, optOut: true }) };
+options.demoBargeIn = env.DEMO_BARGE_IN === "1";
+options.warmDemoVoice = true;
 
 const NEEDED = ["DATABASE_URL", "DIAL_CAMPAIGN_ID", "DIAL_ALLOWLIST", "PUBLIC_BASE_URL", "TELNYX_API_KEY", "TELNYX_CONNECTION_ID", "TELNYX_FROM_NUMBER", "TELNYX_PUBLIC_KEY", "DEEPGRAM_API_KEY"];
 const missing = NEEDED.filter((k) => !env[k]);
@@ -71,7 +83,7 @@ if (dialing) {
 const app = await buildApp(options);
 const port = Number(env.PORT ?? 3000);
 await app.listen({ port, host: env.HOST ?? "0.0.0.0" });
-console.log(`Verity Voice on port ${port}. Answer reading: ${options.model ? options.model.id : "rules only"}.`);
+console.log(`Verity Voice on port ${port}. Answer reading: ${options.model ? options.model.id : "rules only"}. Demo voice: ${options.demoVoice?.id ?? "the browser's own"}. Demo hearing: ${options.demoStt?.id ?? "the browser's own"}.`);
 
 if (!dialing) {
   console.log(`Phone calls are off (${missing.length > 0 ? `not set: ${missing.join(", ")}` : "no voice configured"}). Serving the browser demo only.`);

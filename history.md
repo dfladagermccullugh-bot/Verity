@@ -5,6 +5,38 @@ completed to-dos, they land here so the handoff stays lean. Newest first.
 
 ---
 
+## 2026-11-11 — Verity Voice: server voice and hearing for the demo; ribbon follows sound
+
+Built without any vendor key, so everything here has run against stand-ins only.
+
+- **Voice:** `cartesiaVoice` / `deepgramVoice` take `output: "page"` (a 24 kHz WAV file; the
+  vendors' parameters were checked against their current API references). `GET
+  /demo/audio/<line id>` serves the recording of a script line and of nothing else (the key
+  cannot be used to say arbitrary text); each line is rendered once (`SpeechStore` now shares
+  a rendering between simultaneous requests) and all are rendered in the background at start.
+  A failed recording falls back, for that visitor, to the browser's voice or to text.
+- **Hearing:** the page sends microphone sound over the demo WebSocket; `BrowserChannel` feeds
+  a recogniser (`SttOptions.encoding` gained `linear16`; Deepgram is asked not to keep demo
+  audio for training, `mip_opt_out`), shows interim words, and ends the turn after 0.7 s of
+  quiet or the recogniser's end-of-utterance. Reply times stay on the page's clock (each piece
+  of sound is stamped with it). Half-duplex by default: no sound is sent while a line plays
+  and anything heard earlier is dropped (`bargeIn` switches that off). 8 minutes of sound per
+  interview at most. A recogniser failure tells the page, which falls back to typing; it does
+  not fall back to the browser's recogniser, because the page has told the visitor where
+  their audio goes.
+- **Disclosure:** the gate names the service that will hear the microphone when the server
+  does the hearing.
+- **Ribbon:** with the real sound (server voice through an analyser; the microphone), each
+  side swells and brightens with loudness and six bands of pitch drive waves along it, long
+  to fine. With browser speech (no access to the sound) it still stirs by turn.
+- **Deploy job:** hands `DEEPGRAM_API_KEY`, `CARTESIA_API_KEY`, `CARTESIA_VOICE_ID` from
+  repository secrets to Fly.io when set; new task `compare-voices` runs `npm run bakeoff`
+  live (now also checks the page format and the streaming recogniser) and keeps the audio.
+- **Stand-ins:** `humVoice`, `scriptedStt`, `scripts/demo-standin-server.ts`,
+  `scripts/demo-server-voice-check.cjs`.
+- **Checked:** typecheck; 355 tests; the three browser checks. Not checked: any real vendor,
+  real microphone, echo through loudspeakers, phones.
+
 ## 2026-11-11 — Verity Voice: browser demo rebuilt to the operator's reference
 
 The first demo page (a card with chat bubbles) was replaced after the operator called it

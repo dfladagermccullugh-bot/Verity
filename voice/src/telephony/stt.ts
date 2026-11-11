@@ -28,9 +28,12 @@ export interface SttStream extends EventEmitter<SttEventMap> {
   close(): void;
 }
 
-/** The audio a caller will write. Phone audio is 8 kHz mu-law; stated so an adapter never has to assume it. */
+/**
+ * The audio a caller will write, stated so an adapter never has to assume it. Phone audio is
+ * 8 kHz mu-law; a web page's microphone is sent as 16-bit samples ("linear16"), usually at 16 kHz.
+ */
 export interface SttOptions {
-  encoding: "mulaw";
+  encoding: "mulaw" | "linear16";
   sampleRate: number;
 }
 
@@ -42,6 +45,8 @@ export interface DeepgramConfig {
   model?: string;
   /** The listen endpoint. Only tests override it. */
   url?: string;
+  /** Ask Deepgram not to keep the audio to train its models (its "mip_opt_out" setting). */
+  optOut?: boolean;
 }
 
 const DEEPGRAM_LISTEN_URL = "wss://api.deepgram.com/v1/listen";
@@ -87,6 +92,7 @@ export class DeepgramStt extends EventEmitter<SttEventMap> implements SttStream 
       utterance_end_ms: "1200",
       vad_events: "true",
     });
+    if (cfg.optOut) params.set("mip_opt_out", "true");
     this.ws = new WebSocket(`${cfg.url ?? DEEPGRAM_LISTEN_URL}?${params}`, { headers: { Authorization: `Token ${cfg.apiKey}` } });
     this.ws.on("open", () => {
       this.open = true;
@@ -155,4 +161,41 @@ export class DeepgramStt extends EventEmitter<SttEventMap> implements SttStream 
 /** An `SttFactory` that opens one Deepgram stream per call. */
 export function deepgramStt(cfg: DeepgramConfig): SttFactory {
   return (opts) => new DeepgramStt(cfg, opts);
+}
+
+/**
+ * A stand-in recogniser for tests and for trying the demo page with no vendor account. It
+ * understands nothing: each time it has been sent `afterMs` of sound it "hears" the next reply
+ * from the list, whatever the sound was.
+ */
+export function scriptedStt(replies: string[], afterMs = 1200): SttFactory {
+  return (opts) => {
+    const stream = new EventEmitter<SttEventMap>() as EventEmitter<SttEventMap> & SttStream;
+    const left = [...replies];
+    const msPerByte = 1000 / (opts.sampleRate * (opts.encoding === "linear16" ? 2 : 1));
+    let ms = 0;
+    let since = 0;
+    let closed = false;
+    stream.write = (audio: Buffer) => {
+      if (closed) return;
+      ms += audio.length * msPerByte;
+      since += audio.length * msPerByte;
+      if (since < afterMs || left.length === 0) return;
+      since = 0;
+      const text = left.shift()!;
+      const startMs = Math.max(0, ms - afterMs + 200);
+      const endMs = ms - 100;
+      queueMicrotask(() => {
+        if (closed) return;
+        stream.emit("speechStart", startMs);
+        stream.emit("transcript", { text: text.split(" ")[0]!, isFinal: false, startMs, endMs: startMs + 200 });
+        stream.emit("transcript", { text, isFinal: true, startMs, endMs });
+        stream.emit("utteranceEnd", endMs);
+      });
+    };
+    stream.close = () => {
+      closed = true;
+    };
+    return stream;
+  };
 }

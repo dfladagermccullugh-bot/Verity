@@ -46,15 +46,30 @@ Secrets go into GitHub or Fly.io secret settings, never into chat.
    ("Space to speak. / A conversation, taking shape."); a fourth pill button (keyboard)
    opens the keypad, typed reply and transcript; dark mode follows the device.
 
+4. Done (2026-11-11, second session), **built but never run against a real vendor**: the
+   demo can use the server's own voice and hearing. With `DEEPGRAM_API_KEY` set the page plays
+   server-rendered recordings (`/demo/audio/<line id>`, 24 kHz WAV) and sends its microphone
+   over the same connection (binary: 4-byte page clock + 16 kHz 16-bit samples); the server
+   runs the recogniser and decides the turns (`browser-channel.ts`). The ribbon follows the
+   real sound (six pitch bands per side; `ribbon.follow`). Without keys nothing changes: the
+   browser's own speech is used. Detail in history.md.
+
+**Waiting on the operator (asked 2026-11-11):** create a Deepgram account and add the
+repository secret `DEEPGRAM_API_KEY` (steps: `voice/docs/what-needs-you.md` §D). When they
+say it is done: run voice-deploy (task `deploy`) on this branch, read the job's server log for
+"Demo voice: deepgram/…", then run it with task `compare-voices` and read its output (first
+live use of the adapters; fix what it finds). Then ask them to try the page.
+
 **Next, in this order (one per turn)**
 
-- Real voices in the browser demo. Needs new server work: serve vendor-rendered audio
-  for each line (the `SpeechStore` exists; phone format is 8 kHz, the browser wants better)
-  and stream the microphone to the server for recognition. Keys as Fly.io secrets, set in
-  the Fly.io dashboard (app `verity-voice-demo` → Secrets). Adapters in `src/voice/tts.ts`
-  have never run against a live account. The ribbon already has a hook for sound level
-  (`ribbon.voice(on)`); with real audio, drive it from the actual level.
-- `ANTHROPIC_API_KEY` as a Fly.io secret, then `npm run eval -- --live` once to measure.
+- After Deepgram works: Cartesia key + voice id (§G) so the voices can be compared; the
+  operator chooses by listening. Other vendors "compared on merit" need new adapters.
+- Cutting in by voice (`DEMO_BARGE_IN=1`) is off: untested echo risk through loudspeakers.
+  Try it with the operator once the basic path works.
+- `ANTHROPIC_API_KEY` for the demo server (not yet passed by the deploy job, on purpose: it
+  makes a public page spend money per visitor; add it as its own step), then
+  `npm run eval -- --live` once to measure.
+- Ask the operator what else they do not agree with (they said "a lot"; unspecified).
 - Still open from before: rotate the legacy Neon password, the Qualtrics import check,
   first real phone call. See `voice/docs/what-needs-you.md`.
 
@@ -63,9 +78,15 @@ Secrets go into GitHub or Fly.io secret settings, never into chat.
 - `cd voice && PORT=3311 HOST=127.0.0.1 npx tsx src/server/index.ts`, then
   `node scripts/demo-check.cjs http://127.0.0.1:3311 <dir>` (read-and-type mode, three
   screen sizes, one dark; saves screenshots; follows `<body data-phase>`) and
-  `node scripts/demo-voice-check.cjs http://127.0.0.1:3311 <dir>` (speak-and-listen logic
-  with stand-ins for the browser's speech features). Look at the screenshots.
-- Real speech in a real browser has still only been tried by the operator, on the old page.
+  `node scripts/demo-voice-check.cjs http://127.0.0.1:3311 <dir>` (browser-speech logic
+  with stand-ins for the browser's speech features).
+- Server voice path: `PORT=3312 npx tsx scripts/demo-standin-server.ts` (a hum for a voice,
+  a scripted "recogniser"), then `node scripts/demo-server-voice-check.cjs
+  http://127.0.0.1:3312 <dir>` (headless Chromium with a fake microphone).
+- Look at the screenshots. Real speech in a real browser has only been tried by the
+  operator, on the old page.
+- A new workflow file cannot be started until it is on `main`; that is why the live vendor
+  check is a task inside `voice-deploy.yml` (which can be run from this branch).
 
 **Things learned the hard way this session**
 
@@ -90,7 +111,7 @@ AI voice survey interviewers on top of Qualtrics. Plan and phase status table:
 own Postgres schema). The web app described in the rest of this file is now the **legacy
 app**: unchanged at the root (its `tsconfig.json` excludes `voice/`), to be switched off later.
 
-- **State (2026-11-11):** all code that needs no account login is built; 343 tests
+- **State (2026-11-11):** all code that needs no account login is built; 355 tests
   (`cd voice && npm test`); database tests also pass on real Postgres 16
   (`TEST_DATABASE_URL=… npx vitest run test/dialer-store.test.ts`).
 - **Never run live:** Telnyx calls, Deepgram/Cartesia speech, the Claude classifier, a

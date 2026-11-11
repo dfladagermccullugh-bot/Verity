@@ -2,6 +2,14 @@
 #
 # Manual only: run it from the Actions tab. Needs the repository secret FLY_API_TOKEN.
 # The first run creates the Fly.io app; later runs update it.
+#
+# Voice keys are repository secrets too, and each deploy hands the server those that are set:
+#   DEEPGRAM_API_KEY                       the demo hears through Deepgram and speaks with its voice
+#   CARTESIA_API_KEY + CARTESIA_VOICE_ID   the demo speaks with Cartesia's voice instead
+# With none set, the demo uses the browser's built-in speech.
+#
+# The task "compare-voices" deploys nothing: it runs the voice comparison against the live
+# vendors (the first real use of those adapters) and keeps the audio to listen to.
 name: voice-deploy
 
 on:
@@ -11,6 +19,11 @@ on:
         description: "Fly.io app name (must be unique across Fly.io)"
         required: true
         default: "verity-voice-demo"
+      task:
+        description: "deploy the server, or compare-voices (live check of the voice vendors; deploys nothing)"
+        type: choice
+        options: [deploy, compare-voices]
+        default: deploy
 
 permissions:
   contents: read
@@ -20,7 +33,35 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  compare-voices:
+    if: inputs.task == 'compare-voices'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: voice
+    env:
+      DEEPGRAM_API_KEY: ${{ secrets.DEEPGRAM_API_KEY }}
+      CARTESIA_API_KEY: ${{ secrets.CARTESIA_API_KEY }}
+      CARTESIA_VOICE_ID: ${{ secrets.CARTESIA_VOICE_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - name: Render every line with each voice and hear it back
+        run: npm run bakeoff -- --out bakeoff
+      - name: Keep the audio to listen to
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: voice-comparison
+          path: voice/bakeoff
+          if-no-files-found: ignore
+
   deploy:
+    if: inputs.task != 'compare-voices'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     defaults:
@@ -43,6 +84,19 @@ jobs:
           else
             flyctl apps create "$APP" --org personal || flyctl apps create "$APP"
           fi
+      - name: Hand the voice keys to the server
+        # Staged: they take effect with the release below. A key that is not set is left alone.
+        env:
+          DEEPGRAM_API_KEY: ${{ secrets.DEEPGRAM_API_KEY }}
+          CARTESIA_API_KEY: ${{ secrets.CARTESIA_API_KEY }}
+          CARTESIA_VOICE_ID: ${{ secrets.CARTESIA_VOICE_ID }}
+        run: |
+          : > keys.env
+          for name in DEEPGRAM_API_KEY CARTESIA_API_KEY CARTESIA_VOICE_ID; do
+            if [ -n "${!name}" ]; then printf '%s=%s\n' "$name" "${!name}" >> keys.env; echo "$name: set, handing it to the server."; else echo "$name: not set in this repository's secrets."; fi
+          done
+          if [ -s keys.env ]; then flyctl secrets import --stage --app "$APP" < keys.env; fi
+          rm -f keys.env
       - name: Deploy
         run: flyctl deploy --app "$APP" --remote-only --ha=false --wait-timeout 180
       - name: Start the machine

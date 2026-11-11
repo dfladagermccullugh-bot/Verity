@@ -168,7 +168,7 @@
     <section id="gate" aria-labelledby="gateTitle">
       <h2 class="caps" id="gateTitle">Before you start</h2>
       <p class="lead">You will talk to an <strong>automated AI interviewer, not a person</strong>. It asks a short survey about public libraries, word for word, and then shows how it read each answer. It takes about three minutes. You can stop at any time.</p>
-      <p class="fine">If you use your voice, your browser turns your speech into text; in Chrome that means your audio is sent to Google. This demo stores nothing you say: when you close the page it is gone.</p>
+      <p class="fine"><span id="soundNote">If you use your voice, your browser turns your speech into text; in Chrome that means your audio is sent to Google.</span> This demo stores nothing you say: when you close the page it is gone.</p>
       <fieldset>
         <legend class="sr">How would you like to take part?</legend>
         <div class="modes">
@@ -241,9 +241,11 @@
 (() => {
   const $ = (id) => document.getElementById(id);
 
-  // The ribbon: a looped band drawn on a canvas. The left side (teal) stirs when the person is
-  // speaking, the right side (amber) when the interviewer is. It is decoration: every state it
-  // shows is also written in words on the page.
+  // The ribbon: a looped band drawn on a canvas. The left side (teal) is the person, the right
+  // side (amber) the interviewer. When the page has the actual sound (the server's voice, the
+  // microphone), each side moves with it: its loudness swells the band and brightens it, and each
+  // band of pitch, low to high, drives a wave along it, long to fine. Without the sound it stirs
+  // by whose turn it is. It is decoration: every state it shows is also written in words.
   const ribbon = (() => {
     const cv = $("ribbon"), g = cv.getContext("2d");
     const still = matchMedia("(prefers-reduced-motion: reduce)"), dark = matchMedia("(prefers-color-scheme: dark)");
@@ -257,7 +259,33 @@
     const MOODS = { gate: [0.3, 0.3, 0.55], speaking: [0.08, 1, 1], listening: [0.5, 0.08, 0.8], typing: [0.3, 0.1, 0.6], thinking: [0.25, 0.25, 0.9], paused: [0, 0, 0.05], ended: [0.15, 0.15, 0.4] };
     const now = { h: 0.3, a: 0.3, s: 0.55 }, to = { h: 0.3, a: 0.3, s: 0.55 };
     const ax = new Float32Array(MAX + 1), ay = new Float32Array(MAX + 1), bx = new Float32Array(MAX + 1), by = new Float32Array(MAX + 1), face = new Float32Array(MAX + 1), glint = new Float32Array(MAX + 1);
+    const vivid = new Float32Array(MAX + 1);
     let w = 0, h = 0, d = 1, time = 40, prev = 0, queued = false, n = MAX, cost = 0;
+    // Sound: six bands of pitch per side (0 to 1 each), and the loudest of them.
+    const EDGES = [90, 180, 360, 720, 1440, 2880, 5760], HARM = [3, 5, 8, 12, 17, 23], WEIGHT = [0.3, 0.26, 0.22, 0.18, 0.14, 0.1], RUN = [2, 3, 4.2, 5.5, 7, 9];
+    const taps = { h: null, a: null }, bands = { h: new Float32Array(6), a: new Float32Array(6) }, level = { h: 0, a: 0 };
+    let bins = null;
+
+    function hear() {
+      for (const side of ["h", "a"]) {
+        const tap = taps[side], b = bands[side];
+        let top = 0;
+        if (tap) { if (!bins || bins.length !== tap.frequencyBinCount) bins = new Uint8Array(tap.frequencyBinCount); tap.getByteFrequencyData(bins); }
+        const hz = tap ? tap.context.sampleRate / tap.fftSize : 1;
+        for (let k = 0; k < 6; k++) {
+          let v = 0;
+          if (tap) {
+            const lo = Math.max(1, Math.round(EDGES[k] / hz)), hi = Math.max(lo + 1, Math.round(EDGES[k + 1] / hz));
+            let sum = 0; for (let i = lo; i < hi && i < bins.length; i++) sum += bins[i];
+            v = Math.min(1, Math.max(0, (sum / (hi - lo) / 255 - 0.18) * 1.7));
+          }
+          // Quick to rise, slow to fall, like a level meter.
+          b[k] += (v - b[k]) * (v > b[k] ? 0.55 : 0.14);
+          if (b[k] > top) top = b[k];
+        }
+        level[side] = top;
+      }
+    }
 
     // One strip of a sheet between two fractions of its width (0 is one edge, 1 the other).
     function strip(i, from, upto) {
@@ -296,8 +324,13 @@
           const ux = ty * nz - tz * ny, uy = tz * nx - tx * nz, uz = tx * ny - ty * nx;
           const phi = (L.twist * t) / 2 + L.phase + time * L.drift, c = Math.cos(phi), s = Math.sin(phi);
           let wx = c * nx + s * ux, wy = c * ny + s * uy, wz = c * nz + s * uz;
-          const stir = now.h * Math.min(1, Math.max(0, 0.5 - x * 0.9)) + now.a * Math.min(1, Math.max(0, 0.5 + x * 0.9));
-          const half = L.width * (0.78 + 0.22 * Math.sin(2 * t + L.phase * 1.7 + time * 0.23)) * (1 + 0.2 * stir + 0.22 * stir * Math.sin(11 * t - time * 4.2 + L.phase));
+          const sh = Math.min(1, Math.max(0, 0.5 - x * 0.9)), sa = Math.min(1, Math.max(0, 0.5 + x * 0.9));
+          // With the real sound to follow, the stirring by turn is only a faint undertone.
+          const stir = (taps.h ? 0.3 : 1) * now.h * sh + (taps.a ? 0.3 : 1) * now.a * sa, swell = level.h * sh + level.a * sa;
+          let wave = 0;
+          if (swell > 0.004) for (let k = 0; k < 6; k++) wave += (bands.h[k] * sh + bands.a[k] * sa) * WEIGHT[k] * Math.sin(HARM[k] * t - time * RUN[k] + L.phase * (k + 1));
+          vivid[i] = 1 + 0.55 * swell;
+          const half = L.width * (0.78 + 0.22 * Math.sin(2 * t + L.phase * 1.7 + time * 0.23)) * Math.max(0.3, 1 + 0.2 * stir + 0.22 * stir * Math.sin(11 * t - time * 4.2 + L.phase) + 0.3 * swell + wave);
           // Turn the whole figure a little so its depth shows, then put it on the screen.
           let q = x * cyw + z * syw; z = -x * syw + z * cyw; x = q; q = y * ct - z * st; z = y * st + z * ct; y = q;
           q = wx * cyw + wz * syw; wz = -wx * syw + wz * cyw; wx = q; q = wy * ct - wz * st; wz = wy * st + wz * ct; wy = q;
@@ -310,7 +343,7 @@
         // The sheet itself: denser towards its two edges, like glass seen at an angle.
         g.fillStyle = body;
         for (let i = 0; i < n; i++) {
-          const a = L.alpha * (0.3 + 0.6 * (1 - (face[i] + face[i + 1]) / 2));
+          const a = Math.min(1, L.alpha * (0.3 + 0.6 * (1 - (face[i] + face[i + 1]) / 2)) * vivid[i]);
           g.globalAlpha = a; strip(i, 0, 1);
           g.globalAlpha = a * 0.8; strip(i, 0, 0.2); strip(i, 0.8, 1);
         }
@@ -333,7 +366,8 @@
       const dt = Math.min((ts - prev) / 1000 || 0, 0.05); prev = ts;
       const k = still.matches ? 1 : 1 - Math.exp(-dt * 3);
       now.h += (to.h - now.h) * k; now.a += (to.a - now.a) * k; now.s += (to.s - now.s) * k;
-      time += dt * now.s;
+      if (taps.h || taps.a) hear();
+      time += dt * (now.s + 0.9 * Math.max(level.h, level.a));
       // On a slow device, draw the ribbon with fewer pieces rather than drop frames.
       const began = performance.now(); draw(); cost += (performance.now() - began - cost) * 0.1;
       if (cost > 11 && n > 120) { n = Math.max(120, Math.round(n * 0.8)); cost = 0; }
@@ -352,16 +386,35 @@
       mood(name) { const m = MOODS[name] || MOODS.gate; to.h = m[0]; to.a = m[1]; to.s = m[2]; wake(); },
       // The person has started or stopped making sound.
       voice(on) { to.h = on ? 1 : MOODS.listening[0]; wake(); },
+      // Follow the actual sound of one side ("h" the person, "a" the interviewer) from an analyser.
+      follow(side, analyser) { taps[side] = analyser; wake(); },
     };
   })();
 
   const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  const canSpeak = "speechSynthesis" in window;
-  $("voiceNote").textContent = Recognition && canSpeak ? "Speaking needs a microphone. You can switch to typing at any time." : canSpeak ? "This browser cannot recognise speech: you will hear the questions and type your replies." : "This browser cannot speak aloud, so the demo is read-and-type here.";
-  if (!canSpeak) { document.querySelector('input[value="text"]').checked = true; document.querySelector('input[value="voice"]').disabled = true; }
+  const AudioCtx = window.AudioContext || window.webkitAudioContext;
+  const canRecord = !!(AudioCtx && navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+  // What this server offers: its own voice and its own hearing, or neither (then the browser's are used).
+  let info = { voice: null, hearing: null, bargeIn: false };
+  // Who speaks the lines and who turns speech into text: "server", "browser" or "none".
+  const speaker = () => (info.voice && AudioCtx ? "server" : "speechSynthesis" in window ? "browser" : "none");
+  const hearer = () => (info.hearing && canRecord ? "server" : Recognition ? "browser" : "none");
+  function describe() {
+    const s = speaker(), h = hearer();
+    $("voiceNote").textContent = s !== "none" && h !== "none" ? "Speaking needs a microphone. You can switch to typing at any time." : s !== "none" ? "This browser cannot recognise speech: you will hear the questions and type your replies." : "This browser cannot speak aloud, so the demo is read-and-type here.";
+    const vendor = (info.hearing || "").split("/")[0];
+    if (h === "server") $("soundNote").textContent = "If you use your voice, the sound from your microphone is sent through this server to " + vendor.charAt(0).toUpperCase() + vendor.slice(1) + ", a speech recognition service, to be turned into text; it is asked not to keep it for training.";
+    const none = s === "none";
+    document.querySelector('input[value="voice"]').disabled = none;
+    if (none) document.querySelector('input[value="text"]').checked = true;
+  }
+  describe();
+  fetch("/demo/info").then((r) => r.json()).then((got) => { if (phase === "gate") { info = { ...info, ...got }; describe(); } }).catch(() => {});
   $("agree").addEventListener("change", (e) => { $("start").disabled = !e.target.checked; });
 
-  let ws = null, t0 = 0, aloud = false, micOn = false, phase = "gate", over = false;
+  let ws = null, t0 = 0, speakBy = "none", hearBy = "none", micOn = false, phase = "gate", over = false;
+  let ctx = null, agentTap = null, micStream = null, agentTurn = false, voiceDown = false;
+  const clips = new Map();
   let paused = false, pausedAt = 0, pausedTotal = 0;
   let playing = null, pendingTurn = null, listening = null, recognizer = null, listenWait = 0, batch = [];
   // Milliseconds of interview so far. The clock stands still while the interview is paused.
@@ -398,19 +451,42 @@
 
   // Speak one line; resolves with whether it finished or was cut off. Pausing stops the voice;
   // resuming says the line again from its start, so a line is never reported as heard in part.
+  // The server's recording of a line, fetched once and decoded.
+  function clip(id) {
+    if (!clips.has(id)) clips.set(id, fetch("/demo/audio/" + encodeURIComponent(id)).then((r) => { if (!r.ok) throw new Error("HTTP " + r.status); return r.arrayBuffer(); }).then((bytes) => ctx.decodeAudioData(bytes)));
+    return clips.get(id);
+  }
   function speakLine(line) {
     return new Promise((resolve) => {
       const startedMs = now();
-      let done = false, timer = null, current = null;
+      // `current` marks the attempt in progress, so a sound that ends after it was cut off is ignored.
+      let done = false, timer = null, current = null, node = null;
       const finish = (completed) => { if (done) return; done = true; clearTimeout(timer); current = null; playing = null; resolve({ lineId: line.id, startedMs, endedMs: Math.max(now(), startedMs + 1), completed }); };
-      const begin = () => {
-        if (paused || done) return;
-        if (!aloud) { timer = setTimeout(() => finish(true), 260); return; }
+      const byBrowser = () => {
+        if (!("speechSynthesis" in window)) { timer = setTimeout(() => finish(true), Math.max(900, line.text.length * 55)); return; }
         const u = new SpeechSynthesisUtterance(line.text); current = u;
         u.onend = u.onerror = () => { if (current === u) finish(true); };
         speechSynthesis.speak(u);
       };
-      const hush = () => { clearTimeout(timer); current = null; if (aloud) speechSynthesis.cancel(); };
+      const begin = () => {
+        if (paused || done) return;
+        if (speakBy === "none") { timer = setTimeout(() => finish(true), 260); return; }
+        if (speakBy === "browser" || voiceDown) return byBrowser();
+        const mine = (current = {});
+        clip(line.id).then((sound) => {
+          if (current !== mine) return;
+          const src = ctx.createBufferSource(); src.buffer = sound; src.connect(agentTap);
+          src.onended = () => { if (current === mine && node === src) finish(true); };
+          node = src; src.start();
+        }, () => {
+          // The recording could not be had: say so once, and carry on with the browser's voice or the text.
+          clips.delete(line.id);
+          if (current !== mine) return;
+          if (!voiceDown) { voiceDown = true; notice("The recorded voice is not available just now; carrying on without it."); }
+          byBrowser();
+        });
+      };
+      const hush = () => { clearTimeout(timer); current = null; if (node) { const was = node; node = null; try { was.stop(); } catch {} } if ("speechSynthesis" in window && speakBy !== "none") speechSynthesis.cancel(); };
       playing = { stop: () => { hush(); finish(false); }, pause: hush, resume: begin };
       batch.push(line); render(); say("Agent", line.text);
       begin();
@@ -418,7 +494,8 @@
   }
 
   async function onSpeak(lines) {
-    batch = []; setPhase("speaking");
+    batch = []; agentTurn = true; setPhase("speaking");
+    if (speakBy === "server" && !voiceDown) for (const line of lines) clip(line.id).catch(() => {});
     const played = [];
     for (const line of lines) {
       if (pendingTurn || over) break;
@@ -426,6 +503,62 @@
       if (!p.completed) break;
     }
     send({ type: "played", played });
+    // Leave a moment for the room to go quiet before the microphone counts again.
+    setTimeout(() => { if (!playing) agentTurn = false; }, 200);
+  }
+
+  // The microphone, when the server does the hearing: sound is sent in pieces of about a tenth of
+  // a second, each stamped with this page's clock. Nothing is sent while the microphone is off,
+  // the interview is paused, or (unless cutting in is allowed) the interviewer is speaking.
+  const MIC_RATE = 16000;
+  const sending = () => hearBy === "server" && micOn && !paused && !over && ws && ws.readyState === 1 && (info.bargeIn || !agentTurn);
+  let piece = new Int16Array(1600), filled = 0, sum = 0, count = 0, drift = 0;
+  function onSamples(samples) {
+    if (!sending()) { filled = 0; sum = 0; count = 0; drift = 0; return; }
+    const ratio = ctx.sampleRate / MIC_RATE;
+    for (let i = 0; i < samples.length; i++) {
+      sum += samples[i]; count++; drift++;
+      if (drift < ratio) continue;
+      drift -= ratio;
+      const v = Math.max(-1, Math.min(1, sum / count)); sum = 0; count = 0;
+      piece[filled++] = v < 0 ? v * 32768 : v * 32767;
+      if (filled < piece.length) continue;
+      const frame = new ArrayBuffer(4 + piece.length * 2);
+      new DataView(frame).setUint32(0, Math.max(0, now() - Math.round((piece.length / MIC_RATE) * 1000)), true);
+      new Int16Array(frame, 4).set(piece);
+      ws.send(frame); filled = 0;
+    }
+  }
+  async function openMic() {
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 } });
+    const src = ctx.createMediaStreamSource(micStream);
+    const tap = ctx.createAnalyser(); tap.fftSize = 1024; tap.minDecibels = -85; tap.maxDecibels = -25; tap.smoothingTimeConstant = 0.7;
+    src.connect(tap); ribbon.follow("h", tap);
+    const mute = ctx.createGain(); mute.gain.value = 0; mute.connect(ctx.destination);
+    if (ctx.audioWorklet) {
+      const code = 'registerProcessor("tap", class extends AudioWorkletProcessor { constructor() { super(); this.b = new Float32Array(2048); this.n = 0; } process(inputs) { const c = inputs[0][0]; if (c) { for (let i = 0; i < c.length; i++) { this.b[this.n++] = c[i]; if (this.n === this.b.length) { this.port.postMessage(this.b.slice(0)); this.n = 0; } } } return true; } });';
+      const url = URL.createObjectURL(new Blob([code], { type: "application/javascript" }));
+      await ctx.audioWorklet.addModule(url); URL.revokeObjectURL(url);
+      const node = new AudioWorkletNode(ctx, "tap"); node.port.onmessage = (e) => onSamples(e.data);
+      src.connect(node); node.connect(mute);
+    } else {
+      const node = ctx.createScriptProcessor(4096, 1, 1); node.onaudioprocess = (e) => onSamples(e.inputBuffer.getChannelData(0));
+      src.connect(node); node.connect(mute);
+    }
+  }
+  function closeMic() { if (micStream) for (const track of micStream.getTracks()) track.stop(); micStream = null; ribbon.follow("h", null); }
+  // The server has heard something: words so far, or (final) the whole turn, which it has already taken.
+  function onHeard(msg) {
+    if (over || typeof msg.text !== "string") return;
+    if (!msg.final) { heard(msg.text, true); if (listening && !paused) { clearTimeout(listening.timer); listening.timer = setTimeout(silence, 20000); } return; }
+    notice(""); say("You", msg.text); heard(msg.text, false);
+    if (listening) { clearTimeout(listening.timer); listening = null; }
+    setPhase("thinking");
+  }
+  function onDeaf(msg) {
+    if (hearBy !== "server") return;
+    hearBy = "none"; closeMic(); $("mic").disabled = true;
+    setMic(false); notice("Listening has stopped (" + (msg.reason || "the recogniser is not available") + "). You can type your replies instead.");
   }
 
   function stopRecognizer() { const r = recognizer; recognizer = null; if (r) { try { r.abort(); } catch {} } }
@@ -463,12 +596,13 @@
   }
   // Wait for a reply: by microphone when it is on, otherwise typed (with a longer wait, since typing is slower).
   function startListening() {
-    const byVoice = micOn && !!Recognition;
+    const byVoice = micOn && hearBy !== "none";
     listening = { timer: paused ? null : setTimeout(silence, listenWait + (byVoice ? 0 : 60000)) };
     setPhase(byVoice ? "listening" : "typing");
     showReply();
     if (paused) return;
     if (!byVoice) { $("typed").focus({ preventScroll: true }); return; }
+    if (hearBy === "server") return; // the server listens; what it hears arrives as "heard" messages
     const r = new Recognition(); recognizer = r;
     r.lang = "en-US"; r.interimResults = true; r.maxAlternatives = 1;
     let startedMs = null;
@@ -492,7 +626,8 @@
   function restartListening() { if (!listening) return; clearTimeout(listening.timer); stopRecognizer(); listening = null; startListening(); }
 
   function setMic(on) {
-    micOn = on && !!Recognition;
+    micOn = on && hearBy !== "none";
+    if (micStream) for (const track of micStream.getTracks()) track.enabled = micOn;
     $("mic").setAttribute("aria-pressed", String(micOn));
     showReply();
     if (!paused) restartListening();
@@ -530,12 +665,13 @@
 
   function endCall(label) {
     over = true; delete document.body.dataset.live; $("live").textContent = label;
+    closeMic();
     clearInterval(tick); setPhase("ended"); setSheet(false);
     for (const id of ["mic", "pause", "more", "hang"]) $(id).disabled = true;
     $("reply").hidden = true;
   }
   function onEnded(msg) {
-    if (aloud) speechSynthesis.cancel();
+    if (speakBy === "browser") speechSynthesis.cancel();
     endCall("Session ended");
     const words = { complete: "The interview was completed.", breakoff: "The interview stopped part-way; the answers given were kept.", consent_declined: "You did not agree to take part, so no question was asked.", opt_out: "You asked to be removed, so the call ended at once and the number would never be called again.", callback: "You asked to be called another time." };
     $("outcome").textContent = (words[msg.outcome] || "") + " Answers recorded: " + msg.answered + ". Flagged for a person to check: " + msg.review.length + ".";
@@ -563,24 +699,41 @@
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("sheet").hidden) { setSheet(false); $("more").focus(); } });
 
   let tick = null;
-  $("start").addEventListener("click", () => {
+  $("start").addEventListener("click", async () => {
     const mode = document.querySelector('input[name="mode"]:checked').value;
-    aloud = mode === "voice" && canSpeak; micOn = mode === "voice" && !!Recognition;
-    $("gate").hidden = true; $("call").hidden = false; t0 = performance.now();
+    speakBy = mode === "voice" ? speaker() : "none"; hearBy = mode === "voice" ? hearer() : "none";
+    $("gate").hidden = true; $("call").hidden = false;
     $("live").textContent = "Live session"; document.body.dataset.live = "";
-    $("mic").setAttribute("aria-pressed", String(micOn)); $("mic").disabled = !Recognition;
-    if (!Recognition) $("mic").title = "This browser cannot recognise speech";
     // With a voice reading the lines aloud, a screen reader should not read them a second time.
-    $("said").setAttribute("aria-live", aloud ? "off" : "polite");
-    showReply(); setPhase("thinking");
+    $("said").setAttribute("aria-live", speakBy === "none" ? "polite" : "off");
+    setPhase("thinking");
+    if (speakBy === "server" || hearBy === "server") {
+      ctx = new AudioCtx(); if (ctx.state === "suspended") ctx.resume().catch(() => {});
+      agentTap = ctx.createAnalyser(); agentTap.fftSize = 1024; agentTap.minDecibels = -85; agentTap.maxDecibels = -25; agentTap.smoothingTimeConstant = 0.7;
+      agentTap.connect(ctx.destination);
+      if (speakBy === "server") ribbon.follow("a", agentTap);
+    }
+    if (hearBy === "server") {
+      // Ask for the microphone before the interviewer starts, so its first words are not spoken over a permission box.
+      try { await openMic(); } catch { hearBy = "none"; closeMic(); notice("The microphone is not available. You can type your replies instead."); }
+    }
+    micOn = hearBy !== "none";
+    $("mic").setAttribute("aria-pressed", String(micOn)); $("mic").disabled = hearBy === "none";
+    if (hearBy === "none" && mode === "voice") $("mic").title = "The microphone cannot be used here";
+    showReply(); t0 = performance.now();
     tick = setInterval(() => { const s = Math.floor(now() / 1000); $("timer").textContent = String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0"); }, 250);
-    if (aloud) speechSynthesis.cancel();
+    if (speakBy === "browser") speechSynthesis.cancel();
     let refused = false;
     ws = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/demo/ws");
+    ws.binaryType = "arraybuffer";
     ws.onmessage = (ev) => {
+      if (typeof ev.data !== "string") return;
       const msg = JSON.parse(ev.data);
       if (msg.type === "speak") onSpeak(msg.lines);
       else if (msg.type === "listen") onListen(msg.waitMs);
+      else if (msg.type === "heard") onHeard(msg);
+      else if (msg.type === "stop") { if (playing) playing.stop(); }
+      else if (msg.type === "deaf") onDeaf(msg);
       else if (msg.type === "ended") onEnded(msg);
       else if (msg.type === "refused") { refused = true; notice(msg.reason); }
     };

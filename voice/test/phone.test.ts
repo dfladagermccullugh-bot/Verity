@@ -7,7 +7,7 @@ import { DEFAULT_WORDING } from "../src/interviewer/simulate.js";
 import { buildScript } from "../src/script/script.js";
 import { FakeCallSession } from "../src/telephony/fake.js";
 import type { TelephonyProvider } from "../src/telephony/types.js";
-import { SpeechStore, cartesiaVoice, deepgramVoice, silentVoice, wavData } from "../src/voice/tts.js";
+import { PAGE_SAMPLE_RATE, SpeechStore, cartesiaVoice, deepgramVoice, humVoice, pcmWav, silentVoice, wavData } from "../src/voice/tts.js";
 import { RESPONSE_A, library } from "./helpers.js";
 
 const inst = library();
@@ -162,6 +162,42 @@ describe("rendered speech", () => {
     expect(seen[0]!.url).toBe("https://api.cartesia.ai/tts/bytes");
     expect(seen[0]!.init.headers).toMatchObject({ Authorization: "Bearer k", "Cartesia-Version": "2026-08-14" });
     expect(JSON.parse(seen[0]!.init.body)).toEqual({ model_id: "sonic-3.6", transcript: "Hello.", voice: { id: "v-1" }, output_format: { container: "raw", encoding: "pcm_mulaw", sample_rate: 8000 }, language: "en" });
+  });
+
+  it("for a web page, asks each vendor for a 24 kHz WAV file and refuses anything else", async () => {
+    const wav = pcmWav(new Int16Array(480), PAGE_SAMPLE_RATE);
+    const seen: { url: string; init: any }[] = [];
+    let body: Buffer = wav;
+    const fetch = async (url: string, init: any) => (seen.push({ url, init }), { ok: true, status: 200, arrayBuffer: async () => body.buffer.slice(body.byteOffset, body.byteOffset + body.length) as ArrayBuffer, text: async () => "" });
+    const cartesia = cartesiaVoice({ apiKey: "k", voiceId: "v-1", output: "page", fetch });
+    expect(cartesia.id).toBe("cartesia/sonic-3.6/v-1/page");
+    expect(await cartesia.synthesize("Hello.")).toEqual(wav);
+    expect(JSON.parse(seen[0]!.init.body).output_format).toEqual({ container: "wav", encoding: "pcm_s16le", sample_rate: 24000 });
+    const deepgram = deepgramVoice({ apiKey: "k", output: "page", fetch });
+    expect(deepgram.id).toBe("deepgram/aura-2-thalia-en/page");
+    expect(await deepgram.synthesize("Hello.")).toEqual(wav);
+    expect(Object.fromEntries(new URL(seen[1]!.url).searchParams)).toEqual({ model: "aura-2-thalia-en", encoding: "linear16", sample_rate: "24000", container: "wav" });
+    body = Buffer.from('{"err_msg":"nope"}');
+    await expect(deepgram.synthesize("Hello.")).rejects.toThrow(/did not return a WAV file/);
+    await expect(cartesia.synthesize("Hello.")).rejects.toThrow(/did not return a WAV file/);
+  });
+
+  it("the stand-in page voice is a WAV file of about the length the words take to say", async () => {
+    const audio = await humVoice(15).synthesize("x".repeat(30));
+    expect(audio.toString("ascii", 0, 4) + audio.toString("ascii", 8, 12)).toBe("RIFFWAVE");
+    expect(audio.readUInt32LE(24)).toBe(PAGE_SAMPLE_RATE);
+    expect((audio.length - 44) / 2 / PAGE_SAMPLE_RATE).toBeCloseTo(2, 1);
+  });
+
+  it("two requests for the same line share one rendering", async () => {
+    let calls = 0;
+    const store = new SpeechStore({ id: "slow", synthesize: async () => (calls++, await new Promise((r) => setTimeout(r, 10)), Buffer.from([1])) });
+    const [a, b] = await Promise.all([store.get({ text: "Hello." }), store.get({ text: "Hello." })]);
+    expect(a).toBe(b);
+    expect(calls).toBe(1);
+    const failing = new SpeechStore({ id: "down", synthesize: async () => { throw new Error("vendor down"); } });
+    await expect(failing.get({ text: "Hello." })).rejects.toThrow("vendor down");
+    await expect(failing.get({ text: "Hello." })).rejects.toThrow("vendor down");
   });
 
   it("asks Deepgram for 8 kHz mu-law and removes the WAV wrapper", async () => {
