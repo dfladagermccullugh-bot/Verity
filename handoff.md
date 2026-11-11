@@ -34,6 +34,70 @@ ask before anything that changes one of their outside accounts or makes a phone 
 own independent voice thing" later; do not work on it. They have said there are "a lot of
 things I kind of don't agree with", still unspecified: ask, one at a time; do not guess.
 
+**The operator's vision and notes, given after the session's close (2026-11-11). Read this
+before doing anything else; it changes the priorities below.** Their words are quoted; what
+is marked "my reading" is mine and unconfirmed.
+
+- *The product.* Someone has Qualtrics and a members list. Email questionnaires are easy;
+  "the phone is always the hard part", and they do not want to hire people for phone
+  outreach. They want "a platform in which I could import my contacts and the questionnaire,
+  and it would send out an agent swarm to the contact list with digital virtual voice agents
+  to conduct the questionnaire", then get the answers back to "re-export … and import them
+  back into Qualtrics". "I think it's going to be solely voice, nothing else, for the most
+  part."
+- *The main complaint, from a test on the web page.* "The whole thing just needs more
+  conversational flexibility." "I don't want them to feel like they're talking to an
+  automated agent. They've had this for decades: a machine voice that only answers one way."
+  The bar is the voice modes of Claude, Gemini, Grok and ChatGPT: "pretty close to human".
+  Not "ums" in a survey, but an interviewer that copes when the respondent does.
+- *Three concrete failures they hit.*
+  1. Answers that are not the exact wording are not understood. Example: asked "Would you
+     be willing to answer two more questions?", "sure" should count as yes.
+  2. A five-point scale read once cannot be remembered, and when they asked what the scale
+     was again, "the agent is too on track to say what the 5-point scale was again".
+  3. "Sorry, what was the question?" and "Sorry, what was the scale again?" must work.
+- *Models and vendors.* They suggested "something like JEV or JEV2" to classify answers:
+  **I do not know what that refers to (the message was dictated); ask, do not guess.** They
+  named Fish Audio ("I think it was Fish Audio 3") as the example of a conversational
+  agent, and said ElevenLabs and Cartesia have voice agents; "I'm really just wanting to …
+  go for the most natural voice agent. I may try Cartesia as an option." They have $185 of
+  free Deepgram credit. The sentence about it was garbled ("so I want to go away from
+  that"); my reading is that they want to stay on Deepgram for now and try its settings
+  ("maybe there are some settings in Deepgram we could mess with"). Confirm.
+- *They asked for the transcript and logs of that web test to be reviewed. There are none:*
+  the demo page keeps nothing by design (it tells visitors so), and the server log has no
+  words in it. They were told. If their own test runs should be reviewable, that needs a
+  deliberate, visible way to keep them; ask.
+
+**What this means (my reading; put it to the operator, one decision at a time).**
+- It collides with a founding rule of this code: the interviewer may only speak lines from
+  a fixed, approved table, and says "I am not able to answer questions or explain further"
+  to anything else. The operator has now answered the question left open above: that
+  rigidity is not what they want. What is not yet decided is how far to go. My
+  recommendation to offer them: keep every survey question and its answer options word for
+  word (the researcher's instrument, and what makes the data comparable), keep the AI
+  disclosure and consent fixed, and make everything *around* the questions conversational:
+  repeating a question or just its options on request as often as asked, re-offering a
+  scale briefly, acknowledging an answer, handling a side remark, steering back. Whether
+  that conversational speech is generated live by a model or drawn from a larger approved
+  set is the real design decision; it affects the audit trail and what can be promised to
+  a researcher. Do not drop the AI disclosure: "not feeling like an automated agent" is
+  about manner, and callers must still be told it is an AI (my caution; also a legal one).
+- Likely quick wins inside the present design, worth doing first because they are cheap
+  and address failures 1 to 3 directly: yes/no synonyms ("sure", "okay", "yeah", "go
+  ahead") in the rules; a less cautious classifier prompt (the live measurement already
+  showed it calls plain answers unclear) and a look at the 0.85 acceptance bar; a separate
+  "say the options again" reply that does not use up repeats; no cap, or a much higher one,
+  on repeats (`DEFAULT_POLICY.maxRepeats` is 2). Check each against what they actually said
+  on a test before claiming it is fixed.
+- Vendor work to scope, not start, until they choose: Deepgram settings and its own
+  turn-taking and voice-agent offerings (they have credit there); Cartesia, ElevenLabs and
+  Fish Audio as fuller voice-agent stacks. The carrier stays Telnyx. A vendor's all-in-one
+  agent would replace the interviewer's fixed-script core, so it is the same decision as
+  the first bullet, not a separate one.
+- Scale ("agent swarm"): the server holds calls in memory on one machine today. Not the
+  next problem, but it is part of the vision.
+
 **The very next thing: a third real phone call.** Calling is off. When the operator says
 go (calls are placed 9am to 8pm Pacific only):
 1. Run `voice-deploy.yml` (on your working branch, or `main`) with task `set-up-call` (a fresh one-person
@@ -60,7 +124,7 @@ call, and not yet deployed** (the live server runs the commit before these fixes
 played, a cut-off introduction starts again, and a question at the consent step gets the
 introduction again (`interviewer/interviewer.ts`).
 
-**An open question to put to the operator.** They said the interviewer "doesn't handle
+**An open question, since answered in spirit (see the vision notes above).** They said the interviewer "doesn't handle
 natural language at all… anything not within its scope, it just immediately ends". Part of
 that was the bugs above. Part is design: during the survey a respondent's question gets "I
 am not able to answer questions or explain further" and the question again, because the
