@@ -131,6 +131,66 @@ describe("calls that never reach a person", () => {
     expect(t.interviewer.state.outcome).toBe("complete");
   }, 20_000);
 
+  it("the person's hello is waited for, then the interviewer speaks: no long silence, nothing cut off", async () => {
+    // As on the first real call: the carrier takes about four seconds to say "human". The
+    // interviewer must not sit silent for that long, and the hello must not count as anything.
+    const t = setup(SPOKEN, (s) =>
+      setTimeout(() => {
+        s.answer();
+        setTimeout(() => {
+          const now = s.now();
+          s.speechStart(now);
+          s.say("Hello?", { startMs: now, endMs: now + 400 });
+          s.utteranceEnd();
+        }, 600 * SCALE);
+        setTimeout(() => s.machineDetected("human"), 4000 * SCALE);
+      }, 5),
+    );
+    const result = await phoneConnect({ provider: t.provider, speech: t.speech, ringTimeoutMs: 20_000 })(t.claim, t.interviewer);
+    expect(result).toEqual({ connected: true });
+    const intro = t.session.played[0]!;
+    expect(intro.markName).toBe("p.intro");
+    expect(intro.completed).toBe(true);
+    // Speaking began soon after the hello, well before the carrier's verdict.
+    expect(intro.startMs!).toBeLessThan(3000);
+    expect(t.interviewer.log.some((e) => e.type === "heard" && /hello/i.test(e.text))).toBe(false);
+    expect(t.interviewer.state.attempts.consent).toEqual({ probes: 0, repeats: 0 });
+    expect(t.interviewer.state.outcome).toBe("complete");
+  }, 20_000);
+
+  it("a second hello just as the interviewer starts is still a greeting", async () => {
+    const t = setup(SPOKEN);
+    // Say the hello a moment after the first clip begins to play.
+    const started = setInterval(() => {
+      const first = t.session.played[0];
+      if (!first || first.startMs === null) return;
+      clearInterval(started);
+      t.session.say("Hello.", { startMs: first.startMs + 140, endMs: first.startMs + 540 });
+    }, 1);
+    const result = await phoneConnect({ provider: t.provider, speech: t.speech, detectMachine: false })(t.claim, t.interviewer);
+    clearInterval(started);
+    expect(result).toEqual({ connected: true });
+    expect(t.session.played[0]!.completed).toBe(true);
+    expect(t.interviewer.log.some((e) => e.type === "heard" && /hello/i.test(e.text))).toBe(false);
+    expect(t.interviewer.state.outcome).toBe("complete");
+  }, 20_000);
+
+  it("a machine verdict that comes after the interviewer has begun ends the call there", async () => {
+    const t = setup({}, (s) =>
+      setTimeout(() => {
+        s.answer();
+        setTimeout(() => s.machineDetected("machine"), 3500 * SCALE);
+      }, 5),
+    );
+    const result = await phoneConnect({ provider: t.provider, speech: t.speech, ringTimeoutMs: 20_000 })(t.claim, t.interviewer);
+    expect(result).toEqual({ connected: false, outcome: "answering_machine" });
+    expect(t.session.ended).toBe(true);
+    // It had started speaking (nothing was heard for a moment), and stopped within the introduction.
+    expect(t.session.played.length).toBeGreaterThan(0);
+    expect(t.session.played.some((p) => p.markName === "p.consent_ask" && p.completed)).toBe(false);
+    expect(t.interviewer.state.consent.participate).not.toBe(true);
+  }, 20_000);
+
   it("a refused or failed dial is an outcome, not a crash", async () => {
     const t = setup(SPOKEN);
     const failing = (message: string): TelephonyProvider => ({ name: "x", startCall: async () => Promise.reject(new Error(message)) });

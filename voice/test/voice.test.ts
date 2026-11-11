@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { ModelClassifier } from "../src/interviewer/classify.js";
 import { Interviewer, type AuditEvent } from "../src/interviewer/interviewer.js";
 import { buildProtocol, buildSpeechTable, type SpeechTable } from "../src/interviewer/protocol.js";
 import { DEFAULT_WORDING } from "../src/interviewer/simulate.js";
@@ -88,6 +89,74 @@ describe("interruptions", () => {
     expect(iv.state.interview.answers).toEqual(RESPONSE_A);
     expect(iv.state.review).toEqual([]);
     expect(voice.heard.filter((h) => h.lineId === "q.QID3.options")).toEqual([{ lineId: "q.QID3.options", completed: true }]);
+  });
+});
+
+describe("the introduction and consent, as a real phone call goes", () => {
+  // The first real call (11 Nov 2026): the person said "Hello?" into four seconds of silence, that cut
+  // the introduction off after half a second, they were asked to say yes or no to a call they had
+  // heard nothing about, and when they asked "take part in what?" the call said goodbye.
+  async function callWith(turns: SpokenReply[], model?: ModelClassifier) {
+    const script = buildScript(inst);
+    const table = buildSpeechTable(script, buildProtocol(DEFAULT_WORDING));
+    const iv = new Interviewer(model ? { instrument: inst, script, table, model } : { instrument: inst, script, table });
+    const later = spokenPersona(() => iv.expecting(), A);
+    const voice = new ScriptedVoice((ctx) => turns[ctx.turn - 1] ?? later(ctx));
+    await runVoiceCall(iv, voice, { replyWaitMs: 8000, maxSilences: 3 });
+    return { iv, voice };
+  }
+  const INTRO = ["p.intro", "p.purpose", "p.transcribed", "p.how_to_stop", "p.consent_ask"];
+  const decisions = (iv: Interviewer) => events(iv, "decision").map((d) => `${d.action}: ${d.detail}`);
+
+  it("a hello over the introduction starts it again from the beginning; it is not an unclear reply", async () => {
+    const { iv, voice } = await callWith([{ say: "Hello?", interruptAt: 0.02 }, { say: "yes" }]);
+    expect(voice.heard.slice(0, 6)).toEqual([{ lineId: "p.intro", completed: false }, ...INTRO.map((lineId) => ({ lineId, completed: true }))]);
+    expect(decisions(iv).slice(0, 2)).toEqual(["repeat: the introduction was cut off before it was heard in full; started again from the beginning", "consent: agreed to take part"]);
+    expect(events(iv, "say").some((e) => e.lineId === "p.consent_unclear")).toBe(false);
+    expect(iv.state.attempts.consent).toEqual({ probes: 0, repeats: 0, restarts: 1 });
+    expect(iv.state.outcome).toBe("complete");
+  });
+
+  it("a yes from someone who has not heard that it is an AI, or what is asked, is not consent", async () => {
+    const { iv } = await callWith([{ say: "yes", interruptAt: 0.3 }, { say: "yes" }]);
+    expect(decisions(iv).slice(0, 2)).toEqual(["repeat: the introduction was cut off before it was heard in full; started again from the beginning", "consent: agreed to take part"]);
+    // Agreement was recorded only after every line of the introduction had played to its end.
+    const agreedAt = iv.log.findIndex((e) => e.type === "decision" && e.action === "consent");
+    const before = iv.log.slice(0, agreedAt).filter((e): e is Extract<AuditEvent, { type: "played" }> => e.type === "played" && e.completed);
+    expect(INTRO.every((id) => before.some((p) => p.lineId === id))).toBe(true);
+  });
+
+  it("a no over the introduction is taken at once", async () => {
+    const { iv, voice } = await callWith([{ say: "no", interruptAt: 0.3 }]);
+    expect(iv.state.outcome).toBe("consent_declined");
+    expect(voice.heard.at(-1)).toEqual({ lineId: "p.consent_declined", completed: true });
+    expect(voice.heard.filter((h) => h.lineId === "p.intro")).toHaveLength(1);
+  });
+
+  it("an introduction that cannot be got through ends the call without asking for consent", async () => {
+    const talksOver: SpokenReply = { say: "hello? who is this?", interruptAt: 0.05 };
+    const { iv, voice } = await callWith([talksOver, talksOver, talksOver]);
+    expect(iv.state.outcome).toBe("consent_declined");
+    expect(decisions(iv).at(-1)).toBe("end: consent_declined: the introduction could not be played in full, so there was nothing to agree to");
+    expect(voice.heard.some((h) => h.lineId === "p.consent_ask" || h.lineId === "p.consent_unclear")).toBe(false);
+    expect(iv.state.consent.participate).toBe(false);
+  });
+
+  it("asking what the call is gets the introduction again, not a goodbye", async () => {
+    // What the language model returned on the real call for these words.
+    const model: ModelClassifier = { id: "stand-in", classify: async (req) => (req.utterance === "Take your part in what?" ? { intent: "question", confidence: 0.92, evidence: req.utterance } : { intent: "unclear", confidence: 0.5, evidence: req.utterance }) };
+    const { iv, voice } = await callWith([{ say: "Take your part in what?" }, { say: "yes" }], model);
+    expect(voice.heard.slice(0, 10).map((h) => h.lineId)).toEqual([...INTRO, ...INTRO]);
+    expect(decisions(iv).slice(0, 2)).toEqual(["repeat: asked what the call is; introduction given again", "consent: agreed to take part"]);
+    expect(iv.state.outcome).toBe("complete");
+  });
+
+  it("but only twice: after that a question counts as no clear agreement", async () => {
+    const model: ModelClassifier = { id: "stand-in", classify: async (req) => ({ intent: "question", confidence: 0.92, evidence: req.utterance }) };
+    const ask: SpokenReply = { say: "What is this about?" };
+    const { iv } = await callWith([ask, ask, ask, ask, ask], model);
+    expect(iv.state.attempts.consent).toEqual({ probes: 2, repeats: 2 });
+    expect(iv.state.outcome).toBe("consent_declined");
   });
 });
 

@@ -145,8 +145,35 @@ digits and the log tasks mask numbers. Never print the number. Second mistake: a
 pushed with failing tests because the test command's exit status was hidden by a pipe; fixed
 in the next commit. Run `npm test` on its own line and read the result before committing.
 Carrier events are now traced one line each (`trace` in `TelnyxConfig`) for the next try.
-**Waiting on the operator** to let calls from …8345 ring (save it as a contact, or turn off
-silencing of unknown callers), then say go.
+**Second real call, 2026-11-11 03:53 UTC: answered by the operator, and it went badly.**
+Read from the audit trail (Neon connector, `run_sql` on project `cold-wildflower-22977142`:
+`attempts` joined to `audit_events`; never select the `cases.phone` column) and the server
+trace. What happened: Telnyx's person-or-machine verdict took 4 s ("human"), and the server
+sat silent for it; the operator said "Hello?" twice into the silence; that cut the
+introduction off 0.4 s in and was then taken as the reply to the consent question; they heard
+"Sorry, I did not catch that. Do you agree to take part?" without ever hearing that it was an
+AI or what the call was; they asked "Take [your] part in what?", the model correctly said
+"question", and the consent logic ended the call as declined. Operator's words: "it was not
+able to handle natural language at all… anything that's not within its scope, it just
+immediately ends."
+**Fixed the same evening (tests replay the call; 368 pass; not yet tried on a real call):**
+- `phone-connect.ts`: after pickup the interviewer waits for the greeting to finish (0.5 s of
+  quiet, or 1.5 s of nothing, 4 s at most), not for the carrier's verdict; a "machine" verdict
+  that arrives later hangs up there and the attempt is `answering_machine`.
+- `phone.ts`: anything that began before the interviewer's first words, or within 0.8 s after
+  they began, is the greeting: it neither interrupts nor counts as a reply.
+- `interviewer.ts`: agreement cannot be asked for or accepted until every line of the
+  introduction has played to its end (known from the `played` events; typed conversations
+  report none and are unaffected). If it was cut off, the introduction starts again (twice at
+  most, not counted as a failed reply); a clear "no", "stop" or "remove me" is still taken at
+  once. A question at the consent step ("who is this?", "take part in what?") gets the whole
+  introduction again, twice at most.
+**Still as designed, and the operator may not agree with it:** during the survey a question
+from the respondent gets "I am not able to answer questions or explain further" and the
+question again (standardised interviewing); the interviewer has no way to say anything that
+is not in the fixed script. Ask them about this rather than guess.
+Calling is off (`stop-calls`). **Waiting on the operator** to say go for a third call (9am to
+8pm Pacific): `set-up-call`, then `deploy`, then read the audit trail the same way.
 Then `set-up-call`, then `deploy` (the call is placed at server start, 9am to 8pm in the
 phone's time zone; tell the operator before deploying). The server renders every line with
 the voice before the first call. Expect fixes: see the open points at the top of
@@ -202,7 +229,7 @@ AI voice survey interviewers on top of Qualtrics. Plan and phase status table:
 own Postgres schema). The web app described in the rest of this file is now the **legacy
 app**: unchanged at the root (its `tsconfig.json` excludes `voice/`), to be switched off later.
 
-- **State (2026-11-11):** all code that needs no account login is built; 359 tests
+- **State (2026-11-11):** all code that needs no account login is built; 368 tests
   (`cd voice && npm test`); database tests also pass on real Postgres 16
   (`TEST_DATABASE_URL=… npx vitest run test/dialer-store.test.ts`).
 - **Never run live:** Telnyx calls, Deepgram/Cartesia speech, the Claude classifier, a

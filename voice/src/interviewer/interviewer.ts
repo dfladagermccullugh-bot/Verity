@@ -26,6 +26,11 @@ export interface Policy {
 
 export const DEFAULT_POLICY: Policy = { acceptAt: 0.85, maxProbes: 2, maxRepeats: 2 };
 
+/** What a person must have heard to the end before their agreement can count: who is calling, that it is an AI, what is asked, and how to stop. */
+const INTRODUCTION: ProtocolKey[] = ["intro", "purpose", "transcribed", "how_to_stop"];
+/** Times the introduction is started again when it was cut off, before the call is given up. */
+const MAX_INTRO_RESTARTS = 2;
+
 export type Phase = "not_started" | "consent" | "recording" | "interview" | "ended";
 
 /** Everything needed to resume a call. Plain data: safe to store and reload. */
@@ -33,8 +38,8 @@ export interface CallState {
   phase: Phase;
   interview: InterviewState;
   consent: { participate: boolean | null; recording: boolean | null };
-  /** Probes and repeats used, by slot key ("consent" for the consent question). */
-  attempts: Record<string, { probes: number; repeats: number }>;
+  /** Probes and repeats used, by slot key ("consent" for the consent question). `restarts` counts the introduction being started again after it was cut off. */
+  attempts: Record<string, { probes: number; repeats: number; restarts?: number }>;
   /** Slots whose recorded value should be checked by a person. */
   review: string[];
   /** Milliseconds from the end of the question audio to the start of the reply, by slot (first reply only). */
@@ -212,7 +217,7 @@ export class Interviewer {
     this.push(slot === undefined ? { type: "decision", action, detail } : { type: "decision", action, detail, slot });
   }
 
-  private attempts(key: string): { probes: number; repeats: number } {
+  private attempts(key: string): { probes: number; repeats: number; restarts?: number } {
     return (this.state.attempts[key] ??= { probes: 0, repeats: 0 });
   }
 
@@ -234,9 +239,33 @@ export class Interviewer {
 
   // ── consent ────────────────────────────────────────────────────────────────
 
+  /**
+   * Whether every line of the introduction has reached the person's ear to its end. Known only
+   * when the layer carrying the audio reports playback; a typed conversation reports none, and
+   * there the lines were shown in full.
+   */
+  private introductionHeard(): boolean {
+    const played = this.log.filter((e) => e.type === "played");
+    if (played.length === 0) return true;
+    return INTRODUCTION.every((key) => played.some((p) => p.lineId === `p.${key}` && p.completed));
+  }
+
   private onConsent(c: Classification): void {
     if (this.common(c, true)) return;
     const a = this.attempts("consent");
+    const refused = c.intent === "no" && c.confidence >= this.policy.acceptAt;
+    if (!refused && !this.introductionHeard()) {
+      // A "yes" from someone who has not heard that this is an AI, or what they are agreeing to, is
+      // not consent; and a "hello?" over the introduction is not a reply to a question they never
+      // heard. Start again from the beginning. This is not counted as a failed reply.
+      if ((a.restarts ?? 0) < MAX_INTRO_RESTARTS) {
+        a.restarts = (a.restarts ?? 0) + 1;
+        this.decide("repeat", "the introduction was cut off before it was heard in full; started again from the beginning");
+        return this.sayKeys(...INTRODUCTION, "consent_ask");
+      }
+      this.state.consent.participate = false;
+      return this.end("consent_declined", "consent_declined", "the introduction could not be played in full, so there was nothing to agree to");
+    }
     if (c.intent === "yes" && c.confidence >= this.policy.acceptAt) {
       this.state.consent.participate = true;
       this.decide("consent", "agreed to take part");
@@ -254,6 +283,12 @@ export class Interviewer {
       a.repeats += 1;
       this.decide("repeat", "introduction repeated on request");
       return this.sayKeys("purpose", "transcribed", "how_to_stop", "consent_ask");
+    }
+    if (c.intent === "question" && a.repeats < this.policy.maxRepeats) {
+      // "Who is this?", "take part in what?": the only answer the interviewer has is its introduction.
+      a.repeats += 1;
+      this.decide("repeat", "asked what the call is; introduction given again");
+      return this.sayKeys(...INTRODUCTION, "consent_ask");
     }
     // Anything short of a clear yes is not consent.
     if (a.probes < this.policy.maxProbes) {

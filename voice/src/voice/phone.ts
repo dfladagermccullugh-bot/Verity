@@ -20,9 +20,15 @@ export interface PhoneOptions {
   keyGapMs: number;
   /** Longest wait for speech that has begun to turn into recognised words. */
   maxTurnMs: number;
+  /**
+   * People answer the phone with "hello". Anything that began before the interviewer's first
+   * words, or within this long after they began, is that greeting: it does not stop the
+   * introduction and is not taken as a reply to anything.
+   */
+  greetingGraceMs: number;
 }
 
-export const DEFAULT_PHONE_OPTIONS: Omit<PhoneOptions, "audio"> = { endOfTurnMs: 700, keyGapMs: 1500, maxTurnMs: 30_000 };
+export const DEFAULT_PHONE_OPTIONS: Omit<PhoneOptions, "audio"> = { endOfTurnMs: 700, keyGapMs: 1500, maxTurnMs: 30_000, greetingGraceMs: 800 };
 
 export class PhoneChannel implements VoiceChannel {
   private playing = false;
@@ -34,17 +40,20 @@ export class PhoneChannel implements VoiceChannel {
   private lastKeyMs = 0;
   private firstKeyMs = 0;
   private wake: (() => void) | null = null;
+  /** When the interviewer's first words began, in call time. Null until then. */
+  private firstAudioMs: number | null = null;
 
   constructor(
     private readonly session: CallSession,
     private readonly opts: PhoneOptions,
   ) {
     session.on("speechStart", (atMs) => {
+      if (this.isGreeting(atMs)) return;
       if (this.speechStartMs === null) this.speechStartMs = atMs;
       this.poke();
     });
     session.on("transcript", (e) => {
-      if (e.text.trim() === "") return;
+      if (e.text.trim() === "" || this.isGreeting(e.startMs)) return;
       if (this.speechStartMs === null) this.speechStartMs = e.startMs;
       this.lastHeardMs = this.session.now();
       if (e.isFinal) {
@@ -68,6 +77,10 @@ export class PhoneChannel implements VoiceChannel {
     session.on("ended", () => this.poke());
   }
 
+  private isGreeting(startMs: number): boolean {
+    return this.firstAudioMs === null || startMs < this.firstAudioMs + this.opts.greetingGraceMs;
+  }
+
   private poke(): void {
     const w = this.wake;
     this.wake = null;
@@ -88,6 +101,7 @@ export class PhoneChannel implements VoiceChannel {
       if (this.session.ended || this.turnBegun()) break;
       const audio = await this.opts.audio(line);
       const startedMs = this.session.now();
+      if (this.firstAudioMs === null) this.firstAudioMs = startedMs;
       this.playing = true;
       const result = await this.session.play(audio, line.id);
       this.playing = false;
