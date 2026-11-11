@@ -57,5 +57,19 @@ await section("Other connections on the account (not used by this server; listed
   if (conns.length === 0) console.log("None.");
 });
 
+// The key Telnyx signs its messages with. It is public by nature; only whether it can be read
+// here is reported, to learn whether it has to be copied from the portal by hand.
+console.log("\n## Public key");
+for (const path of ["/public_key", "/webhooks/public_key"]) {
+  const res = await fetch(`https://api.telnyx.com/v2${path}`, { headers: { Authorization: `Bearer ${key}` } });
+  const body = await res.text();
+  let found = "";
+  try {
+    const data = (JSON.parse(body) as { data?: Record<string, unknown> }).data ?? {};
+    found = String(data.public ?? data.public_key ?? data.key ?? "");
+  } catch {}
+  console.log(`- GET ${path}: HTTP ${res.status}${found ? `, a key of ${found.length} characters` : `, no key in the reply (${body.slice(0, 120).replace(/\s+/g, " ")})`}`);
+}
+
 if (want) console.log(`\nThe webhook this server needs: ${want}`);
 process.exit(failed ? 1 : 0);
