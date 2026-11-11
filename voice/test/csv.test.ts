@@ -84,3 +84,34 @@ describe("Qualtrics response file", () => {
     expect(responseColumns(i2).map((c) => c.name)).toContain("Q1");
   });
 });
+
+describe("what Qualtrics did with our import file (its own export afterwards, 2026-11-11)", () => {
+  // library-test-numeric.csv is a genuine export from a Qualtrics account after
+  // library-test-expected-import.csv was imported into the test survey.
+  const table = (file: string) => {
+    const [header, , , ...rows] = parseCsv(readFileSync(new URL(`../fixtures/qualtrics/${file}`, import.meta.url), "utf8"));
+    const byCase = new Map(rows.filter((r) => r.length > 1).map((r) => [r[header!.indexOf("vv_case_id")]!, r]));
+    return { header: header!, byCase };
+  };
+  const sent = table("library-test-expected-import.csv");
+  const got = table("library-test-numeric.csv");
+
+  it("kept both responses, with every value in the field it was sent to", () => {
+    expect([...got.byCase.keys()].sort()).toEqual(["case-A", "case-B"]);
+    for (const [caseId, row] of sent.byCase) {
+      for (const [i, column] of sent.header.entries()) {
+        if (column === "Status") continue;
+        expect([caseId, column, got.byCase.get(caseId)![got.header.indexOf(column)]]).toEqual([caseId, column, row[i]]);
+      }
+    }
+  });
+
+  it("marks them as imported, and works out the recommend group itself", () => {
+    const col = (name: string) => [...got.byCase.values()].map((r) => r[got.header.indexOf(name)]);
+    // We send Status 0 (a normal response); Qualtrics records 4, its code for an imported response.
+    expect(col("Status")).toEqual(["4", "4"]);
+    expect(got.header).toContain("Q5_NPS_GROUP");
+    expect(got.byCase.get("case-A")![got.header.indexOf("Q5_NPS_GROUP")]).toBe("2"); // 8 of 10: passive
+    expect(got.byCase.get("case-B")![got.header.indexOf("Q5_NPS_GROUP")]).toBe("1"); // 3 of 10: detractor
+  });
+});

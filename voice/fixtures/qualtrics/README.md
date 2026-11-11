@@ -9,8 +9,9 @@ Only made-up answers belong here. Never a real respondent's data.
 | `import-probe.qsf` | Two plain questions and nothing else, **written by hand**. If Qualtrics refuses `library-test.qsf`, importing this one tells a problem with the file's outer shape from a problem with one question. |
 | `library-test-expected-import.csv` | The response import file the writer must produce for the two specified test responses. Tests compare against it byte for byte. Not yet imported into a live account. |
 
-Still to come from the Qualtrics check: `library-test-numeric.csv` (Qualtrics' own export of
-the imported responses). The hand-written survey file stays as the fixture the tests and the
+`library-test-numeric.csv` is **Qualtrics' own export** (values, not labels) after
+`library-test-expected-import.csv` was imported into that survey (2026-11-11). A test checks
+every value came back in the field it was sent to. The hand-written survey file stays as the fixture the tests and the
 demo run on; the genuine export sits beside it as the proof.
 
 The reader is also checked against genuine Qualtrics exports that are not committed

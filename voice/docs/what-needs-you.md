@@ -6,7 +6,7 @@ needs a login, a payment, or a decision only you can make. Nothing below is urge
 | | What | Why only you | Time |
 |---|---|---|---|
 | **B** | Change the leaked database password | Needs your Neon and Vercel logins | 10 min, **before the repo is made public** |
-| **C** | Qualtrics import check | Needs your Qualtrics login | 10 min |
+| ~~C~~ | Qualtrics import check | **Done 2026-11-11**: survey in, survey out, responses in, data out | — |
 | ~~E~~ | Turn on the language model | **Done 2026-11-11** (key added; measured; on in the demo) | — |
 | ~~F~~ | Put the demo online | **Done 2026-11-11**: <https://verity-voice-demo.fly.dev> | — |
 | ~~D~~ | Give the demo a real voice and real hearing | **Done 2026-11-11** (Deepgram) | — |
@@ -38,9 +38,18 @@ Vercel has the new one, and there is no access to Vercel from the build session.
 
 ## C. Qualtrics import check
 
-See [`qualtrics-test-survey.md`](qualtrics-test-survey.md). It answers the one open question
-about a free account (can it import responses?) and replaces a hand-written test file with a
-real export.
+Done 2026-11-11. A free-trial account imported the test survey and two test responses, and
+its exports are in `voice/fixtures/qualtrics/`. What it showed:
+
+- A free account can import responses.
+- Qualtrics marks them as imported (Status 4) and sets its own recorded date and response ID.
+- When importing, set the **Timezone** option to UTC: the interviewer writes times in UTC, and
+  Qualtrics otherwise reads them in the account's time zone.
+- Qualtrics' help page says imported responses can count as billable responses on its newer
+  price plans. Check your plan before importing in volume.
+
+The steps are in [`qualtrics-test-survey.md`](qualtrics-test-survey.md) if they are ever
+needed again.
 
 ## E. Turn on the language model
 

@@ -94,11 +94,22 @@ through Qualtrics intact. Qualtrics also adds `PL` and `PROJ` entries; the reade
 Step 3 done: Qualtrics reported "Import complete. 2 of 2 responses were successfully
 imported." on the free-trial account, so the open question (can a free account import
 responses?) is answered yes. Not yet seen: whether the values landed in the right fields.
-**Waiting on the operator** for step 4: Data & Analysis → Export & Import → Export data →
-CSV with "Use numeric values", and upload the file here. Then: save it as
-`fixtures/qualtrics/library-test-numeric.csv`, compare every field with
-`library-test-expected-import.csv` (answers, `vv_mode`, `vv_case_id`, dates, the skipped
-questions left empty for response B), and fix the writer if anything moved.
+Step 4 done: their data export is `fixtures/qualtrics/library-test-numeric.csv`. Every value
+is in the field it was sent to (tested), skipped questions are blank, `vv_mode` and
+`vv_case_id` came through. Qualtrics set Status to 4 (imported), its own RecordedDate and
+ResponseId, and added `Q5_NPS_GROUP`. **Open point:** the dates came back unchanged but
+labelled America/Los_Angeles: Qualtrics read our UTC times in the account's zone. Its import
+dialog has a Timezone option; choosing UTC there should fix it (not tried). An in-file
+`"timeZone"` key in the ImportId row is what Qualtrics' own exports carry and its importer
+"tries to detect" it; writing it from our side is untested. Verify one or the other the next
+time results are imported (after the first real call). **The Qualtrics check is complete.**
+
+**Waiting on the operator (asked 2026-11-11):** Telnyx. Asked whether they already have a
+Telnyx account with a phone number. The call path has only ever run against a simulated
+carrier; what the server needs is listed at the top of `voice/src/server/index.ts` and in
+`voice/docs/what-needs-you.md` §H (Telnyx API key, connection id, from-number, public key;
+a database URL; a campaign; `DIAL_ALLOWLIST` with their own number). The deploy job does not
+yet hand those to the server.
 
 **Next, in this order (one per turn)**
 
@@ -149,7 +160,7 @@ AI voice survey interviewers on top of Qualtrics. Plan and phase status table:
 own Postgres schema). The web app described in the rest of this file is now the **legacy
 app**: unchanged at the root (its `tsconfig.json` excludes `voice/`), to be switched off later.
 
-- **State (2026-11-11):** all code that needs no account login is built; 357 tests
+- **State (2026-11-11):** all code that needs no account login is built; 359 tests
   (`cd voice && npm test`); database tests also pass on real Postgres 16
   (`TEST_DATABASE_URL=… npx vitest run test/dialer-store.test.ts`).
 - **Never run live:** Telnyx calls, Deepgram/Cartesia speech, the Claude classifier, a
