@@ -126,10 +126,14 @@ The operator said yes; `set-up-telnyx` created the application "verity-voice"
 not touched. A Neon project for Verity Voice was created with the Neon connector:
 `verity-voice`, id `cold-wildflower-22977142`, aws-us-east-1, Postgres 17, empty (the
 server and the CLI run the migrations themselves).
-Still needed, one per turn:
-1. `VOICE_DATABASE_URL` (**asked; waiting**): the operator copies that project's connection
-   string (pooling off: postgres.js prepares statements) into the repository secret.
-2. `MY_PHONE_NUMBER`.
+`VOICE_DATABASE_URL` and `MY_PHONE_NUMBER` are set (the operator asked why their own number:
+it is only the phone that receives the test call, any phone they can answer). `set-up-call`
+ran (2026-11-11 03:42 UTC): a one-contact campaign is running in the new database and
+`DIAL_CAMPAIGN_ID` is staged on Fly. **Nothing has been deployed since, so nothing dials yet.**
+**Waiting on the operator's go** to run task `deploy`, which starts the server with calling on:
+it rings their phone within a few minutes if it is between 9am and 8pm Pacific, otherwise at
+9am. After the call: read the deploy job's server log / run `look`-style checks, run
+`stop-calls`, fix what the call showed.
 Then `set-up-call`, then `deploy` (the call is placed at server start, 9am to 8pm in the
 phone's time zone; tell the operator before deploying). The server renders every line with
 the voice before the first call. Expect fixes: see the open points at the top of
