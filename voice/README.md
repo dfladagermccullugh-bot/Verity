@@ -1,94 +1,140 @@
 # Verity Voice
 
-AI voice survey interviewers on top of Qualtrics. Plan, decisions and phases:
-[`../voice-interviewer-plan.md`](../voice-interviewer-plan.md).
+AI voice survey interviewers on top of Qualtrics. A researcher builds the survey in Qualtrics
+as usual; Verity Voice phones people who have agreed to be called, asks the questions word for
+word, and hands the answers back as a file Qualtrics imports. Qualtrics stays the system of
+record. Plan and decisions: [`../voice-interviewer-plan.md`](../voice-interviewer-plan.md).
 
-**Status: Phases 1 and 2 (core) — survey file in, a full scripted interview in text, response file out. No voice yet.**
+## The design rule
 
-This folder is a self-contained package. The original Verity web app at the repo root is
-separate: it does not import from here, its typecheck excludes this folder, and nothing
-here touches its database.
+**The AI never composes speech.** Everything the interviewer can say is fixed before the first
+call: the survey's own wording, taken from the Qualtrics file, plus a short list of call-handling
+lines (introduction, consent, neutral probes, goodbye). The code can only speak a line by its
+id from that list. A language model is used for one thing: reading what the respondent said.
+Its reading counts only if it names a real answer option and the words it relied on are
+actually in the transcript; otherwise the interviewer asks again.
 
-## What works today
+This is standardized interviewing, enforced in code rather than requested in a prompt.
 
-- **Phone-readiness check.** Reads a Qualtrics survey file (`.qsf`) and reports whether it
-  can be run by voice, what must change if not, and every word that would be spoken.
-- **Survey logic.** Display logic and skip logic are followed exactly; an interrupted
-  interview resumes where it stopped.
-- **Typed interview.** Runs the survey in the terminal with typed answers.
-- **Response file.** Writes answers as a CSV in Qualtrics' import layout.
+## What it does
 
-- **The interviewer.** A deterministic state machine runs the whole call: AI disclosure,
-  consent, questions word for word, neutral probes, opt-out, stop and call-back. It can
-  only speak lines from a fixed table, looked up by id. A model may only classify what the
-  respondent said, and its verdict is checked in code (real option, evidence actually
-  spoken) before it counts. Every line, utterance and decision goes to an audit log.
-- **Simulated respondents.** Scripted people replying in text, so calls run end to end
-  with no carrier, speech vendor or model. See [`docs/sample-calls.md`](docs/sample-calls.md).
+| | |
+|---|---|
+| **Reads a Qualtrics survey file** | Reports whether it can be run by phone, what must change if not, and every word that would be spoken. Anything outside the supported subset is refused, never approximated. |
+| **Follows the survey's logic** | Display and skip logic exactly; a dropped call resumes at the next unanswered question. |
+| **Runs the call** | AI disclosure in the first sentence, consent before any question, questions verbatim, at most two neutral probes, refusals accepted at once, "remove me" honoured immediately and permanently. No comment on any answer. |
+| **Understands replies** | Rules first (exact options, "the third one", spoken numbers, keypad); a language model for the rest, checked in code. Uncertain readings are probed, not guessed, and what stays uncertain is flagged for a person. |
+| **Calls many people at once** | Only with consent on file, only 9am to 8pm in the respondent's local time, a limited number of times. The database itself refuses a call without consent. |
+| **Keeps an audit trail** | Every line played, every transcript, every reading with its confidence and evidence, every decision, in an append-only log. |
+| **Reports** | AAPOR final dispositions and outcome rates, answer-quality signals, answers to check, and a methodology disclosure covering the AI items in AAPOR's Transparency Initiative. |
 
-Anything outside the supported subset is refused with a plain reason, never approximated.
-Supported: single choice, 0–10 scale, number entry, open text, single-answer Likert grids,
-read-only text; display and skip logic on earlier answers; embedded-data fields.
+Supported questions: single choice, 0–10 scale, number, open text, single-answer Likert grids,
+read-only text. Refused for now: select-all-that-apply, piped text, randomization, loops,
+branches in the survey flow.
 
-## Commands
+## See it without running anything
 
-Run from `voice/`. Needs Node 22.13 or newer.
+- [`docs/sample-calls.md`](docs/sample-calls.md): three simulated calls with the reasoning behind each answer.
+- [`docs/sample-campaign-report.md`](docs/sample-campaign-report.md): the report from a simulated campaign of 60 contacts.
+- [`docs/sample-campaign-responses.csv`](docs/sample-campaign-responses.csv): the matching Qualtrics import file.
+
+All three are generated by the real code, and a test fails if they go out of date.
+
+## Try it
+
+Needs Node 22.13 or newer. From `voice/`:
 
 ```bash
 npm ci
 ```
 
+Is this survey ready for the phone?
+
 ```bash
 npm run verity -- check fixtures/qualtrics/library-test.qsf
 ```
+
+Talk to the interviewer in a browser (speak and listen, or read and type). Open http://localhost:3000:
+
+```bash
+npm run serve
+```
+
+Be interviewed in the terminal:
 
 ```bash
 npm run verity -- interview fixtures/qualtrics/library-test.qsf --out responses.csv --audit audit.json
 ```
 
+Run a whole simulated campaign and get its report and Qualtrics file:
+
 ```bash
-npm run typecheck
+npm run verity -- campaign sample --out sample-campaign
+```
+
+Measure how well answers are read (rules only; add `-- --live` with an Anthropic key for the model):
+
+```bash
+npm run eval
 ```
 
 ```bash
 npm test
 ```
 
+## How it is checked
+
+342 automated tests. Among them:
+
+- **Nothing off-script can be spoken**: 400 random simulated calls with a hostile stand-in for the model, and 300 random spoken calls, never play a line outside the fixed list or ask a question without consent.
+- **Calling rules**: across 5,000 random situations, never a call without valid consent, to a do-not-call number, or outside calling hours. The database triggers are tested by trying to break them directly.
+- **Many calls at once**: 200 people at 40 calls at a time, on in-process Postgres and on a real Postgres 16 server: nobody on two calls, no answer lost or duplicated.
+- **Answer reading**: 298 hand-labelled replies. Rules alone decide 130 of them, all correctly, and record nothing wrong.
+- **Survey files**: besides the test survey, the reader was run by hand against three genuine Qualtrics exports (third-party files, not committed): it read the simple one and refused the others with reasons.
+- **The page**: driven through a complete interview in a real headless browser at desktop and phone sizes.
+
+## What has not been verified
+
+Stated plainly, because the difference matters:
+
+- **No real phone call has been placed.** The Telnyx path runs end to end against a simulated carrier, built from Telnyx's documentation. The first live call will find things.
+- **No real speech has been recognised or produced by a vendor.** The Deepgram and Cartesia adapters are written from their API references and tested with stand-ins.
+- **The language model has not been run live.** Its adapter is type-checked against the real SDK and tested with a stand-in; its accuracy on the labelled replies is unmeasured.
+- **Nothing has been through a live Qualtrics account.** The response file follows the layout of genuine exports; whether a free account can import it is the open question in `docs/qualtrics-test-survey.md`. The test survey file is hand-written.
+- **The labelled replies are hand-written**, not real respondents, and there has been no pilot. Nothing here measures mode effects or real-world accuracy yet.
+- **The voice comparison has not been run**, and only one recogniser adapter exists.
+- **The container image has not been built** and nothing is deployed.
+- **Not legal advice.** The consent wording has had no legal review. The server will not dial any number that is not explicitly allowed.
+
+What each of these needs is in [`docs/what-needs-you.md`](docs/what-needs-you.md); the study that
+would produce real numbers is in [`docs/pilot-kit.md`](docs/pilot-kit.md).
+
 ## Layout
 
 ```
-src/instrument/   platform-neutral questionnaire model; HTML to spoken text
+src/instrument/   questionnaire model; survey HTML to spoken text
 src/qualtrics/    .qsf reader, wording advice, response CSV writer
-src/engine/       survey-logic engine; rule-based reading of typed answers
-src/script/       the spoken script: every line, fixed in advance, with a version hash
-src/interviewer/  call protocol, answer classification, the interviewer, simulated respondents
-src/report/       phone-readiness report; readable call reports
-src/cli.ts        command line
-test/             tests (vitest)
-fixtures/         test survey and expected response file (made-up answers only)
-docs/             what still needs the operator; the test-survey specification
+src/engine/       survey logic; rule-based reading of answers
+src/script/       the spoken script, fixed in advance, with a version hash
+src/interviewer/  call wording, answer classification, the interviewer, simulated respondents
+src/voice/        spoken calls: playback, listening, timing; rendered speech; phone channel
+src/telephony/    Telnyx carrier, audio codec, speech recognition, a fake call for tests
+src/dialer/       calling rules, hours, contacts, campaign store, workers
+src/quality/      AAPOR dispositions and rates; answer-quality signals
+src/report/       readiness report, call reports, campaign report
+src/ops/          operator jobs; the limit on which numbers may be dialled
+src/server/       web server and the browser demo
+src/db/           database interface and migrations
+eval/             labelled replies, scorer, voice comparison
+test/             tests
+docs/             samples, what still needs the operator, pilot kit
 ```
 
-## Measuring how well answers are read
-
-`eval/dataset.ts` holds about 300 hand-labelled replies. `npm run eval` scores the rules alone
-(free); `npm run eval -- --live` adds the Claude classifier (needs `ANTHROPIC_API_KEY`). The
-number to watch is "wrong answers that would be recorded without a probe". Rules alone: 130
-of 298 replies decided, all correctly, none wrongly recorded. **The live model has not been
-run yet**: no key exists in the build environment.
-
-## Not built yet
-
-- Saving calls to a database, the live language-model classifier and its labelled
-  evaluation set (rest of Phase 2); speech (Phase 3); phone calls (Phase 4).
-
-## Not yet verified
-
-- No file here has been through a live Qualtrics account. The reader is checked against
-  genuine exports; the response file follows the layout of genuine exports, but a real
-  import has not been run. See `docs/qualtrics-test-survey.md`.
+Separate from the original Verity web app at the repo root: nothing is shared, and this code
+uses its own database.
 
 ## Rules
 
-- No respondent data, archive or credential is ever committed. The repo is intended to be public.
-- Every phase ships with its own verification; see the plan.
+- No respondent data, archive or credential is ever committed.
+- Where a rule protects respondents (consent, hours, opt-out, the dial limit), it is code with a test, not a setting.
+- Claims in this README are either covered by a test or listed under "What has not been verified".

@@ -1,5 +1,8 @@
 # Verity
 
+> **New work lives in [`voice/`](voice/README.md): Verity Voice**, AI voice survey interviewers
+> on top of Qualtrics. This page describes the original Verity web app, which is unchanged.
+
 A constrained-interview tool that turns a one-sentence idea into a structured PRD. The invitee answers only yes, no, or done. The model does the asking.
 
 Live: invite-only. See *Try it* below.

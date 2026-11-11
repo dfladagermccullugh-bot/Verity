@@ -1,23 +1,32 @@
 # Verity Voice — AI voice interviewers on top of Qualtrics: plan
 
-**Status (10 Nov 2026):** Phases 0 and 1 built; Phase 2 core built. The operator has asked for the build to
-proceed without per-phase sign-off. Open items that need the operator's logins are in
-`voice/docs/phase-0-operator-steps.md` (password rotation, archive, Qualtrics import check).
+**Status (11 Nov 2026):** everything that can be built and tested without an account login is
+built: all six phases' code, 342 tests. The operator asked for the build to proceed without
+per-phase sign-off. What remains needs a login, a payment or a decision, and is listed in
+`voice/docs/what-needs-you.md`.
 
-- **Phase 0:** `voice/` package, `ci.yml`, old code bookmarked as branch
-  `legacy/idea-seeder-v1`. Not done: archive and password rotation (need logins).
-- **Phase 1:** `.qsf` reader, readiness report, spoken script, survey-logic engine, typed
-  interview, response CSV writer. Checked against three genuine Qualtrics
-  exports. **Not yet verified against a live Qualtrics account.**
-- **Phase 2 (core built, rest open):** call protocol with locked AI disclosure, rules-first
-  classification with code-checked model verdicts, the interviewer state machine, audit
-  log, simulated respondents, generated `voice/docs/sample-calls.md`; 126 tests including
-  400 random simulated calls that never produce an off-script line. **Open:** database
-  persistence, the live Claude classifier, the 300-answer labelled evaluation set, the
-  weekly live check.
-- **Deviations from this plan:** piped text and multi-select are refused for now, not
-  supported (piped text needs live speech, Phase 3). The test survey file is hand-written
-  until a real export replaces it. Location is assumed to be the US.
+| Phase | Built | Not verified or not done |
+|---|---|---|
+| 0 Safeguard | `voice/` package, CI, old sessions archived to Neon branch `archive-2026-11` (counts match), old code bookmarked as branch `legacy/idea-seeder-v1` | Leaked database password not rotated (needs Neon + Vercel logins) |
+| 1 Survey in, responses out | `.qsf` reader, readiness report, spoken script, survey-logic engine, response CSV | Nothing has been through a live Qualtrics account; test survey file is hand-written |
+| 2 Interviewer core | Fixed speech table, rules-first classification, Claude classifier with code-checked verdicts, state machine, audit log, Postgres persistence, 298 labelled replies, weekly eval workflow | Live model never run; its accuracy is unmeasured |
+| 3 Real voice | Spoken-call runner (playback, interruption, timing, keypad), browser demo using the browser's own speech, Cartesia and Deepgram voice adapters, voice-comparison harness | No vendor speech produced or recognised; comparison not run; only one recogniser adapter; demo not deployed |
+| 4 Phone and many calls | Telnyx two-way call layer, phone channel, consent gate, calling hours, do-not-call, retries, caps, database-level guards, 200-person concurrency test on real Postgres | No real call placed |
+| 5 Quality and review | AAPOR dispositions and outcome rates, answer-quality signals, campaign report with disclosure, answers-to-check sheet, per-person audit trail, retention job | Review is a document, not an interactive queue |
+| 6 Pilot and portfolio | README, generated sample calls and campaign report, pilot kit | No pilot run; no write-up; old app not switched off |
+
+**Deviations from this plan**
+- Piped text and select-all-that-apply are refused, not supported (D5 listed simple piped text).
+- Calling hours use the contact's stated state or time zone, and all US zones when unknown.
+  The area code is not used: mobile numbers keep it when people move (section 5 said area code).
+- The browser demo speaks and listens with the browser's built-in speech features, so it needs
+  no vendor key. Vendor voices are for phone calls.
+- Outcome rates treat the consented list as all eligible, per AAPOR's guidance for such lists;
+  this lowers the rates.
+- Audio is never kept at present: recording is not implemented, only the consent question for it.
+- The server dials nothing unless `DIAL_ALLOWLIST` is set (new safety rail).
+- The classifier defaults to `claude-haiku-5-5` (D11's "small fast model"); `VERITY_CLASSIFIER_MODEL` overrides.
+- Location is assumed to be the US; the operator has not confirmed.
 
 ## Context
 

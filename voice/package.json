@@ -13,7 +13,8 @@
     "test:watch": "vitest",
     "verity": "tsx src/cli.ts",
     "eval": "tsx eval/run.ts",
-    "serve": "tsx src/server/index.ts"
+    "serve": "tsx src/server/index.ts",
+    "bakeoff": "tsx eval/bakeoff.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.8.0",
