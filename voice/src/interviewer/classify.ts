@@ -58,7 +58,10 @@ const STOP = /^(?:(?:please\s+)?stop(?:\s+please)?|i (?:want|need|have) to stop|
 const REPEAT = new RegExp(
   "^(?:(?:sorry|pardon|excuse me|um|uh|oh|wait|hang on)\\s+)*" +
     "(?:(?:(?:can|could|would|will) you\\s+)?(?:please\\s+)?(?:repeat|say)(?:\\s+(?:that|it|this|the question|the options|the choices|them))?(?:\\s+again)?(?:\\s+for me)?" +
-    "|what|what was that|what was the question|what did you say|what were the (?:options|choices)|come again|huh|eh|pardon|sorry" +
+    "|what|what was that|what did you say|come again|huh|eh|pardon|sorry" +
+    // "What was the question?", "what's the scale again?", "what were my options?", "remind me of the choices"
+    "|(?:and\\s+)?what(?:'s| is| was| are| were)(?: the| my| those)? (?:question|scale|options|choices|answers)(?:\\s+again)?" +
+    "|(?:(?:can|could|would|will) you\\s+)?(?:please\\s+)?(?:remind me(?: of)?|give me|read(?: me)?|tell me|repeat|say)(?: the| my| those)? (?:question|scale|options|choices|answers)(?:\\s+(?:again|one more time|once more))?(?:\\s+for me)?" +
     "|i (?:didn't|did not|couldn't|could not) (?:hear|catch|get) (?:that|you|it|the question))" +
     "(?:\\s+please)?$",
 );
@@ -66,8 +69,8 @@ const CALLBACK = /\b(call (?:me )?back|call (?:me )?later|another time|not a goo
 const YES = /^(?:(?:yes|yeah|yep|yup|sure|ok|okay|all right|alright|fine by me|i agree|i do|that's fine|that is fine|go ahead|yes please|yes i agree|yes i do)(?:[ ,]+(?:sure|go ahead|okay|ok|i agree|that's fine))?)$/;
 const NO = /^(?:no|nope|nah|no thanks|no thank you|i don't|i do not|i don't agree|i do not agree|i don't want to|not interested|i'm not interested|absolutely not|definitely not)$/;
 /** Whole-utterance yes and no, for survey questions whose only options are Yes and No. */
-const PLAIN_YES = /^(?:yes|yeah|yep|yup|uh huh|yes yes|yes i have|yes i did|yes i do|i have yes|i did yes)$/;
-const PLAIN_NO = /^(?:no|nope|nah|no no|no no no|no i haven't|no i have not|no i didn't|no i don't)$/;
+const PLAIN_YES = /^(?:(?:oh\s+)?(?:yes|yeah|yep|yup|uh huh|mm hmm|sure|sure thing|ok|okay|all right|alright|of course|absolutely|definitely|certainly|go ahead|why not|i would|i have|i did|i do|i am|yes yes|yes i have|yes i did|yes i do|yes i would|yes i am|i have yes|i did yes)(?:[ ,]+(?:sure|go ahead|okay|ok|of course|i would|i have|i did|i do|i am|that's fine|please))?)$/;
+const PLAIN_NO = /^(?:(?:oh\s+)?(?:no|nope|nah|no no|no no no|not really|no thanks|no thank you|i would not|i wouldn't|i have not|i haven't|i did not|i didn't|i do not|i don't|i am not|i'm not|no i haven't|no i have not|no i didn't|no i don't|no i wouldn't|no i would not)(?:[ ,]+(?:thanks|thank you|i haven't|i didn't|i don't|i wouldn't))?)$/;
 
 function rule(intent: Intent, utterance: string, answer?: Answer): Classification {
   const c: Classification = { intent, confidence: 1, evidence: utterance.trim(), by: "rule" };

@@ -177,6 +177,72 @@ describe("messages from the page are not trusted", () => {
   });
 });
 
+describe("the demo behind a passcode", () => {
+  const enter = (host: string, passcode: string) => fetch(`http://${host}/demo/enter`, { method: "POST", redirect: "manual", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ passcode }) });
+
+  it("shows only the passcode form, and serves nothing of the demo, until the passcode is entered", async () => {
+    const host = await start({ demoPasscode: "open sesame", demoVoice: humVoice(200) });
+    const page = await (await fetch(`http://${host}/`)).text();
+    expect(page).toContain("Enter the passcode");
+    expect(page).not.toContain("automated AI interviewer");
+    expect((await fetch(`http://${host}/demo/info`)).status).toBe(401);
+    expect((await fetch(`http://${host}/demo/audio/p.intro`)).status).toBe(401);
+    const turnedAway = await visitor(host, REPLIES);
+    expect(turnedAway.refused).toMatch(/passcode/);
+    expect(turnedAway.spoken).toEqual([]);
+    // The health check is not part of the demo and stays open.
+    expect((await fetch(`http://${host}/health`)).status).toBe(200);
+  });
+
+  it("a wrong passcode is refused; the right one opens the page, its recordings and an interview", async () => {
+    const host = await start({ demoPasscode: "open sesame", demoVoice: humVoice(200) });
+    const wrong = await enter(host, "open says me");
+    expect(wrong.status).toBe(401);
+    expect(wrong.headers.get("set-cookie")).toBeNull();
+    expect(await wrong.text()).toContain("That passcode is not right.");
+    const right = await enter(host, " open sesame ");
+    expect(right.status).toBe(303);
+    const cookie = right.headers.get("set-cookie")!.split(";")[0]!;
+    expect(right.headers.get("set-cookie")).toMatch(/HttpOnly; SameSite=Lax/);
+    // The cookie does not contain the passcode.
+    expect(cookie).not.toContain("sesame");
+    const headers = { Cookie: cookie };
+    expect(await (await fetch(`http://${host}/`, { headers })).text()).toContain("automated AI interviewer, not a person");
+    expect((await fetch(`http://${host}/demo/info`, { headers })).status).toBe(200);
+    expect((await fetch(`http://${host}/demo/audio/p.intro`, { headers })).status).toBe(200);
+    const ended = await new Promise<any>((resolve, reject) => {
+      const ws = new WebSocket(`ws://${host}/demo/ws`, { headers });
+      let last: any = null;
+      ws.on("message", (raw) => {
+        const msg = JSON.parse(raw.toString());
+        if (msg.type === "speak") ws.send(JSON.stringify({ type: "played", played: msg.lines.map((l: any, i: number) => ({ lineId: l.id, startedMs: i, endedMs: i + 1, completed: true })) }));
+        else if (msg.type === "listen") ws.send(JSON.stringify({ type: "turn", kind: "speech", text: "no", startedMs: 10, endedMs: 11 }));
+        else last = msg;
+      });
+      ws.on("close", () => resolve(last));
+      ws.on("error", reject);
+    });
+    expect(ended).toMatchObject({ type: "ended", outcome: "consent_declined" });
+  });
+
+  it("guessing is slowed down, and a made-up cookie opens nothing", async () => {
+    const host = await start({ demoPasscode: "open sesame" });
+    expect(await (await fetch(`http://${host}/`, { headers: { Cookie: "vv_demo=0000" } })).text()).toContain("Enter the passcode");
+    const statuses = [];
+    for (let i = 0; i < 12; i++) statuses.push((await enter(host, `guess ${i}`)).status);
+    expect(statuses.slice(0, 10).every((s) => s === 401)).toBe(true);
+    expect(statuses.slice(10)).toEqual([429, 429]);
+    // Even the right passcode waits once the tries are used up.
+    expect((await enter(host, "open sesame")).status).toBe(429);
+  });
+
+  it("with no passcode set, the demo is open as before", async () => {
+    const host = await start();
+    expect(await (await fetch(`http://${host}/`)).text()).toContain("automated AI interviewer, not a person");
+    expect((await enter(host, "anything")).status).toBe(303);
+  });
+});
+
 /** One piece of microphone sound as the page sends it: its clock, then `ms` of 16-bit samples. */
 function sound(pageMs: number, ms: number): Buffer {
   const frame = Buffer.alloc(4 + Math.round((ms / 1000) * MIC_SAMPLE_RATE) * 2);

@@ -84,7 +84,7 @@ npm test
 
 ## How it is checked
 
-368 automated tests. Among them:
+378 automated tests. Among them:
 
 - **Nothing off-script can be spoken**: 400 random simulated calls with a hostile stand-in for the model, and 300 random spoken calls, never play a line outside the fixed list or ask a question without consent.
 - **Calling rules**: across 5,000 random situations, never a call without valid consent, to a do-not-call number, or outside calling hours. The database triggers are tested by trying to break them directly.

@@ -7,6 +7,7 @@
 #   DEEPGRAM_API_KEY                       the demo hears through Deepgram and speaks with its voice
 #   CARTESIA_API_KEY + CARTESIA_VOICE_ID   the demo speaks with Cartesia's voice instead
 #   ANTHROPIC_API_KEY                      natural replies are read by Claude (otherwise by rules only)
+#   DEMO_PASSCODE                          the demo page asks for this passcode before showing anything
 # With none set, the demo uses the browser's built-in speech and understands exact answers only.
 #
 # Real phone calls need more, all as repository secrets, and are placed only to the one number
@@ -252,9 +253,10 @@ jobs:
           TELNYX_FROM_NUMBER: ${{ secrets.TELNYX_FROM_NUMBER }}
           DATABASE_URL: ${{ secrets.VOICE_DATABASE_URL }}
           MY_PHONE_NUMBER: ${{ secrets.MY_PHONE_NUMBER }}
+          DEMO_PASSCODE: ${{ secrets.DEMO_PASSCODE }}
         run: |
           : > keys.env
-          for name in DEEPGRAM_API_KEY CARTESIA_API_KEY CARTESIA_VOICE_ID ANTHROPIC_API_KEY TELNYX_API_KEY TELNYX_PUBLIC_KEY TELNYX_CONNECTION_ID DATABASE_URL; do
+          for name in DEEPGRAM_API_KEY CARTESIA_API_KEY CARTESIA_VOICE_ID ANTHROPIC_API_KEY TELNYX_API_KEY TELNYX_PUBLIC_KEY TELNYX_CONNECTION_ID DATABASE_URL DEMO_PASSCODE; do
             if [ -n "${!name}" ]; then printf '%s=%s\n' "$name" "${!name}" >> keys.env; echo "$name: set, handing it to the server."; else echo "$name: not set in this repository's secrets."; fi
           done
           # Phone numbers are written the one way the server accepts: +1 and ten digits.

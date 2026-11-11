@@ -62,6 +62,28 @@ describe("rules", () => {
   });
 });
 
+describe("everyday speech, as heard on the operator's own test (11 Nov 2026)", () => {
+  it("sure, okay, of course and the like are yes to a yes-or-no question; not really and no thanks are no", () => {
+    for (const said of ["sure", "Sure.", "okay", "ok", "of course", "absolutely", "yeah, sure", "sure thing", "go ahead", "I would", "oh yes", "why not"]) {
+      expect([said, classifyByRule(ask("QID7", said))]).toEqual([said, expect.objectContaining({ intent: "answer", answer: { kind: "choice", code: "1" }, by: "rule" })]);
+    }
+    for (const said of ["nope", "not really", "no thanks", "No, thank you", "I wouldn't", "nah"]) {
+      expect([said, classifyByRule(ask("QID7", said))]).toEqual([said, expect.objectContaining({ intent: "answer", answer: { kind: "choice", code: "2" } })]);
+    }
+  });
+
+  it("but only where the options are Yes and No: sure is not an answer to a five-point scale", () => {
+    expect(classifyByRule(ask("QID3", "sure"))).toBeNull();
+    expect(classifyByRule(ask("QID4", "okay"))).toBeNull();
+  });
+
+  it("asking for the question, the scale or the choices again is a request to repeat", () => {
+    for (const said of ["Sorry, what was the question?", "what was the scale again?", "Sorry, what was the scale again?", "what were my options?", "what are the choices again", "can you repeat the options?", "could you read the choices again", "remind me of the scale", "what's the question"]) {
+      expect([said, classifyByRule(ask("QID4", said))?.intent]).toEqual([said, "repeat"]);
+    }
+  });
+});
+
 describe("model verdicts are checked in code", () => {
   const req = ask("QID3", "probably about once a month I'd say");
   const good = { intent: "answer" as const, answer: { kind: "choice" as const, code: "3" }, confidence: 0.93, evidence: "about once a month" };

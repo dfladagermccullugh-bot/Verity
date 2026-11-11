@@ -34,6 +34,44 @@ ask before anything that changes one of their outside accounts or makes a phone 
 own independent voice thing" later; do not work on it. They have said there are "a lot of
 things I kind of don't agree with", still unspecified: ask, one at a time; do not guess.
 
+**Direction changed again, last thing on 2026-11-11. This is the current one; where it
+conflicts with anything below, it wins.**
+- After researching it, the operator concluded the product idea does not solve a real
+  problem: phone response rates are about 6%, unknown numbers go unanswered, automated phone
+  surveys are decades old. They asked to be told plainly, and were: an AI interviewer does
+  not fix the answer rate; nobody has asked for this; the "voice by link" alternative is
+  also crowded (Koji, TheySaid, Listen Labs, Outset, YouGov and others; Qualtrics itself has
+  only text follow-ups). **It is not being pursued as a business.**
+- What they want instead, in their words: "a working product demo, just as an idea… so it
+  actually works. Whether or not it's useful is just to show that I can set these types of
+  things up. Maybe just keep a demo page up with a passcode or something so people can see
+  it." So: **the goal is a demo that works, behind a passcode, as proof of skill.**
+- **Outbound phone calling is parked.** Do not place a third call or spend time on Telnyx
+  unless they ask. Calling is off. The "very next thing: a third real phone call" section
+  below is kept only for the record of how it is done.
+- Done towards the demo the same evening (378 tests pass):
+  - "sure", "okay", "of course" and the like are yes to a yes-or-no question (rules).
+  - "What was the scale again?", "what were my options?" get just the options and the
+    statement, at once; "what was the question?" gets the question. Up to six times per
+    question, never counted against the respondent.
+  - The demo page, its recordings and its interviews can be closed behind a passcode
+    (`DEMO_PASSCODE`; `voice/src/server/app.ts`). The carrier endpoints and `/health` stay
+    open. **Waiting on the operator** to add the repository secret `DEMO_PASSCODE`; then run
+    `deploy` and confirm the log reads "Demo page: behind a passcode". Until then the page
+    is open to anyone and spends their Deepgram and Anthropic credit.
+- Still to do for "it actually works", in rough order; check each against what they said:
+  1. Have them try the deployed page by voice and say what still feels wrong. Nothing they
+     try is kept, so ask them to note the exact words that failed.
+  2. The language model's reading is cautious ("monthly", "around 40" called unclear):
+     revise the prompt, bump `CLASSIFIER_PROMPT_VERSION`, run task `measure-model`.
+  3. Mid-survey questions still get "I am not able to answer questions or explain further".
+     They want it to feel like a person. Decide with them how far to loosen the fixed-script
+     rule (see "What this means" below); the AI disclosure stays.
+  4. The page itself: they said it "is not the product interface that we're going to be
+     using". If the demo is what people will be shown, ask what it should look like.
+- The README says phone calls are "Early" and lists a product direction. If the project is
+  now a demonstration, its "Where it is going" section should be brought into line; ask.
+
 **The operator's vision and notes, given after the session's close (2026-11-11). Read this
 before doing anything else; it changes the priorities below.** Their words are quoted; what
 is marked "my reading" is mine and unconfirmed.
@@ -205,7 +243,7 @@ AI voice survey interviewers on top of Qualtrics. Plan and phase status table:
 own Postgres schema). The web app described in the rest of this file is now the **legacy
 app**: unchanged at the root (its `tsconfig.json` excludes `voice/`), to be switched off later.
 
-- **State (2026-11-11):** all code that needs no account login is built; 368 tests
+- **State (2026-11-11):** all code that needs no account login is built; 378 tests
   (`cd voice && npm test`); database tests also pass on real Postgres 16
   (`TEST_DATABASE_URL=… npx vitest run test/dialer-store.test.ts`).
 - **Never run live:** Telnyx calls, Deepgram/Cartesia speech, the Claude classifier, a

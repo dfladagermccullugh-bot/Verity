@@ -24,12 +24,17 @@ export interface Policy {
   maxRepeats: number;
 }
 
-export const DEFAULT_POLICY: Policy = { acceptAt: 0.85, maxProbes: 2, maxRepeats: 2 };
+export const DEFAULT_POLICY: Policy = { acceptAt: 0.85, maxProbes: 2, maxRepeats: 6 };
+
+/** A request to hear only the answer options again ("what was the scale?", "what were my choices?"). */
+const ABOUT_OPTIONS = /\b(?:options?|choices?|scale|answers)\b/i;
 
 /** What a person must have heard to the end before their agreement can count: who is calling, that it is an AI, what is asked, and how to stop. */
 const INTRODUCTION: ProtocolKey[] = ["intro", "purpose", "transcribed", "how_to_stop"];
 /** Times the introduction is started again when it was cut off, before the call is given up. */
 const MAX_INTRO_RESTARTS = 2;
+/** Times the introduction is given again on request before a further request counts as no clear agreement. */
+const MAX_INTRO_REPEATS = 2;
 
 export type Phase = "not_started" | "consent" | "recording" | "interview" | "ended";
 
@@ -279,12 +284,12 @@ export class Interviewer {
       this.state.consent.participate = false;
       return this.end("consent_declined", "consent_declined", "declined to take part");
     }
-    if (c.intent === "repeat" && a.repeats < this.policy.maxRepeats) {
+    if (c.intent === "repeat" && a.repeats < MAX_INTRO_REPEATS) {
       a.repeats += 1;
       this.decide("repeat", "introduction repeated on request");
       return this.sayKeys("purpose", "transcribed", "how_to_stop", "consent_ask");
     }
-    if (c.intent === "question" && a.repeats < this.policy.maxRepeats) {
+    if (c.intent === "question" && a.repeats < MAX_INTRO_REPEATS) {
       // "Who is this?", "take part in what?": the only answer the interviewer has is its introduction.
       a.repeats += 1;
       this.decide("repeat", "asked what the call is; introduction given again");
@@ -392,6 +397,11 @@ export class Interviewer {
 
     if (c.intent === "repeat" && a.repeats < this.policy.maxRepeats) {
       a.repeats += 1;
+      // Asking for the scale or the choices gets just those, straight away; nobody can hold five options in their head.
+      if (closed && ABOUT_OPTIONS.test(c.evidence)) {
+        this.decide("repeat", "answer options repeated on request", slot);
+        return this.sayOptions(step);
+      }
       this.decide("repeat", "question repeated on request", slot);
       this.sayKeys("probe_repeat");
       return this.sayStep(step, true);

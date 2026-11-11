@@ -263,6 +263,30 @@ describe("probing", () => {
     expect(ids.slice(i, i + 4)).toEqual(["p.probe_repeat", "q.QID4.ask", "q.QID4.options", "q.QID4.row.2"]);
   });
 
+  it("asking what the scale was gets the scale and the statement again, without starting over", async () => {
+    const c = await call(({ expecting, attempt }) => (expecting.kind === "answer" && expecting.slot === "QID4#2" && attempt === 1 ? "Sorry, what was the scale again?" : cooperative(SPOKEN_A)({ expecting, attempt, said: [] })));
+    const ids = saidIds(c);
+    const at = ids.lastIndexOf("q.QID4.options");
+    // Straight to the options and the statement: no "let me repeat the question", no question stem.
+    expect(ids.slice(at - 1, at + 2)).toEqual(["q.QID4.row.2", "q.QID4.options", "q.QID4.row.2"]);
+    expect(c.interviewer.log.some((e) => e.type === "decision" && e.detail === "answer options repeated on request")).toBe(true);
+    expect(c.interviewer.state.interview.answers).toEqual(RESPONSE_A);
+    expect(c.interviewer.state.review).toEqual([]);
+  });
+
+  it("the scale can be asked for again and again without the question being given up on", async () => {
+    const c = await call(({ expecting, attempt }) => (expecting.kind === "answer" && expecting.slot === "QID4#1" && attempt <= 4 ? "what were the options?" : cooperative(SPOKEN_A)({ expecting, attempt, said: [] })));
+    expect(c.interviewer.state.attempts["QID4#1"]).toEqual({ probes: 0, repeats: 4 });
+    expect(c.interviewer.state.interview.answers).toEqual(RESPONSE_A);
+  });
+
+  it("sure is yes to a yes-or-no question", async () => {
+    const c = await call(({ expecting, attempt }) => (expecting.kind === "answer" && expecting.slot === "QID7" ? "sure" : cooperative(SPOKEN_A)({ expecting, attempt, said: [] })));
+    expect(c.interviewer.state.interview.answers.QID7).toEqual({ kind: "choice", code: "1" });
+    expect(c.interviewer.state.attempts.QID7 ?? { probes: 0, repeats: 0 }).toEqual({ probes: 0, repeats: 0 });
+    expect(c.interviewer.state.outcome).toBe("complete");
+  });
+
   it("a number question asks for a number", async () => {
     const c = await call(({ expecting, attempt }) => (expecting.kind === "answer" && expecting.slot === "QID6" && attempt === 1 ? "a fair few" : cooperative(SPOKEN_A)({ expecting, attempt, said: [] })));
     const ids = saidIds(c);

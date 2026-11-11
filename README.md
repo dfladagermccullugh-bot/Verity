@@ -199,7 +199,7 @@ cd voice
 npm test
 ```
 
-368 automated tests. Among them:
+378 automated tests. Among them:
 
 - **Nothing off-script is spoken.** Hundreds of random simulated calls, with a hostile
   stand-in for the language model, never play a line outside the fixed script.
