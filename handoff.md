@@ -77,18 +77,19 @@ like "five, no, six"), so the caller is re-asked. Worth a prompt revision later 
 `CLASSIFIER_PROMPT_VERSION`, re-measure); not blocking. The demo server now has the key (its health check reports
 `claude-haiku-5-5/prompt-v1`).
 
-**Qualtrics import, in progress (2026-11-11).** The operator's first import of the
-hand-written `library-test.qsf` failed with Qualtrics' generic "Something went wrong and the
-project wasn't created". The file was compared with a genuine export (QualtricsTools'
-"Better Sample Survey", fetched from raw.githubusercontent.com) and corrected: the question
-count belongs in `SecondaryAttribute` with a null payload; skip logic sits on the block's
-entry for the question, not in the question; IDs are 15 letters and digits; `SCO` and `STAT`
-entries added; skin given in the current object form. Which of these Qualtrics objected to
-is unknown. **Waiting on the operator** to import the corrected `library-test.qsf`, and if it
-fails, `import-probe.qsf` (two plain questions), and report which worked. If both fail:
-suspect the account or a passing Qualtrics fault before the file. If only the probe works:
-halve the full file (NPS question, matrix, display logic, embedded data are the suspects).
-Then steps 2 to 5 of `voice/docs/qualtrics-test-survey.md`, one per turn.
+**Qualtrics (2026-11-11).** The operator's free-trial account ("Start Free Trial" shown)
+accepted the corrected `library-test.qsf` (first version was refused; the fixture was brought
+into line with a genuine export: question count in `SecondaryAttribute`, skip logic on the
+block entry, 15-character IDs, `SCO`/`STAT` entries; which mattered is unknown). Seen in
+their editor: the NPS question with both end labels, the number question, the "Extra" block,
+Q7's skip to end of survey. Qualtrics' only flags are accessibility/mobile tips about the
+matrix (Q4), which concern the web form, not voice. Display logic on Q3/Q4 and the embedded
+data fields were not on screen: confirm from the export. Survey name there: `verity_talk_test`.
+**Waiting on the operator** for step 2 of `voice/docs/qualtrics-test-survey.md`: export the
+survey (Tools → Import/Export → Export survey) and upload the `.qsf` to the chat. Then: save
+it as `fixtures/qualtrics/library-test-real.qsf`, run the reader on it, compare with the
+hand-written one, fix differences. Then steps 3 to 5, one per turn. `import-probe.qsf` was
+not needed.
 
 **Next, in this order (one per turn)**
 
