@@ -6,10 +6,12 @@
 # Voice keys are repository secrets too, and each deploy hands the server those that are set:
 #   DEEPGRAM_API_KEY                       the demo hears through Deepgram and speaks with its voice
 #   CARTESIA_API_KEY + CARTESIA_VOICE_ID   the demo speaks with Cartesia's voice instead
-# With none set, the demo uses the browser's built-in speech.
+#   ANTHROPIC_API_KEY                      natural replies are read by Claude (otherwise by rules only)
+# With none set, the demo uses the browser's built-in speech and understands exact answers only.
 #
-# The task "compare-voices" deploys nothing: it runs the voice comparison against the live
-# vendors (the first real use of those adapters) and keeps the audio to listen to.
+# Two tasks deploy nothing:
+#   compare-voices   runs the voice comparison against the live vendors and keeps the audio
+#   measure-model    scores the language model's reading of the labelled replies (a few cents)
 name: voice-deploy
 
 on:
@@ -20,9 +22,9 @@ on:
         required: true
         default: "verity-voice-demo"
       task:
-        description: "deploy the server, or compare-voices (live check of the voice vendors; deploys nothing)"
+        description: "deploy the server; or compare-voices / measure-model (live checks; they deploy nothing)"
         type: choice
-        options: [deploy, compare-voices]
+        options: [deploy, compare-voices, measure-model]
         default: deploy
 
 permissions:
@@ -60,8 +62,29 @@ jobs:
           path: voice/bakeoff
           if-no-files-found: ignore
 
+  measure-model:
+    if: inputs.task == 'measure-model'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: voice
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - name: Check the key is present
+        run: |
+          if [ -z "$ANTHROPIC_API_KEY" ]; then echo "The repository secret ANTHROPIC_API_KEY is not set."; exit 1; fi
+      - name: Read the labelled replies with the model and score it
+        run: npm run -s eval -- --live --wrong | tee -a "$GITHUB_STEP_SUMMARY"
+
   deploy:
-    if: inputs.task != 'compare-voices'
+    if: inputs.task != 'compare-voices' && inputs.task != 'measure-model'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     defaults:
@@ -84,15 +107,16 @@ jobs:
           else
             flyctl apps create "$APP" --org personal || flyctl apps create "$APP"
           fi
-      - name: Hand the voice keys to the server
+      - name: Hand the service keys to the server
         # Staged: they take effect with the release below. A key that is not set is left alone.
         env:
           DEEPGRAM_API_KEY: ${{ secrets.DEEPGRAM_API_KEY }}
           CARTESIA_API_KEY: ${{ secrets.CARTESIA_API_KEY }}
           CARTESIA_VOICE_ID: ${{ secrets.CARTESIA_VOICE_ID }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           : > keys.env
-          for name in DEEPGRAM_API_KEY CARTESIA_API_KEY CARTESIA_VOICE_ID; do
+          for name in DEEPGRAM_API_KEY CARTESIA_API_KEY CARTESIA_VOICE_ID ANTHROPIC_API_KEY; do
             if [ -n "${!name}" ]; then printf '%s=%s\n' "$name" "${!name}" >> keys.env; echo "$name: set, handing it to the server."; else echo "$name: not set in this repository's secrets."; fi
           done
           if [ -s keys.env ]; then flyctl secrets import --stage --app "$APP" < keys.env; fi
