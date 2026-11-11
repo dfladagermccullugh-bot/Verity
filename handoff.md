@@ -77,9 +77,18 @@ like "five, no, six"), so the caller is re-asked. Worth a prompt revision later 
 `CLASSIFIER_PROMPT_VERSION`, re-measure); not blocking. The demo server now has the key (its health check reports
 `claude-haiku-5-5/prompt-v1`).
 
-**Waiting on the operator (asked 2026-11-11):** Qualtrics, step 1 of
-`voice/docs/qualtrics-test-survey.md` only: import `library-test.qsf` into their Qualtrics
-account and say what happened. Then steps 2 to 5, one per turn.
+**Qualtrics import, in progress (2026-11-11).** The operator's first import of the
+hand-written `library-test.qsf` failed with Qualtrics' generic "Something went wrong and the
+project wasn't created". The file was compared with a genuine export (QualtricsTools'
+"Better Sample Survey", fetched from raw.githubusercontent.com) and corrected: the question
+count belongs in `SecondaryAttribute` with a null payload; skip logic sits on the block's
+entry for the question, not in the question; IDs are 15 letters and digits; `SCO` and `STAT`
+entries added; skin given in the current object form. Which of these Qualtrics objected to
+is unknown. **Waiting on the operator** to import the corrected `library-test.qsf`, and if it
+fails, `import-probe.qsf` (two plain questions), and report which worked. If both fail:
+suspect the account or a passing Qualtrics fault before the file. If only the probe works:
+halve the full file (NPS question, matrix, display logic, embedded data are the suspects).
+Then steps 2 to 5 of `voice/docs/qualtrics-test-survey.md`, one per turn.
 
 **Next, in this order (one per turn)**
 
