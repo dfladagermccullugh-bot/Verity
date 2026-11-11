@@ -45,6 +45,19 @@ jobs:
           fi
       - name: Deploy
         run: flyctl deploy --app "$APP" --remote-only --ha=false --wait-timeout 180
+      - name: Start the machine
+        # A release leaves a stopped machine stopped (for example one that crashed on an earlier image).
+        run: |
+          for id in $(flyctl machine list --app "$APP" --json | jq -r '.[].id'); do
+            flyctl machine start "$id" --app "$APP" || true
+          done
+      - name: Check the server answers
+        run: |
+          for i in 1 2 3 4 5 6; do
+            if curl -fsS -m 20 "https://$APP.fly.dev/health"; then echo; exit 0; fi
+            sleep 10
+          done
+          echo "The server did not answer at https://$APP.fly.dev/health"; exit 1
       - name: What the server says (shown whether or not the deploy passed)
         if: always()
         run: |
@@ -54,10 +67,3 @@ jobs:
           timeout 25 flyctl logs --app "$APP" --no-tail | tail -n 80 || true
           echo "----- health -----"
           curl -sS -m 15 -i "https://$APP.fly.dev/health" || true
-      - name: Check the server answers
-        run: |
-          for i in 1 2 3 4 5 6; do
-            if curl -fsS -m 20 "https://$APP.fly.dev/health"; then echo; exit 0; fi
-            sleep 10
-          done
-          echo "The server did not answer at https://$APP.fly.dev/health"; exit 1
