@@ -36,7 +36,7 @@ things I kind of don't agree with", still unspecified: ask, one at a time; do no
 
 **The very next thing: a third real phone call.** Calling is off. When the operator says
 go (calls are placed 9am to 8pm Pacific only):
-1. Run `voice-deploy.yml` on this branch with task `set-up-call` (a fresh one-person
+1. Run `voice-deploy.yml` (on your working branch, or `main`) with task `set-up-call` (a fresh one-person
    campaign from the secrets), then task `deploy` (starts the server with calling on; the
    phone rings about three minutes later). Tell them before the deploy. Suggest they answer
    with "Hello?" and ask a question at the consent step: that is what broke last time.
@@ -68,8 +68,9 @@ interviewer may only speak lines from the fixed script. They were asked what the
 instead and have not answered. Do not loosen the script rule without their decision.
 
 **What is live.**
-- Demo: https://verity-voice-demo.fly.dev, deployed from this branch by `voice-deploy.yml`
-  (never from `main`). Deepgram voice (`aura-2-thalia-en`, a default, not a choice) and
+- Demo: https://verity-voice-demo.fly.dev, deployed by `voice-deploy.yml` from whichever
+  branch the job is run on (the last deploy was from `claude/walkthrough-continuation-9ivfb9`,
+  one commit before the call fixes). Deepgram voice (`aura-2-thalia-en`, a default, not a choice) and
   hearing (`nova-3`); answers read by rules, then `claude-haiku-5-5`. The operator heard
   the voice in the browser; they did not report on hearing or the ribbon.
 - Repository secrets set: `FLY_API_TOKEN`, `DEEPGRAM_API_KEY`, `ANTHROPIC_API_KEY`,
@@ -84,7 +85,7 @@ instead and have not answered. Do not loosen the script rule without their decis
   read our UTC times as Pacific; its import dialog has a Timezone option (choose UTC), not
   yet tried. Its help page says imported responses can be billable on newer plans.
 
-**`voice-deploy.yml` tasks** (run with `actions_run_trigger`, ref = this branch, inputs
+**`voice-deploy.yml` tasks** (run with `actions_run_trigger`, ref = your branch, inputs
 `app: verity-voice-demo`, `task: …`): `deploy`, `server-log`, `stop-calls`, `set-up-call`,
 `look-at-telnyx` (read-only), `set-up-telnyx`, `compare-voices`, `measure-model`. A new
 workflow file cannot be started until it is on `main`, so new jobs go in this file as tasks.
@@ -99,8 +100,9 @@ workflow file cannot be started until it is on `main`, so new jobs go in this fi
 - Before calling anyone but the operator: legal review of the consent wording (§I).
 - Before the repository is made public: rotate the legacy Neon password; blank the account
   IDs in `voice/fixtures/qualtrics/library-test-real.qsf`.
-- This branch is 20-odd commits ahead of `main` with no pull request. The operator has not
-  been asked whether to merge; raise it.
+- `main` carries all of this work: the operator asked for it to be pushed there at the end
+  of the session (2026-11-11). A push to `main` redeploys the legacy app on Vercel; Verity
+  Voice does not run on Vercel.
 
 **Mistakes made this session; do not repeat them.**
 - The server printed the operator's number in full and a log job copied it into an Actions
